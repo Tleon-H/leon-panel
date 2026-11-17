@@ -124,8 +124,11 @@ func CreateDatabase(driver string, db *gorm.DB) error {
 		&models.ItemIconGroup{},
 		&models.ModuleConfig{},
 	)
-
-	return err
+	if err != nil {
+		return err
+	}
+	// 进程启动时给已经打开的旧库补上可空列。覆盖恢复会先改临时库，不把补列留到重启。
+	return models.EnsureItemIconGroupIconStyle(db)
 }
 
 // 初始化一个用户,一个用户都没有的时候创建一个

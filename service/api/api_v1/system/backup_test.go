@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 	"strings"
 	"testing"
 
+	panelapi "sun-panel/api/api_v1/panel"
 	"sun-panel/global"
 	"sun-panel/lib/backup"
 	"sun-panel/lib/iniConfig"
@@ -23,7 +25,19 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+	"gorm.io/gorm/schema"
 )
+
+type legacyBackupGroup struct {
+	models.BaseModel
+	Icon        string
+	Title       string
+	Description string
+	Sort        int
+	UserId      uint
+}
+
+func (legacyBackupGroup) TableName() string { return "item_icon_group" }
 
 func TestExportMessageUsesTheActualFailure(t *testing.T) {
 	cases := []struct {
@@ -492,7 +506,7 @@ func callRestore(t *testing.T, api *BackupApi, user *models.User, confirm string
 	if baseDir == "" {
 		api.Restore(ctx)
 	} else {
-		api.restoreAt(ctx, baseDir, "1.3.0+leon.10", 10)
+		api.restoreAt(ctx, baseDir, "1.3.0+leon.11", 10)
 	}
 	response := exportResponse{status: recorder.Code, body: recorder.Body.String()}
 	if strings.HasPrefix(response.body, "{") {
@@ -504,6 +518,357 @@ func callRestore(t *testing.T, api *BackupApi, user *models.User, confirm string
 		}
 	}
 	return response
+}
+
+func TestHTTPRestoreLeavesLiveDataWhenStyleMigrationFails(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	base := t.TempDir()
+	for _, dir := range []string{"uploads", "conf", filepath.Join("web", "custom"), "database"} {
+		if err := os.MkdirAll(filepath.Join(base, dir), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(base, "uploads", "keep.txt"), []byte("INSIDE-OK"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	conf := "[base]\ndatabase_drive=sqlite\nsource_path=./uploads\n[sqlite]\nfile_path=./database/database.db\n"
+	if err := os.WriteFile(filepath.Join(base, "conf", "conf.ini"), []byte(conf), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(base, "web", "custom", "index.css"), []byte("/* example */"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dbPath := filepath.Join(base, "database", "database.db")
+	gormDB, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqlDB, err := gormDB.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqlDB.SetMaxOpenConns(1)
+	t.Cleanup(func() { _ = sqlDB.Close() })
+	var ddl strings.Builder
+	ddl.WriteString(`create table item_icon_group(id integer primary key, title text`)
+	for i := 0; i < 1998; i++ {
+		fmt.Fprintf(&ddl, ", c%d integer", i)
+	}
+	ddl.WriteString(`)`)
+	if _, err := sqlDB.Exec(ddl.String()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sqlDB.Exec(`insert into item_icon_group(id, title) values (1, 'BACKUP')`); err != nil {
+		t.Fatal(err)
+	}
+	previous := global.Db
+	global.Db = gormDB
+	t.Cleanup(func() { global.Db = previous })
+	restore := useConfig(t, conf)
+	t.Cleanup(restore)
+
+	archive := buildLiveBackup(t, gormDB, base, "1.3.0+leon.10")
+	if _, err := sqlDB.Exec(`update item_icon_group set title = 'LIVE-SENTINEL' where id = 1`); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(base, "uploads", "keep.txt"), []byte("LIVE-UPLOAD"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(base, "web", "custom", "index.css"), []byte("LIVE-CSS"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(base, "conf", "conf.ini"), []byte(conf+"# live-sentinel\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	admin := models.User{BaseModel: models.BaseModel{ID: 1}, Role: 1}
+	response := callRestore(t, &BackupApi{}, &admin, backup.ConfirmOverwrite, archive, base)
+	if response.code == 0 || !strings.Contains(response.body, "备份里的分组样式无法补上，没有改动现有数据。") || strings.Contains(response.body, "备份已经覆盖") || strings.Contains(response.body, "请重启") {
+		t.Fatalf("restore %#v", response.body)
+	}
+	var title string
+	if err := sqlDB.QueryRow(`select title from item_icon_group where id = 1`).Scan(&title); err != nil || title != "LIVE-SENTINEL" {
+		t.Fatalf("title = %s %v", title, err)
+	}
+	if _, err := sqlDB.Exec(`select icon_style from item_icon_group`); err == nil {
+		t.Fatal("live database gained icon_style")
+	}
+	keep, err := os.ReadFile(filepath.Join(base, "uploads", "keep.txt"))
+	if err != nil || string(keep) != "LIVE-UPLOAD" {
+		t.Fatalf("uploads = %s %v", keep, err)
+	}
+	css, err := os.ReadFile(filepath.Join(base, "web", "custom", "index.css"))
+	if err != nil || string(css) != "LIVE-CSS" {
+		t.Fatalf("css = %s %v", css, err)
+	}
+	saved, err := os.ReadFile(filepath.Join(base, "conf", "conf.ini"))
+	if err != nil || !strings.Contains(string(saved), "# live-sentinel") {
+		t.Fatalf("conf = %s %v", saved, err)
+	}
+}
+
+func TestLegacyBackupGainsAnEmptyGroupIconStyle(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	base := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(base, "uploads"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(base, "uploads", "keep.txt"), []byte("INSIDE-OK"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(base, "conf"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	conf := "[base]\ndatabase_drive=sqlite\nsource_path=./uploads\n[sqlite]\nfile_path=./database/database.db\n"
+	if err := os.WriteFile(filepath.Join(base, "conf", "conf.ini"), []byte(conf), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(base, "web", "custom"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(base, "web", "custom", "index.css"), []byte("/* example */"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dbPath := filepath.Join(base, "database", "database.db")
+	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	gormDB, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{
+		NamingStrategy: schema.NamingStrategy{SingularTable: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := gormDB.AutoMigrate(&legacyBackupGroup{}); err != nil {
+		t.Fatal(err)
+	}
+	legacy := legacyBackupGroup{Title: "HOME", UserId: 7, Sort: 1}
+	if err := gormDB.Create(&legacy).Error; err != nil {
+		t.Fatal(err)
+	}
+	sqlDB, err := gormDB.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqlDB.SetMaxOpenConns(1)
+	t.Cleanup(func() { _ = sqlDB.Close() })
+	previous := global.Db
+	global.Db = gormDB
+	t.Cleanup(func() { global.Db = previous })
+	restore := useConfig(t, conf)
+	defer restore()
+
+	result, err := backup.Build(context.Background(), backup.Options{
+		BaseDir:       base,
+		DatabaseDrive: "sqlite",
+		UploadsPath:   "uploads",
+		ConfFile:      filepath.Join("conf", "conf.ini"),
+		CustomDir:     filepath.Join("web", "custom"),
+		SQLitePath:    filepath.Join("database", "database.db"),
+		Version:       "1.3.0+leon.10",
+		VersionCode:   10,
+		DB:            sqlDB,
+		TempParent:    t.TempDir(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(result.Dir) })
+	archive, err := os.ReadFile(result.ZipPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := gormDB.Model(&legacyBackupGroup{}).Where("id = ?", legacy.ID).Update("title", "changed").Error; err != nil {
+		t.Fatal(err)
+	}
+
+	admin := models.User{BaseModel: models.BaseModel{ID: 1}, Role: 1}
+	response := callRestore(t, &BackupApi{}, &admin, backup.ConfirmOverwrite, archive, base)
+	if response.code != 0 {
+		t.Fatalf("restore %#v", response.body)
+	}
+	var saved models.ItemIconGroup
+	if err := gormDB.First(&saved, legacy.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if saved.Title != "HOME" || saved.UserId != 7 || saved.IconStyle != nil {
+		t.Fatalf("restored group = %#v", saved)
+	}
+}
+
+func TestLegacyBackupCanSaveStyleAndCurrentBackupKeepsIt(t *testing.T) {
+	for _, version := range []string{"1.3.0+leon.4", "1.3.0+leon.10"} {
+		t.Run(version, func(t *testing.T) {
+			db, groupID, base := restoreLegacyGroupBackup(t, version)
+			var saved models.ItemIconGroup
+			if err := db.First(&saved, groupID).Error; err != nil {
+				t.Fatal(err)
+			}
+			if saved.Title != "HOME" || saved.IconStyle != nil {
+				t.Fatalf("restored group = %#v", saved)
+			}
+			inherited := panelList(t, 7, `{"includeItems":true}`)
+			if inherited["title"] != "HOME" || inherited["iconStyle"] != nil {
+				t.Fatalf("inherited response = %#v", inherited)
+			}
+			cards, _ := inherited["items"].([]interface{})
+			if len(cards) != 2 || cards[0].(map[string]interface{})["title"] != "路由" || cards[1].(map[string]interface{})["title"] != "相册" {
+				t.Fatalf("restored cards = %#v", cards)
+			}
+
+			edited := callPanel(t, 7, fmt.Sprintf(`{"id":%d,"title":"HOME","iconStyle":0}`, groupID), (&panelapi.ItemIconGroup{}).Edit)
+			if edited["code"] != float64(0) {
+				t.Fatalf("save style = %#v", edited)
+			}
+			refreshed := panelList(t, 7, `{"includeItems":true}`)
+			if refreshed["iconStyle"] != float64(0) || refreshed["title"] != "HOME" {
+				t.Fatalf("saved style was not readable: %#v", refreshed)
+			}
+
+			archive := buildLiveBackup(t, db, base, "1.3.0+leon.11")
+			if err := db.Model(&models.ItemIconGroup{}).Where("id = ?", groupID).Updates(map[string]interface{}{"title": "changed", "icon_style": 1}).Error; err != nil {
+				t.Fatal(err)
+			}
+			admin := models.User{BaseModel: models.BaseModel{ID: 1}, Role: 1}
+			response := callRestore(t, &BackupApi{}, &admin, backup.ConfirmOverwrite, archive, base)
+			if response.code != 0 {
+				t.Fatalf("current restore %#v", response.body)
+			}
+			kept := panelList(t, 7, `{"includeItems":true}`)
+			if kept["title"] != "HOME" || kept["iconStyle"] != float64(0) {
+				t.Fatalf("current backup dropped the style: %#v", kept)
+			}
+			keptCards, _ := kept["items"].([]interface{})
+			if len(keptCards) != 2 || keptCards[0].(map[string]interface{})["title"] != "路由" {
+				t.Fatalf("current backup cards = %#v", keptCards)
+			}
+			omitted := panelList(t, 7, `{}`)
+			if _, ok := omitted["items"]; ok || omitted["iconStyle"] != float64(0) {
+				t.Fatalf("old client response = %#v", omitted)
+			}
+		})
+	}
+}
+
+func restoreLegacyGroupBackup(t *testing.T, version string) (*gorm.DB, uint, string) {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	base := t.TempDir()
+	for _, dir := range []string{"uploads", "conf", filepath.Join("web", "custom"), filepath.Join("database")} {
+		if err := os.MkdirAll(filepath.Join(base, dir), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(base, "uploads", "keep.txt"), []byte("INSIDE-OK"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	conf := "[base]\ndatabase_drive=sqlite\nsource_path=./uploads\n[sqlite]\nfile_path=./database/database.db\n"
+	if err := os.WriteFile(filepath.Join(base, "conf", "conf.ini"), []byte(conf), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(base, "web", "custom", "index.css"), []byte("/* example */"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dbPath := filepath.Join(base, "database", "database.db")
+	gormDB, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{NamingStrategy: schema.NamingStrategy{SingularTable: true}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := gormDB.AutoMigrate(&legacyBackupGroup{}, &models.ItemIcon{}); err != nil {
+		t.Fatal(err)
+	}
+	legacy := legacyBackupGroup{Title: "HOME", UserId: 7, Sort: 1}
+	if err := gormDB.Create(&legacy).Error; err != nil {
+		t.Fatal(err)
+	}
+	icons := []models.ItemIcon{
+		{UserId: 7, ItemIconGroupId: int(legacy.ID), Title: "相册", Sort: 2, IconJson: `{"itemType":1,"text":"相册"}`},
+		{UserId: 7, ItemIconGroupId: int(legacy.ID), Title: "路由", Sort: 1, IconJson: `{"itemType":1,"text":"路由"}`},
+	}
+	if err := gormDB.Create(&icons).Error; err != nil {
+		t.Fatal(err)
+	}
+	sqlDB, err := gormDB.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqlDB.SetMaxOpenConns(1)
+	t.Cleanup(func() { _ = sqlDB.Close() })
+	previous := global.Db
+	global.Db = gormDB
+	t.Cleanup(func() { global.Db = previous })
+	restore := useConfig(t, conf)
+	t.Cleanup(restore)
+
+	archive := buildLiveBackup(t, gormDB, base, version)
+	if err := gormDB.Model(&legacyBackupGroup{}).Where("id = ?", legacy.ID).Update("title", "changed").Error; err != nil {
+		t.Fatal(err)
+	}
+	admin := models.User{BaseModel: models.BaseModel{ID: 1}, Role: 1}
+	response := callRestore(t, &BackupApi{}, &admin, backup.ConfirmOverwrite, archive, base)
+	if response.code != 0 {
+		t.Fatalf("restore %s: %s", version, response.body)
+	}
+	return gormDB, legacy.ID, base
+}
+
+func buildLiveBackup(t *testing.T, gormDB *gorm.DB, base, version string) []byte {
+	t.Helper()
+	sqlDB, err := gormDB.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := backup.Build(context.Background(), backup.Options{
+		BaseDir:       base,
+		DatabaseDrive: "sqlite",
+		UploadsPath:   "uploads",
+		ConfFile:      filepath.Join("conf", "conf.ini"),
+		CustomDir:     filepath.Join("web", "custom"),
+		SQLitePath:    filepath.Join("database", "database.db"),
+		Version:       version,
+		VersionCode:   10,
+		DB:            sqlDB,
+		TempParent:    t.TempDir(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(result.Dir) })
+	archive, err := os.ReadFile(result.ZipPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return archive
+}
+
+func callPanel(t *testing.T, userID uint, body string, handle func(*gin.Context)) map[string]interface{} {
+	t.Helper()
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/", bytes.NewBufferString(body))
+	ctx.Request.Header.Set("Content-Type", "application/json")
+	ctx.Set("userInfo", models.User{BaseModel: models.BaseModel{ID: userID}})
+	handle(ctx)
+	var payload map[string]interface{}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("response %s: %v", recorder.Body.String(), err)
+	}
+	return payload
+}
+
+func panelList(t *testing.T, userID uint, body string) map[string]interface{} {
+	t.Helper()
+	payload := callPanel(t, userID, body, (&panelapi.ItemIconGroup{}).GetList)
+	if payload["code"] != float64(0) {
+		t.Fatalf("list %#v", payload)
+	}
+	data, _ := payload["data"].(map[string]interface{})
+	raw, _ := data["list"].([]interface{})
+	if len(raw) != 1 {
+		t.Fatalf("groups = %#v", raw)
+	}
+	row, _ := raw[0].(map[string]interface{})
+	return row
 }
 
 func useConfig(t *testing.T, contents string) func() {

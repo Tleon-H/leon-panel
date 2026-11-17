@@ -1,6 +1,8 @@
 package panel
 
 import (
+	"encoding/json"
+	"errors"
 	"math"
 	"sun-panel/api/api_v1/common/apiData/commonApiStructs"
 	"sun-panel/api/api_v1/common/apiReturn"
@@ -13,45 +15,104 @@ import (
 	"gorm.io/gorm"
 )
 
+// itemIconGroupEditRequest 记住请求里有没有带 iconStyle。
+// 没带时不改这一列，旧客户端编辑分组名称不会把已经设置的样式清掉。
+type itemIconGroupEditRequest struct {
+	models.ItemIconGroup
+	iconStylePresent bool
+}
+
+func (r *itemIconGroupEditRequest) UnmarshalJSON(data []byte) error {
+	if err := json.Unmarshal(data, &r.ItemIconGroup); err != nil {
+		return err
+	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	_, r.iconStylePresent = raw["iconStyle"]
+	return nil
+}
+
 type ItemIconGroup struct {
 }
 
 func (a *ItemIconGroup) Edit(c *gin.Context) {
 	userInfo, _ := base.GetCurrentUserInfo(c)
-	req := models.ItemIconGroup{}
+	req := itemIconGroupEditRequest{}
 
 	if err := c.ShouldBindBodyWith(&req, binding.JSON); err != nil {
 		apiReturn.ErrorParamFomat(c, err.Error())
+		return
+	}
+	if !models.ValidGroupIconStyle(req.IconStyle) {
+		apiReturn.Error(c, "分组卡片样式只能选择跟随全局、详情图标或小图标")
 		return
 	}
 
 	req.UserId = userInfo.ID
 
 	if req.ID != 0 {
-		// 修改
-		updateField := []string{"IconJson", "Icon", "Title", "Url", "LanUrl", "Description", "OpenMethod", "GroupId", "UserId"}
-		if req.Sort != 0 {
-			updateField = append(updateField, "Sort")
+		updates := map[string]interface{}{
+			"icon":        req.Icon,
+			"title":       req.Title,
+			"description": req.Description,
+			"user_id":     userInfo.ID,
 		}
-		global.Db.Model(&models.ItemIconGroup{}).
-			Select(updateField).
-			Where("id=?", req.ID).Updates(&req)
-	} else {
-		// 创建
-		global.Db.Create(&req)
+		if req.Sort != 0 {
+			updates["sort"] = req.Sort
+		}
+		if req.iconStylePresent {
+			if req.IconStyle == nil {
+				updates["icon_style"] = nil
+			} else {
+				updates["icon_style"] = *req.IconStyle
+			}
+		}
+		result := global.Db.Model(&models.ItemIconGroup{}).
+			Where("id = ? AND user_id = ?", req.ID, userInfo.ID).
+			Updates(updates)
+		if result.Error != nil {
+			apiReturn.ErrorDatabase(c, result.Error.Error())
+			return
+		}
+		var saved models.ItemIconGroup
+		err := global.Db.Where("id = ? AND user_id = ?", req.ID, userInfo.ID).First(&saved).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			apiReturn.Error(c, "分组不存在")
+			return
+		}
+		if err != nil {
+			apiReturn.ErrorDatabase(c, err.Error())
+			return
+		}
+		apiReturn.SuccessData(c, saved)
+		return
 	}
 
-	apiReturn.SuccessData(c, req)
+	if err := global.Db.Create(&req.ItemIconGroup).Error; err != nil {
+		apiReturn.ErrorDatabase(c, err.Error())
+		return
+	}
+	apiReturn.SuccessData(c, req.ItemIconGroup)
 }
 
 func (a *ItemIconGroup) GetList(c *gin.Context) {
-
+	req := struct {
+		IncludeItems bool `json:"includeItems"`
+	}{}
+	if c.Request.ContentLength != 0 {
+		if err := c.ShouldBindJSON(&req); err != nil {
+			apiReturn.ErrorParamFomat(c, err.Error())
+			return
+		}
+	}
 	userInfo, _ := base.GetCurrentUserInfo(c)
 	groups := []models.ItemIconGroup{}
+	icons := []models.ItemIcon{}
 
 	err := global.Db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Order("sort ,created_at").Where("user_id=?", userInfo.ID).Find(&groups).Error; err != nil {
-			apiReturn.ErrorDatabase(c, err.Error())
 			return err
 		}
 
@@ -63,29 +124,50 @@ func (a *ItemIconGroup) GetList(c *gin.Context) {
 				Icon:   "material-symbols:ad-group-outline",
 			}
 			if err := tx.Create(&defaultGroup).Error; err != nil {
-				apiReturn.ErrorDatabase(c, err.Error())
 				return err
 			}
 
 			// 并将当前账号下所有无分组的图标更新到当前组
 			if err := tx.Model(&models.ItemIcon{}).Where("user_id=?", userInfo.ID).Update("item_icon_group_id", defaultGroup.ID).Error; err != nil {
-				apiReturn.ErrorDatabase(c, err.Error())
 				return err
 			}
 
 			groups = append(groups, defaultGroup)
 		}
 
-		// 返回 nil 提交事务
+		if req.IncludeItems {
+			if err := tx.Where("user_id=?", userInfo.ID).Order("sort, created_at, id").Find(&icons).Error; err != nil {
+				return err
+			}
+		}
 		return nil
 	})
 
 	if err != nil {
 		apiReturn.ErrorDatabase(c, err.Error())
 		return
-	} else {
-		apiReturn.SuccessListData(c, groups, 0)
 	}
+	if !req.IncludeItems {
+		apiReturn.SuccessListData(c, groups, 0)
+		return
+	}
+	type groupWithItems struct {
+		models.ItemIconGroup
+		Items []models.ItemIcon `json:"items"`
+	}
+	result := make([]groupWithItems, len(groups))
+	positions := make(map[int]int, len(groups))
+	for i, group := range groups {
+		result[i] = groupWithItems{group, []models.ItemIcon{}}
+		positions[int(group.ID)] = i
+	}
+	for _, icon := range icons {
+		if i, ok := positions[icon.ItemIconGroupId]; ok {
+			_ = json.Unmarshal([]byte(icon.IconJson), &icon.Icon)
+			result[i].Items = append(result[i].Items, icon)
+		}
+	}
+	apiReturn.SuccessListData(c, result, 0)
 }
 
 func (a *ItemIconGroup) Deletes(c *gin.Context) {

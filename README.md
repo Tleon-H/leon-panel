@@ -12,7 +12,7 @@ An independent navigation panel based on the public MIT source of Sun-Panel v1.3
 
 Leon Panel 是 [Sun-Panel v1.3.0](https://github.com/hslr-s/sun-panel) 公开源码上的独立版本，不是官方仓库，也不是官方 v1.8.1。
 
-- 显示版本：`1.3.0+leon.10`
+- 显示版本：`1.3.0+leon.11`
 - 内部数字版本：`10`（原来用来比较版本的数字，这一版保持不变）
 
 版权和 MIT 许可证保留在 [LICENSE](./LICENSE)。上游仓库是 [hslr-s/sun-panel](https://github.com/hslr-s/sun-panel)。本仓库没有改许可证，也没有加入或绕过任何授权检查。实现和差异的详细说明见 [doc/LEON-PANEL.md](./doc/LEON-PANEL.md)。
@@ -49,11 +49,27 @@ Leon Panel 是 [Sun-Panel v1.3.0](https://github.com/hslr-s/sun-panel) 公开源
 - 整站覆盖恢复：管理员可以从本程序自己的 SQLite 备份包覆盖恢复。恢复会换掉现有数据，页面先说明风险，管理员勾选确认后才会执行。不接受官方备份。MySQL 不能在这里恢复。
 - 多账号切换：在这台浏览器记住多个已登录账号，并在系统应用和登录页切换。不保存密码。
 - 批量删除：上传文件管理可以多选并删除当前账号自己的图片。只能选择当前页，删除前要再次确认。公共图库不能删除别人的图片。
+- 分组卡片样式：每个分组可以单独使用详情大卡片或小图标，也可以跟随风格设置里的全局样式。没有单独设置过的分组仍跟随全局。
 
 ## 尚未实现
 
 - OpenAPI
 - Docker 套接字控制
+
+## 版本与构建约定
+
+仓库为 [Tleon-H/leon-panel](https://github.com/Tleon-H/leon-panel)。当前版本 `1.3.0+leon.11`，其中 `1.3.0` 表示上游基线，`leon.11` 表示独立修订号。备份兼容仍按 Leon 修订号比较，内部数字版本 `10` 用于现有格式兼容。
+
+- `package.json` 与 `service/assets/version` 必须同步，`pnpm run version:check` 和 CI 会验证。
+- 前端直接读取包版本，构建不再改写 `.env`，「关于」页显示相同版本。
+- Git 发布标签使用 `v1.3.0-leon.11`，Docker 标签使用 `1.3.0-leon.11`。镜像标签通过脚本生成，避免 `+` 字符导致发布失败。
+- 使用 Node.js 22.6+ 和 pnpm 8.15.9，以 `pnpm-lock.yaml` 为依赖锁文件。
+
+本次首页加载将当前账号的分组、分组样式和排序后的卡片合并为一次请求，仍支持按组刷新。没有单独设置样式的分组跟随全局。搜索栏支持按 `/` 聚焦，输入框、弹窗和中文输入过程中不会抢占按键。
+
+## 从源码部署
+
+`docker compose up -d --build` 构建当前 Leon Panel 源码。默认配置使用 `./conf`、`./uploads` 和 `./database`。升级已有实例前先确认数据目录和端口，保存备份。新版本可恢复此前的 Leon Panel 备份；旧版本会拒绝恢复较新修订号生成的备份。
 
 ## 构建
 

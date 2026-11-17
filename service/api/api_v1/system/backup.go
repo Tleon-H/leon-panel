@@ -1,6 +1,7 @@
 package system
 
 import (
+	"context"
 	"errors"
 	"io"
 	"net/http"
@@ -231,6 +232,10 @@ func restoreMessage(err error) string {
 		return "恢复失败，而且回滚也没有完成。请先检查数据后再继续使用。当前服务仍在运行。"
 	case errors.Is(err, backup.ErrApply):
 		return "恢复没有完成，已退回覆盖前的数据。当前服务仍在运行。"
+	case errors.Is(err, backup.ErrMigrate):
+		return "备份里的分组样式无法补上，没有改动现有数据。当前服务仍在运行。"
+	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+		return "恢复已经取消，没有改动现有数据。当前服务仍在运行。"
 	default:
 		return "恢复失败，没有关闭正在运行的服务。"
 	}

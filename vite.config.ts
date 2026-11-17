@@ -1,4 +1,5 @@
 import path from 'path'
+import { version } from './package.json'
 import type { PluginOption } from 'vite'
 import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
@@ -30,6 +31,7 @@ export default defineConfig((env) => {
   const viteEnv = loadEnv(env.mode, process.cwd()) as unknown as ImportMetaEnv
 
   return {
+    define: { 'import.meta.env.VITE_APP_VERSION': JSON.stringify(version) },
     resolve: {
       alias: {
         '@': path.resolve(process.cwd(), 'src'),

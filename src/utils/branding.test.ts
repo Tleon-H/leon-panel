@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import test from 'node:test'
@@ -10,8 +11,8 @@ function source(path: string): string {
   return readFileSync(join(root, path), 'utf8')
 }
 
-test('the visible product name is Leon Panel and the version stays 1.3.0+leon.10', () => {
-  assert.equal(source('service/assets/version').trim(), '10|1.3.0+leon.10')
+test('the visible product name is Leon Panel and the version stays 1.3.0+leon.11', () => {
+  assert.equal(source('service/assets/version').trim(), '10|1.3.0+leon.11')
 
   const html = source('index.html')
   assert.match(html, /<title>Leon Panel<\/title>/)
@@ -44,12 +45,12 @@ test('the visible product name is Leon Panel and the version stays 1.3.0+leon.10
   assert.match(about, /\$t\('common\.appName'\)/)
   assert.match(about, /alt="Leon Panel"/)
   assert.match(about, /github\.com\/hslr-s\/sun-panel/)
-  assert.match(about, /github\.com\/Tleon-H\/sun-panel/)
+  assert.match(about, /github\.com\/Tleon-H\/leon-panel/)
   assert.doesNotMatch(about, /donate|qq\.com|hub\.docker\.com|gitee\.com|bilibili|youtube/i)
 
   const readme = source('README.md')
   assert.match(readme, /^# Leon Panel/m)
-  assert.match(readme, /1\.3\.0\+leon\.10/)
+  assert.match(readme, /1\.3\.0\+leon\.11/)
   assert.match(readme, /内部数字版本：`10`/)
   assert.match(readme, /整站覆盖恢复/)
   assert.match(readme, /OpenAPI/)
@@ -58,4 +59,19 @@ test('the visible product name is Leon Panel and the version stays 1.3.0+leon.10
   assert.match(readme, /\[LICENSE\]\(\.\/LICENSE\)/)
   assert.match(readme, /https:\/\/github\.com\/hslr-s\/sun-panel/)
   assert.doesNotMatch(readme, /star-history|hub\.docker\.com|doc\.sun-panel\.top|enianteam\.com|qq_group|donate/)
+})
+
+
+test('release tags match the package version and validation never modifies env files', () => {
+  const pkg = JSON.parse(source('package.json'))
+  const before = source('.env')
+  const script = join(root, 'scripts/check-version.cjs')
+  const tag = pkg.version.replace('+', '-')
+  assert.equal(execFileSync(process.execPath, [script, '--image-tag'], { encoding: 'utf8' }).trim(), tag)
+  const env = { ...process.env, GITHUB_REF_TYPE: 'tag', GITHUB_REF_NAME: `v${tag}` }
+  execFileSync(process.execPath, [script], { env, stdio: 'pipe' })
+  assert.throws(() => execFileSync(process.execPath, [script], {
+    env: { ...env, GITHUB_REF_NAME: 'v0.0.0' }, stdio: 'pipe',
+  }))
+  assert.equal(source('.env'), before)
 })

@@ -2,6 +2,8 @@ name: ci
 
 on:
   pull_request:
+  push:
+    branches: [master]
 
 permissions:
   contents: read
@@ -23,6 +25,9 @@ jobs:
 
       - name: Install
         run: pnpm install --frozen-lockfile
+
+      - name: Validate version
+        run: pnpm run version:check
 
       - name: Unit tests
         run: pnpm run test:unit
@@ -60,3 +65,14 @@ jobs:
         run: |
           rm -f bindata.go
           go test ./...
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate compose files
+        run: |
+          docker compose config --quiet
+          docker compose -f docker-compose.leon-test.yml config --quiet
+      - name: Build runtime image
+        run: docker build -t leon-panel:ci .

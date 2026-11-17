@@ -1,14 +1,11 @@
-version: "3.2"
-
 services:
-  sun-panel:
-    image: 'hslr/sun-panel:latest'
-    container_name: sun-panel
+  leon-panel:
+    build: .
+    image: leon-panel:local
     volumes:
-    - ./conf:/app/conf
-    - ./uploads:/app/uploads
-    - ./database:/app/database
-    # - ./runtime:/app/runtime
+      - ./conf:/app/conf
+      - ./uploads:/app/uploads
+      - ./database:/app/database
     ports:
-    - 3002:3002
-    restart: always
+      - "3002:3002"
+    restart: unless-stopped
