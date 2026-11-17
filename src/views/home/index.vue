@@ -17,6 +17,8 @@ import { router } from '@/router'
 import { t } from '@/locales'
 import { contentMaxWidth } from '@/utils/panel/maxWidth'
 import { resolveGroupIconStyle } from '@/utils/panel/groupIconStyle'
+import { contextMenuEntries, contextNewTabFeatures, resolveContextMenuChoice } from '@/utils/panel/contextMenu'
+import type { ContextMenuEntry } from '@/utils/panel/contextMenu'
 
 interface ItemGroup extends Panel.ItemIconGroup {
   sortStatus?: boolean
@@ -80,6 +82,23 @@ function openPage(openMethod: number, url: string, title?: string) {
   }
 }
 
+function openChosenAddress(method: 1 | 2 | 3, href: string, title?: string) {
+  if (method === 1) {
+    window.location.href = href
+    return
+  }
+  if (method === 2) {
+    const opened = window.open(href, '_blank', contextNewTabFeatures)
+    if (opened)
+      opened.opener = null
+    return
+  }
+  windowShow.value = true
+  windowSrc.value = href
+  windowTitle.value = title || href
+  windowIframeIsLoad.value = true
+}
+
 function handleItemClick(itemGroupIndex: number, item: Panel.ItemInfo) {
   if (items.value[itemGroupIndex] && items.value[itemGroupIndex].sortStatus) {
     handleEditItem(item)
@@ -131,49 +150,42 @@ function updateItemIconGroupByNet(itemIconGroupId: number, requestId = iconLoadR
 
 function handleRightMenuSelect(key: string | number) {
   dropdownShow.value = false
-  // console.log(currentRightSelectItem, key)
-  let jumpUrl = panelState.networkMode === PanelStateNetworkModeEnum.lan ? currentRightSelectItem.value?.lanUrl : currentRightSelectItem.value?.url
-  if (currentRightSelectItem.value?.lanUrl === '')
-    jumpUrl = currentRightSelectItem.value.url
-  switch (key) {
-    case 'newWindows':
-      window.open(jumpUrl)
-      break
-    case 'openWanUrl':
-      if (currentRightSelectItem.value)
-        openPage(currentRightSelectItem.value?.openMethod, currentRightSelectItem.value?.url, currentRightSelectItem.value?.title)
-      break
-    case 'openLanUrl':
-      if (currentRightSelectItem.value && currentRightSelectItem.value.lanUrl)
-        openPage(currentRightSelectItem.value?.openMethod, currentRightSelectItem.value.lanUrl, currentRightSelectItem.value?.title)
-      break
-    case 'edit':
-      // 这里有个奇怪的问题，如果不使用{...}的方式 父组件的值会同步修改 标记一下
-      handleEditItem({ ...currentRightSelectItem.value } as Panel.ItemInfo)
-      break
-    case 'delete':
-      dialog.warning({
-        title: t('common.warning'),
-        content: t('common.deleteConfirmByName', { name: currentRightSelectItem.value?.title }),
-        positiveText: t('common.confirm'),
-        negativeText: t('common.cancel'),
-        onPositiveClick: () => {
-          deletes([currentRightSelectItem.value?.id as number]).then(({ code, msg }) => {
-            if (code === 0) {
-              ms.success(t('common.deleteSuccess'))
-              getList()
-            }
-            else {
-              ms.error(`${t('common.deleteFail')}:${msg}`)
-            }
-          })
-        },
-      })
-
-      break
-    default:
-      break
+  const item = currentRightSelectItem.value
+  if (!item)
+    return
+  if (key === 'edit') {
+    if (authStore.visitMode !== VisitMode.VISIT_MODE_LOGIN)
+      return
+    // 这里有个奇怪的问题，如果不使用{...}的方式 父组件的值会同步修改 标记一下
+    handleEditItem({ ...item } as Panel.ItemInfo)
+    return
   }
+  if (key === 'delete') {
+    if (authStore.visitMode !== VisitMode.VISIT_MODE_LOGIN)
+      return
+    dialog.warning({
+      title: t('common.warning'),
+      content: t('common.deleteConfirmByName', { name: item.title }),
+      positiveText: t('common.confirm'),
+      negativeText: t('common.cancel'),
+      onPositiveClick: () => {
+        deletes([item.id as number]).then(({ code, msg }) => {
+          if (code === 0) {
+            ms.success(t('common.deleteSuccess'))
+            getList()
+          }
+          else {
+            ms.error(`${t('common.deleteFail')}:${msg}`)
+          }
+        })
+      },
+    })
+    return
+  }
+  const choice = resolveContextMenuChoice(item, String(key))
+  if (!choice || choice === 'edit' || choice === 'delete')
+    return
+  openChosenAddress(choice.method, choice.href, item.title)
 }
 
 function handleContextMenu(e: MouseEvent, itemGroupIndex: number, item: Panel.ItemInfo) {
@@ -237,40 +249,23 @@ function handleSaveSort(itemGroup: ItemGroup) {
   }
 }
 
+function toDropdownOptions(entries: ContextMenuEntry[]) {
+  return entries.map((entry) => {
+    const option: { key: string; label: string; children?: ReturnType<typeof toDropdownOptions> } = {
+      key: entry.key,
+      label: t(entry.labelKey),
+    }
+    if (entry.children)
+      option.children = toDropdownOptions(entry.children)
+    return option
+  })
+}
+
 function getDropdownMenuOptions() {
-  const dropdownMenuOptions = [
-    {
-      label: t('iconItem.newWindowOpen'),
-      key: 'newWindows',
-    },
-
-  ]
-
-  if (currentRightSelectItem.value?.lanUrl && panelState.networkMode === PanelStateNetworkModeEnum.wan) {
-    dropdownMenuOptions.push({
-      label: t('panelHome.openLanUrl'),
-      key: 'openLanUrl',
-    })
-  }
-
-  if (currentRightSelectItem.value?.lanUrl && panelState.networkMode === PanelStateNetworkModeEnum.lan) {
-    dropdownMenuOptions.push({
-      label: t('panelHome.openWanUrl'),
-      key: 'openWanUrl',
-    })
-  }
-
-  if (authStore.visitMode === VisitMode.VISIT_MODE_LOGIN) {
-    dropdownMenuOptions.push({
-      label: t('common.edit'),
-      key: 'edit',
-    }, {
-      label: t('common.delete'),
-      key: 'delete',
-    })
-  }
-
-  return dropdownMenuOptions
+  return toDropdownOptions(contextMenuEntries({
+    url: currentRightSelectItem.value?.url,
+    lanUrl: currentRightSelectItem.value?.lanUrl,
+  }, authStore.visitMode === VisitMode.VISIT_MODE_LOGIN))
 }
 
 watch(settingModalShow, (visible) => {

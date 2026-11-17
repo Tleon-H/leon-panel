@@ -338,7 +338,12 @@
     "changeToWanModelSuccess": "Switched to WAN mode (mode status saved locally)",
     "goToLogin": "Go to login",
     "openLanUrl": "Open LAN URL",
-    "openWanUrl": "Open WAN URL"
+    "openWanUrl": "Open WAN URL",
+    "contextDefaultAddress": "Default address",
+    "contextLanAddress": "Intranet address",
+    "contextOpenCurrent": "Open in current page",
+    "contextOpenNewTab": "Open in new tab",
+    "contextOpenWindow": "Open in an in-page window"
   },
   "settingUserInfo": {
     "confirmLogoutText": "Are you sure you want to logout?",
