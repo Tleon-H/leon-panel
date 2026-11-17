@@ -520,6 +520,93 @@ func callRestore(t *testing.T, api *BackupApi, user *models.User, confirm string
 	return response
 }
 
+func TestHTTPRestoreLeavesLiveDataWhenStyleMigrationFails(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	base := t.TempDir()
+	for _, dir := range []string{"uploads", "conf", filepath.Join("web", "custom"), "database"} {
+		if err := os.MkdirAll(filepath.Join(base, dir), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(base, "uploads", "keep.txt"), []byte("INSIDE-OK"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	conf := "[base]\ndatabase_drive=sqlite\nsource_path=./uploads\n[sqlite]\nfile_path=./database/database.db\n"
+	if err := os.WriteFile(filepath.Join(base, "conf", "conf.ini"), []byte(conf), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(base, "web", "custom", "index.css"), []byte("/* example */"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dbPath := filepath.Join(base, "database", "database.db")
+	gormDB, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqlDB, err := gormDB.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqlDB.SetMaxOpenConns(1)
+	t.Cleanup(func() { _ = sqlDB.Close() })
+	var ddl strings.Builder
+	ddl.WriteString(`create table item_icon_group(id integer primary key, title text`)
+	for i := 0; i < 1998; i++ {
+		fmt.Fprintf(&ddl, ", c%d integer", i)
+	}
+	ddl.WriteString(`)`)
+	if _, err := sqlDB.Exec(ddl.String()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sqlDB.Exec(`insert into item_icon_group(id, title) values (1, 'BACKUP')`); err != nil {
+		t.Fatal(err)
+	}
+	previous := global.Db
+	global.Db = gormDB
+	t.Cleanup(func() { global.Db = previous })
+	restore := useConfig(t, conf)
+	t.Cleanup(restore)
+
+	archive := buildLiveBackup(t, gormDB, base, "1.3.0+leon.10")
+	if _, err := sqlDB.Exec(`update item_icon_group set title = 'LIVE-SENTINEL' where id = 1`); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(base, "uploads", "keep.txt"), []byte("LIVE-UPLOAD"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(base, "web", "custom", "index.css"), []byte("LIVE-CSS"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(base, "conf", "conf.ini"), []byte(conf+"# live-sentinel\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	admin := models.User{BaseModel: models.BaseModel{ID: 1}, Role: 1}
+	response := callRestore(t, &BackupApi{}, &admin, backup.ConfirmOverwrite, archive, base)
+	if response.code == 0 || !strings.Contains(response.body, "备份里的分组样式无法补上，没有改动现有数据。") || strings.Contains(response.body, "备份已经覆盖") || strings.Contains(response.body, "请重启") {
+		t.Fatalf("restore %#v", response.body)
+	}
+	var title string
+	if err := sqlDB.QueryRow(`select title from item_icon_group where id = 1`).Scan(&title); err != nil || title != "LIVE-SENTINEL" {
+		t.Fatalf("title = %s %v", title, err)
+	}
+	if _, err := sqlDB.Exec(`select icon_style from item_icon_group`); err == nil {
+		t.Fatal("live database gained icon_style")
+	}
+	keep, err := os.ReadFile(filepath.Join(base, "uploads", "keep.txt"))
+	if err != nil || string(keep) != "LIVE-UPLOAD" {
+		t.Fatalf("uploads = %s %v", keep, err)
+	}
+	css, err := os.ReadFile(filepath.Join(base, "web", "custom", "index.css"))
+	if err != nil || string(css) != "LIVE-CSS" {
+		t.Fatalf("css = %s %v", css, err)
+	}
+	saved, err := os.ReadFile(filepath.Join(base, "conf", "conf.ini"))
+	if err != nil || !strings.Contains(string(saved), "# live-sentinel") {
+		t.Fatalf("conf = %s %v", saved, err)
+	}
+}
+
 func TestLegacyBackupGainsAnEmptyGroupIconStyle(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	base := t.TempDir()

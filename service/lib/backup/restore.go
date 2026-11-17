@@ -38,6 +38,8 @@ var (
 	ErrPackage      = errors.New("backup package is invalid")
 	ErrApply        = errors.New("restore apply failed")
 	ErrRollback     = errors.New("restore rollback failed")
+	// ErrMigrate 表示临时库上的兼容迁移或校验没有通过。此时还没有覆盖正在使用的数据。
+	ErrMigrate = errors.New("backup schema migration failed")
 )
 
 var leonDisplay = regexp.MustCompile(`^1\.3\.0\+leon\.([1-9][0-9]*)$`)
@@ -143,6 +145,19 @@ func Restore(ctx context.Context, opt RestoreOptions, archive io.Reader) error {
 	if err := assertConfMatches(base, extracted.conf, uploads, sqliteFile); err != nil {
 		return err
 	}
+	// 清单、哈希和完整性已经核对。先在临时库上补充分组样式，成功后才允许覆盖。
+	if err := migrateExtractedSQLite(ctx, extracted.sqlite); err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return err
+		}
+		return fmt.Errorf("%w: %v", ErrMigrate, err)
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := opt.fault("migrate"); err != nil {
+		return err
+	}
 
 	rollbackDB := filepath.Join(temp, "rollback.sqlite")
 	if _, err := snapshotSQLite(ctx, opt.DB, rollbackDB); err != nil {
@@ -202,6 +217,114 @@ func Restore(ctx context.Context, opt RestoreOptions, archive io.Reader) error {
 	customSwap.commit()
 	confSwap.commit()
 	return nil
+}
+
+// migrateExtractedSQLite 给已核对的临时 SQLite 补上可空的 icon_style。
+// 旧行保持 NULL。已经是 0、1 或 NULL 的值保持不变。失败时调用方不得覆盖线上数据。
+func migrateExtractedSQLite(ctx context.Context, path string) error {
+	changed, err := migrateGroupIconStyle(ctx, path)
+	if err != nil {
+		return err
+	}
+	if !changed {
+		return nil
+	}
+	return integrityCheckFile(path)
+}
+
+func migrateGroupIconStyle(ctx context.Context, path string) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	db, err := sql.Open("sqlite3", path)
+	if err != nil {
+		return false, err
+	}
+	defer db.Close()
+	db.SetMaxOpenConns(1)
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer conn.Close()
+	if _, err := conn.ExecContext(ctx, "PRAGMA busy_timeout = 5000"); err != nil {
+		return false, err
+	}
+	var table string
+	err = conn.QueryRowContext(ctx, `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'item_icon_group'`).Scan(&table)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	column, err := groupIconStyleColumn(ctx, conn)
+	if err != nil {
+		return false, err
+	}
+	if column == nil {
+		if _, err := conn.ExecContext(ctx, `ALTER TABLE item_icon_group ADD COLUMN icon_style INTEGER`); err != nil {
+			return false, err
+		}
+		column, err = groupIconStyleColumn(ctx, conn)
+		if err != nil {
+			return false, err
+		}
+		if column == nil || column.notNull || column.hasDefault {
+			return false, errors.New("icon_style was not added as a nullable column")
+		}
+		var filled int
+		if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM item_icon_group WHERE icon_style IS NOT NULL`).Scan(&filled); err != nil {
+			return false, err
+		}
+		if filled != 0 {
+			return false, errors.New("adding icon_style changed existing rows")
+		}
+		return true, nil
+	}
+	if column.notNull || column.hasDefault {
+		return false, errors.New("icon_style must stay nullable and without a default")
+	}
+	var invalid int
+	if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM item_icon_group WHERE icon_style IS NOT NULL AND icon_style NOT IN (0, 1)`).Scan(&invalid); err != nil {
+		return false, err
+	}
+	if invalid != 0 {
+		return false, errors.New("icon_style contains a value other than 0, 1, or NULL")
+	}
+	return false, nil
+}
+
+type groupStyleColumn struct {
+	notNull    bool
+	hasDefault bool
+}
+
+func groupIconStyleColumn(ctx context.Context, conn *sql.Conn) (*groupStyleColumn, error) {
+	rows, err := conn.QueryContext(ctx, `PRAGMA table_info(item_icon_group)`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid, notNull, pk int
+		var name, columnType string
+		var dflt sql.NullString
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &dflt, &pk); err != nil {
+			return nil, err
+		}
+		if name != "icon_style" {
+			continue
+		}
+		if err := rows.Close(); err != nil {
+			return nil, err
+		}
+		return &groupStyleColumn{notNull: notNull != 0, hasDefault: dflt.Valid}, nil
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return nil, nil
 }
 
 func (opt RestoreOptions) fault(stage string) error {

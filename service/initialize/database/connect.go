@@ -127,7 +127,7 @@ func CreateDatabase(driver string, db *gorm.DB) error {
 	if err != nil {
 		return err
 	}
-	// 旧库升级和覆盖恢复后的分组表都要有可空的 icon_style，已有行保持为空。
+	// 进程启动时给已经打开的旧库补上可空列。覆盖恢复会先改临时库，不把补列留到重启。
 	return models.EnsureItemIconGroupIconStyle(db)
 }
 

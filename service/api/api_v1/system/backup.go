@@ -1,6 +1,7 @@
 package system
 
 import (
+	"context"
 	"errors"
 	"io"
 	"net/http"
@@ -11,7 +12,6 @@ import (
 	"sun-panel/global"
 	"sun-panel/lib/backup"
 	"sun-panel/lib/cmn"
-	"sun-panel/models"
 
 	"github.com/gin-gonic/gin"
 )
@@ -188,11 +188,6 @@ func (a *BackupApi) restoreAt(c *gin.Context, baseDir, version string, versionCo
 		apiReturn.Error(c, restoreMessage(err))
 		return
 	}
-	// 旧备份没有分组卡片样式这一列。补上可空列后，那些分组继续跟随全局样式。
-	if err := models.EnsureItemIconGroupIconStyle(global.Db); err != nil {
-		apiReturn.Error(c, "备份已经覆盖，但分组卡片样式字段没有补上。请重启后再试。当前服务仍在运行。")
-		return
-	}
 	apiReturn.Success(c)
 }
 
@@ -237,6 +232,10 @@ func restoreMessage(err error) string {
 		return "恢复失败，而且回滚也没有完成。请先检查数据后再继续使用。当前服务仍在运行。"
 	case errors.Is(err, backup.ErrApply):
 		return "恢复没有完成，已退回覆盖前的数据。当前服务仍在运行。"
+	case errors.Is(err, backup.ErrMigrate):
+		return "备份里的分组样式无法补上，没有改动现有数据。当前服务仍在运行。"
+	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+		return "恢复已经取消，没有改动现有数据。当前服务仍在运行。"
 	default:
 		return "恢复失败，没有关闭正在运行的服务。"
 	}
