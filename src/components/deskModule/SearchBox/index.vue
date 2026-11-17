@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { NCheckbox } from 'naive-ui'
 import { decideSearchConfirm, decideSearchKey } from '@/utils/search/filterIcons'
 import { buildSearchUrl, addCustomEngine, currentSearchEngine, moveEngine, normalizeSearchConfig, removeCustomEngine, selectEngine, toPersistedSearchConfig, updateCustomEngine, type SearchConfig, type SearchConfigError, type SearchEngineRecord } from '@/utils/search/engines'
@@ -36,6 +36,20 @@ const builtinIcons: Record<string, string> = {
 const moduleConfigName = 'deskModuleSearchBox'
 const moduleConfig = useModuleConfig()
 const authStore = useAuthStore()
+const searchInput = ref<HTMLInputElement | null>(null)
+function focusSearch(event: KeyboardEvent) {
+  const target = event.target
+  if (event.key !== '/' || event.defaultPrevented || event.isComposing || event.ctrlKey || event.metaKey || event.altKey)
+    return
+  if (target instanceof HTMLElement && (target.isContentEditable || target.closest('input, textarea, select, [role="textbox"], [role="dialog"]')))
+    return
+  if (document.querySelector('[role="dialog"]'))
+    return
+  event.preventDefault()
+  searchInput.value?.focus()
+}
+onMounted(() => window.addEventListener('keydown', focusSearch))
+onUnmounted(() => window.removeEventListener('keydown', focusSearch))
 const searchTerm = ref('')
 const isFocused = ref(false)
 const searchSelectListShow = ref(false)
@@ -211,7 +225,7 @@ onMounted(() => {
         <span v-else class="engine-letter">{{ engineLetter(current) }}</span>
       </div>
 
-      <input v-model="searchTerm" :placeholder="$t('deskModule.searchBox.inputPlaceholder')" :aria-keyshortcuts="localSearchEnabled ? 'ArrowUp ArrowDown Enter Escape' : 'Enter Escape'" @focus="onFocus" @blur="onBlur" @input="handleItemSearch" @keydown="handleKeydown">
+      <input ref="searchInput" v-model="searchTerm" :placeholder="$t('deskModule.searchBox.inputPlaceholder')" :aria-keyshortcuts="localSearchEnabled ? 'ArrowUp ArrowDown Enter Escape' : 'Enter Escape'" @focus="onFocus" @blur="onBlur" @input="handleItemSearch" @keydown="handleKeydown">
 
       <div v-if="searchTerm !== ''" class="search-box-btn-clear w-[25px] mr-[10px] flex justify-center cursor-pointer" @click="handleClearSearchTerm">
         <SvgIcon style="width: 20px;height: 20px;" icon="line-md:close-small" />

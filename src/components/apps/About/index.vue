@@ -42,7 +42,7 @@ onMounted(() => {
       </div>
       <div class="mt-1">
         {{ $t('apps.about.repository') }}
-        <a href="https://github.com/Tleon-H/sun-panel" target="_blank" class="link">Tleon-H/sun-panel</a>
+        <a href="https://github.com/Tleon-H/leon-panel" target="_blank" class="link">Tleon-H/leon-panel</a>
       </div>
       <div class="mt-1">
         {{ $t('apps.about.license') }}

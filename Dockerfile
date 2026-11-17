@@ -1,10 +1,10 @@
 # build frontend
-FROM node AS web_image
+FROM node:22-alpine AS web_image
 
 # 华为源
 # RUN npm config set registry https://repo.huaweicloud.com/repository/npm/
 
-RUN npm install pnpm -g
+RUN npm install pnpm@8.15.9 -g
 
 WORKDIR /build
 
@@ -12,7 +12,7 @@ COPY ./package.json /build
 
 COPY ./pnpm-lock.yaml /build
 
-RUN pnpm install
+RUN pnpm install --frozen-lockfile
 
 COPY . /build
 
@@ -36,15 +36,15 @@ RUN apk add --no-cache bash curl gcc git musl-dev
 
 RUN go env -w GO111MODULE=on \
     && export PATH=$PATH:/go/bin \
-    && go install -a -v github.com/go-bindata/go-bindata/...@latest \
-    && go install -a -v github.com/elazarl/go-bindata-assetfs/...@latest \
+    && go install -a -v github.com/go-bindata/go-bindata/go-bindata@v3.1.2+incompatible \
+    && go install -a -v github.com/elazarl/go-bindata-assetfs/go-bindata-assetfs@v1.0.1 \
     && go-bindata-assetfs -o=assets/bindata.go -pkg=assets assets/... \
     && go build -o sun-panel --ldflags="-X sun-panel/global.RUNCODE=release -X sun-panel/global.ISDOCKER=docker" main.go
 
 
 
 # run_image
-FROM alpine
+FROM alpine:3.18
 
 WORKDIR /app
 

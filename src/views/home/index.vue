@@ -98,16 +98,11 @@ let iconLoadRequest = 0
 
 function getList() {
   const requestId = ++iconLoadRequest
-  getGroupList<Common.ListResponse<ItemGroup[]>>().then(({ code, data }) => {
+  getGroupList<Common.ListResponse<ItemGroup[]>>(true).then(({ code, data }) => {
     if (requestId !== iconLoadRequest || code !== 0)
       return
     items.value = data.list || []
     applySearchFilter()
-    for (let i = 0; i < items.value.length; i++) {
-      const element = items.value[i]
-      if (element.id)
-        updateItemIconGroupByNet(element.id, requestId)
-    }
   })
 }
 

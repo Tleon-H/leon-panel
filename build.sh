@@ -6,8 +6,8 @@ REPO=$(
 )
 COMMIT_SHA=$(git rev-parse --short HEAD)
 # VERSION=$(git describe --tags)
-VERSION="v${cut -d '|' -f 2 ./service/assets/version}"
-LATEST_TAG=$(git describe --tags --abbrev=0)
+VERSION="v$(cut -d '|' -f 2 "$REPO/service/assets/version" | tr '+' '-')"
+LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || true)
 FRONTEND="false"
 BINARY="false"
 RELEASE="false"
@@ -26,15 +26,15 @@ buildFrontend() {
   cd $REPO
   pwd
 #   npm install pnpm -g
-  pnpm install
+  pnpm install --frozen-lockfile
   pnpm run build
 }
 
 buildBackEndAssets() {
   cd $REPO/service
 #   export PATH=$PATH:/root/go/bin
-  go install -a -v github.com/go-bindata/go-bindata/...@latest
-  go install -a -v github.com/elazarl/go-bindata-assetfs/...@latest
+  go install -a -v github.com/go-bindata/go-bindata/go-bindata@v3.1.2+incompatible
+  go install -a -v github.com/elazarl/go-bindata-assetfs/go-bindata-assetfs@v1.0.1
   go-bindata-assetfs -o=assets/bindata.go -pkg=assets assets/...
 }
 

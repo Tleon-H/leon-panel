@@ -1,6 +1,7 @@
 package panel
 
 import (
+	"encoding/json"
 	"math"
 	"sun-panel/api/api_v1/common/apiData/commonApiStructs"
 	"sun-panel/api/api_v1/common/apiReturn"
@@ -45,13 +46,21 @@ func (a *ItemIconGroup) Edit(c *gin.Context) {
 }
 
 func (a *ItemIconGroup) GetList(c *gin.Context) {
-
+	req := struct {
+		IncludeItems bool `json:"includeItems"`
+	}{}
+	if c.Request.ContentLength != 0 {
+		if err := c.ShouldBindJSON(&req); err != nil {
+			apiReturn.ErrorParamFomat(c, err.Error())
+			return
+		}
+	}
 	userInfo, _ := base.GetCurrentUserInfo(c)
 	groups := []models.ItemIconGroup{}
+	icons := []models.ItemIcon{}
 
 	err := global.Db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Order("sort ,created_at").Where("user_id=?", userInfo.ID).Find(&groups).Error; err != nil {
-			apiReturn.ErrorDatabase(c, err.Error())
 			return err
 		}
 
@@ -63,29 +72,50 @@ func (a *ItemIconGroup) GetList(c *gin.Context) {
 				Icon:   "material-symbols:ad-group-outline",
 			}
 			if err := tx.Create(&defaultGroup).Error; err != nil {
-				apiReturn.ErrorDatabase(c, err.Error())
 				return err
 			}
 
 			// 并将当前账号下所有无分组的图标更新到当前组
 			if err := tx.Model(&models.ItemIcon{}).Where("user_id=?", userInfo.ID).Update("item_icon_group_id", defaultGroup.ID).Error; err != nil {
-				apiReturn.ErrorDatabase(c, err.Error())
 				return err
 			}
 
 			groups = append(groups, defaultGroup)
 		}
 
-		// 返回 nil 提交事务
+		if req.IncludeItems {
+			if err := tx.Where("user_id=?", userInfo.ID).Order("sort, created_at, id").Find(&icons).Error; err != nil {
+				return err
+			}
+		}
 		return nil
 	})
 
 	if err != nil {
 		apiReturn.ErrorDatabase(c, err.Error())
 		return
-	} else {
-		apiReturn.SuccessListData(c, groups, 0)
 	}
+	if !req.IncludeItems {
+		apiReturn.SuccessListData(c, groups, 0)
+		return
+	}
+	type groupWithItems struct {
+		models.ItemIconGroup
+		Items []models.ItemIcon `json:"items"`
+	}
+	result := make([]groupWithItems, len(groups))
+	positions := make(map[int]int, len(groups))
+	for i, group := range groups {
+		result[i] = groupWithItems{group, []models.ItemIcon{}}
+		positions[int(group.ID)] = i
+	}
+	for _, icon := range icons {
+		if i, ok := positions[icon.ItemIconGroupId]; ok {
+			_ = json.Unmarshal([]byte(icon.IconJson), &icon.Icon)
+			result[i].Items = append(result[i].Items, icon)
+		}
+	}
+	apiReturn.SuccessListData(c, result, 0)
 }
 
 func (a *ItemIconGroup) Deletes(c *gin.Context) {
