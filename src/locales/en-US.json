@@ -343,7 +343,10 @@
     "contextLanAddress": "Intranet address",
     "contextOpenCurrent": "Open in current page",
     "contextOpenNewTab": "Open in new tab",
-    "contextOpenWindow": "Open in an in-page window"
+    "contextOpenWindow": "Open in an in-page window",
+    "loading": "Loading groups and cards",
+    "loadFailed": "Groups and cards failed to load",
+    "retry": "Retry"
   },
   "settingUserInfo": {
     "confirmLogoutText": "Are you sure you want to logout?",

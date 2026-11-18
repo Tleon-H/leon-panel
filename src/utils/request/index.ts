@@ -1,6 +1,7 @@
 import type { AxiosProgressEvent, AxiosResponse, GenericAbortSignal } from 'axios'
 import request from './axios'
 import { apiRespErrMsg, message } from './apiMessage'
+import { asRequestFailure } from './failure'
 import { prepareHttpRequest } from './payload'
 import { t } from '@/locales'
 import { useAppStore, useAuthStore } from '@/store'
@@ -79,13 +80,13 @@ function http<T = any>(
       return res.data
   }
 
-  const failHandler = (error: Response<Error>) => {
+  const failHandler = (error: unknown) => {
     afterRequest?.()
     message.error(t('common.networkError'), {
       duration: 50000,
       closable: true,
     })
-    throw new Error(error?.msg || 'Error')
+    throw asRequestFailure(error)
   }
 
   beforeRequest?.()
