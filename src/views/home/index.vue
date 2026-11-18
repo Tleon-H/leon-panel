@@ -170,7 +170,9 @@ function requestHomeList(mode: 'refresh' | 'retry') {
   if (begun.requestId === null)
     return
   const requestId = begun.requestId
-  getGroupList<Common.ListResponse<ItemGroup[]>>(true, () => homeListRequestCurrent(listState, requestId, identity)).then((res) => {
+  getGroupList<Common.ListResponse<ItemGroup[]>>(true, () => {
+    return homeListRequestCurrent(listState, requestId, identity) && homeListIdentity(authStore.token) === identity
+  }).then((res) => {
     const parsed = parseHomeListPayload<ItemGroup>(res)
     commitHomeList(settleHomeListLoad(listState, {
       requestId,

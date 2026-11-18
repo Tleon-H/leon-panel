@@ -9,6 +9,7 @@ import {
   createHomeListState,
   disposeHomeList,
   homeListFeedback,
+  homeListIdentity,
   homeListRequestCurrent,
   noteHomeListIdentity,
   settleHomeListLoad,
@@ -79,7 +80,9 @@ function view(current: Page, searchActive = false) {
 
 // 与 successHandler 同一顺序：先判断这次响应是否过期，再清会话；然后首页才按世代接收结果。
 function deliver(current: Page, request: { id: number; identity: string }, code: number, items?: Card[], sessionCurrent?: () => boolean) {
-  const currentResponse = sessionCurrent ?? (() => homeListRequestCurrent(current.list, request.id, request.identity))
+  const currentResponse = sessionCurrent ?? (() => {
+    return homeListRequestCurrent(current.list, request.id, request.identity) && homeListIdentity(current.token) === request.identity
+  })
   if (code !== 0 && !staleSessionResponse(code, currentResponse) && (code === 1000 || code === 1001)) {
     current.effects.push(code === 1001 ? 'login-message' : 'exit')
     current.route = '/login'
@@ -222,6 +225,24 @@ test('a late auth response after leaving or switching accounts does not clear th
   keptInput(switched)
 })
 
+test('an old 1000 or 1001 does not clear a token written before the identity watch runs', () => {
+  for (const code of [1001, 1000]) {
+    const current = page()
+    const request = beginHomeListLoad(current.list, token, 'refresh')
+    current.list = request.state
+    current.token = 'session-b'
+    assert.equal(current.list.identity, token)
+    assert.equal(homeListRequestCurrent(current.list, request.requestId as number, token), true)
+    deliver(current, { id: request.requestId as number, identity: token }, code, cards)
+    assert.deepEqual(current.effects, [])
+    assert.deepEqual(current.forgotten, [])
+    assert.equal(current.token, 'session-b')
+    assert.equal(current.route, '/')
+    assert.equal(current.list.identity, token)
+    keptInput(current)
+  }
+})
+
 test('the request layer checks a stale homepage response before clearing the session', () => {
   const request = source('src/utils/request/index.ts')
   const handler = request.slice(request.indexOf('const successHandler'), request.indexOf('const failHandler'))
@@ -234,7 +255,7 @@ test('the request layer checks a stale homepage response before clearing the ses
   assert.match(handler, /res\.data\.code === 1000/)
   assert.match(request, /sessionCurrent\?: \(\) => boolean/)
   assert.match(source('src/api/panel/itemIconGroup.ts'), /sessionCurrent,/)
-  assert.match(source('src/views/home/index.vue'), /homeListRequestCurrent\(listState, requestId, identity\)/)
+  assert.match(source('src/views/home/index.vue'), /homeListRequestCurrent\(listState, requestId, identity\) && homeListIdentity\(authStore\.token\) === identity/)
   const home = source('src/views/home/index.vue')
   const refresh = home.slice(home.indexOf('function requestHomeList'), home.indexOf('function updateItemIconGroupByNet'))
   assert.doesNotMatch(refresh, /searchKeyword|inputError|formError/)
