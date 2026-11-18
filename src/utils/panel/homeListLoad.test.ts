@@ -368,7 +368,7 @@ test('the homepage keeps one grouped request and the existing card behaviors', (
   const load = source('src/utils/panel/homeListLoad.ts')
   const getList = home.slice(home.indexOf('function getList()'), home.indexOf('function updateItemIconGroupByNet'))
   const mounted = home.slice(home.indexOf('onMounted(() => {'), home.indexOf('const activeSearchItem'))
-  assert.match(getList, /getGroupList<Common\.ListResponse<ItemGroup\[\]>>\(true\)/)
+  assert.match(getList, /getGroupList<Common\.ListResponse<ItemGroup\[\]>>\(true, \(\) => homeListRequestCurrent\(listState, requestId, identity\)\)/)
   assert.equal(getList.match(/getGroupList/g)?.length, 1)
   assert.doesNotMatch(getList, /getListByGroupId/)
   assert.match(getList, /requestHomeList\('retry'\)/)

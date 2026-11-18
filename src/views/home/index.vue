@@ -19,7 +19,7 @@ import { contentMaxWidth } from '@/utils/panel/maxWidth'
 import { resolveGroupIconStyle } from '@/utils/panel/groupIconStyle'
 import { contextMenuEntries, contextNewTabFeatures, resolveContextMenuChoice } from '@/utils/panel/contextMenu'
 import type { ContextMenuEntry } from '@/utils/panel/contextMenu'
-import { beginHomeListLoad, classifyHomeListFailure, createHomeListState, disposeHomeList, homeListFeedback, homeListIdentity, noteHomeListIdentity, parseHomeListPayload, settleHomeListLoad } from '@/utils/panel/homeListLoad'
+import { beginHomeListLoad, classifyHomeListFailure, createHomeListState, disposeHomeList, homeListFeedback, homeListIdentity, homeListRequestCurrent, noteHomeListIdentity, parseHomeListPayload, settleHomeListLoad } from '@/utils/panel/homeListLoad'
 import type { HomeListState } from '@/utils/panel/homeListLoad'
 import { requestFailureDetails } from '@/utils/request/failure'
 
@@ -170,7 +170,7 @@ function requestHomeList(mode: 'refresh' | 'retry') {
   if (begun.requestId === null)
     return
   const requestId = begun.requestId
-  getGroupList<Common.ListResponse<ItemGroup[]>>(true).then((res) => {
+  getGroupList<Common.ListResponse<ItemGroup[]>>(true, () => homeListRequestCurrent(listState, requestId, identity)).then((res) => {
     const parsed = parseHomeListPayload<ItemGroup>(res)
     commitHomeList(settleHomeListLoad(listState, {
       requestId,

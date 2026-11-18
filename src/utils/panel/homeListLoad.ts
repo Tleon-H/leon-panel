@@ -76,13 +76,17 @@ export function beginHomeListLoad<T>(state: HomeListState<T>, identity: string, 
   }
 }
 
+export function homeListRequestCurrent<T>(state: HomeListState<T>, requestId: number, identity: string): boolean {
+  return !state.disposed && requestId === state.generation && identity === state.identity
+}
+
 export function settleHomeListLoad<T>(state: HomeListState<T>, input: {
   requestId: number
   identity: string
   outcome: HomeListOutcome
   items?: T[]
 }): HomeListState<T> {
-  if (state.disposed || input.requestId !== state.generation || input.identity !== state.identity)
+  if (!homeListRequestCurrent(state, input.requestId, input.identity))
     return state
   if (input.outcome === 'success') {
     return {

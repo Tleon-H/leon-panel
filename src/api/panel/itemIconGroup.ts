@@ -7,10 +7,11 @@ export function edit<T>(req: Panel.ItemIconGroup) {
   })
 }
 
-export function getList<T>(includeItems = false) {
+export function getList<T>(includeItems = false, sessionCurrent?: () => boolean) {
   return post<T>({
     url: '/panel/itemIconGroup/getList',
     data: { includeItems },
+    sessionCurrent,
   })
 }
 
