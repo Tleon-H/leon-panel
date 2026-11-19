@@ -556,6 +556,159 @@ test('auth failures clear only the confirmed snapshot, including a late 1001 tha
   assert.equal(staleExpiry.clear, null)
   assert.deepEqual(titles(staleExpiry.state), ['更新后'])
   assert.equal(staleExpiry.state.list.failure, 'none')
+
+  remember(storage, login(7), rawGroups(7, '账号甲'))
+  const hinted = receiveHomeViewAuth(start(boot()).state, {
+    generation: 1,
+    tokenIdentity: 'session-a',
+    response: { code: 1001 },
+    clearHint: login(7),
+    readCache: () => {
+      reads += 1
+      return readHomeSnapshot(storage, login(7), now)
+    },
+    epochNow: 0,
+  })
+  assert.equal(hinted.clear?.identity.kind, 'login')
+  assert.equal(hinted.clear?.identity.accountId, 7)
+  assert.equal(hinted.clear?.epoch, 0)
+  assert.equal(dropHomeSnapshot(storage, hinted.clear!.identity, hinted.clear!.epoch), true)
+  assert.equal(readHomeSnapshot(storage, login(7), now), null)
+  assert.deepEqual(readHomeSnapshot(storage, guest(9), now)?.map(group => group.title), ['公开丙'])
+  assert.equal(reads, 0)
+
+  remember(storage, login(8), rawGroups(8, '账号乙'))
+  const supersededHint = start(boot())
+  const newerHint = start(supersededHint.state)
+  const staleHint = receiveHomeViewList(newerHint.state, {
+    requestId: supersededHint.requestId,
+    tokenIdentity: 'session-a',
+    response: { code: 1001 },
+    clearHint: login(8),
+    epochNow: 0,
+  })
+  assert.equal(staleHint.clear, null)
+  assert.deepEqual(readHomeSnapshot(storage, login(8), now)?.map(group => group.title), ['账号乙'])
+  clearHomeSnapshots(storage)
+  remember(storage, login(8), rawGroups(8, '清除后的账号乙'), 1)
+  assert.equal(dropHomeSnapshot(storage, login(8), 0), false)
+  assert.deepEqual(readHomeSnapshot(storage, login(8), now)?.map(group => group.title), ['清除后的账号乙'])
+})
+
+test('a temporary authInfo failure keeps the authorized list and does not touch the snapshot', () => {
+  const storage = memory()
+  remember(storage, login(7), rawGroups(7, '缓存文档'))
+  const longUrl = `https://example.com/${'a'.repeat(1200)}`
+  const started = start(boot())
+  const early = receiveHomeViewList(started.state, {
+    requestId: started.requestId,
+    tokenIdentity: 'session-a',
+    response: { code: 0, data: { list: rawGroups(7, '实时文档', { url: longUrl, icon: { itemType: 2, src: longUrl, text: '文', backgroundColor: '#112233' } }) } },
+    epochNow: 0,
+  })
+  let reads = 0
+  const interrupted = receiveHomeViewAuth(early.state, {
+    generation: 1,
+    tokenIdentity: 'session-a',
+    failure: { status: null, code: null },
+    clearHint: login(7),
+    readCache: () => {
+      reads += 1
+      return readHomeSnapshot(storage, login(7), now)
+    },
+    epochNow: 0,
+  })
+  assert.equal(interrupted.state.auth, 'unavailable')
+  assert.equal(interrupted.write, null)
+  assert.equal(interrupted.clear, null)
+  assert.equal(reads, 0)
+  assert.deepEqual(titles(interrupted.state), ['实时文档'])
+  assert.equal(interrupted.state.list.failure, 'none')
+  assert.equal(viewOf(interrupted.state).showRetry, false)
+  const shown = interrupted.state.list.items[0].items?.[0]
+  assert.equal(shown?.url, longUrl)
+  assert.equal(shown?.icon?.src, longUrl)
+  assert.deepEqual(readHomeSnapshot(storage, login(7), now)?.map(group => group.title), ['缓存文档'])
+
+  for (const failure of [{ status: 502 }, { status: 500 }, { code: 1005 }] as const) {
+    const again = receiveHomeViewAuth(early.state, {
+      generation: 1,
+      tokenIdentity: 'session-a',
+      response: 'code' in failure ? { code: failure.code } : undefined,
+      failure: 'status' in failure ? failure : undefined,
+      clearHint: login(7),
+      readCache: () => readHomeSnapshot(storage, login(7), now),
+      epochNow: 0,
+    })
+    assert.equal(again.state.auth, 'unavailable')
+    assert.equal(again.clear, null)
+    assert.equal(again.write, null)
+    assert.equal(again.state.list.items[0].items?.[0].url, longUrl)
+  }
+
+  const waiting = start(boot())
+  const offline = receiveHomeViewAuth(waiting.state, {
+    generation: 1,
+    tokenIdentity: 'session-a',
+    failure: { status: 503 },
+    clearHint: login(7),
+    readCache: () => readHomeSnapshot(storage, login(7), now),
+    epochNow: 0,
+  })
+  assert.equal(offline.state.list.loading, true)
+  assert.deepEqual(titles(offline.state), [])
+  const later = receiveHomeViewList(offline.state, {
+    requestId: waiting.requestId,
+    tokenIdentity: 'session-a',
+    response: { code: 0, data: { list: rawGroups(7, '稍后到达', { url: longUrl }) } },
+    clearHint: login(7),
+    epochNow: 0,
+  })
+  assert.deepEqual(titles(later.state), ['稍后到达'])
+  assert.equal(later.write, null)
+  assert.equal(later.clear, null)
+  assert.equal(later.state.list.items[0].items?.[0].url, longUrl)
+
+  const beforeAuth = start(boot())
+  const listed = receiveHomeViewList(beforeAuth.state, {
+    requestId: beforeAuth.requestId,
+    tokenIdentity: 'session-a',
+    response: { code: 1001 },
+    clearHint: login(7),
+    epochNow: 0,
+  })
+  assert.equal(listed.state.list.failure, 'auth')
+  assert.deepEqual(titles(listed.state), [])
+  assert.deepEqual(listed.clear?.identity, login(7))
+  assert.deepEqual(readHomeSnapshot(storage, login(7), now)?.map(group => group.title), ['缓存文档'])
+})
+
+test('live cards keep long addresses while the snapshot is a separate copy', () => {
+  const storage = memory()
+  const longUrl = `https://example.com/${'b'.repeat(1500)}`
+  const started = start(boot())
+  const confirmed = receiveHomeViewAuth(started.state, {
+    generation: 1,
+    tokenIdentity: 'session-a',
+    response: authInfo(0, 7),
+    readCache: () => null,
+    epochNow: 0,
+  })
+  const live = receiveHomeViewList(confirmed.state, {
+    requestId: started.requestId,
+    tokenIdentity: 'session-a',
+    response: { code: 0, data: { list: rawGroups(7, '长地址', { url: longUrl, icon: { itemType: 2, src: longUrl, text: '长', backgroundColor: '#fff' } }) } },
+    epochNow: 0,
+  })
+  const shown = live.state.list.items[0].items?.[0]
+  assert.equal(shown?.url, longUrl)
+  assert.equal(shown?.icon?.src, longUrl)
+  assert.equal(live.write?.groups[0].items[0].url, longUrl)
+  assert.equal(live.write?.groups[0].items[0].icon?.src, longUrl)
+  assert.equal(JSON.stringify(live.write?.groups).includes('secret'), false)
+  assert.equal(writeHomeSnapshot(storage, live.write!.identity, live.write!.groups, live.write!.epoch, now, 80), false)
+  assert.equal(readHomeSnapshot(storage, login(7), now), null)
+  assert.equal(live.state.list.items[0].items?.[0].url, longUrl)
 })
 
 test('damaged, expired, oversized, and disabled storage still leave room for the network result', () => {
@@ -634,7 +787,11 @@ test('the homepage and clear page keep the existing request and route boundaries
   const confirm = home.slice(home.indexOf('function confirmHomeAuth()'), home.indexOf('function getList()'))
   assert.doesNotMatch(confirm, /!homeListIdentity/)
   assert.match(home, /view\.authGeneration === generation/)
-  assert.doesNotMatch(home, /authStore\.userInfo/)
+  const hint = home.slice(home.indexOf('function issuedSnapshotHint'), home.indexOf('function dropIssuedSnapshot'))
+  assert.match(hint, /authStore\.userInfo\?\.id/)
+  assert.doesNotMatch(home.replace(hint, ''), /authStore\.userInfo/)
+  assert.doesNotMatch(home.slice(home.indexOf('function readCachedGroups'), home.indexOf('function persistHomeCache')), /userInfo/)
+  assert.match(home, /dropIssuedSnapshot\(clearTarget\)/)
   assert.doesNotMatch(executable(home), /localStorage|sessionStorage|indexedDB/)
   assert.doesNotMatch(executable(source('src/utils/panel/homeListLoad.ts')), /localStorage|sessionStorage|indexedDB/)
   assert.equal(clear.includes('onMounted'), false)

@@ -4,6 +4,7 @@ import type { NotificationReactive } from 'naive-ui'
 import { NButton, createDiscreteApi } from 'naive-ui'
 import { useAuthStore, useNoticeStore, useUserStore } from '@/store'
 import { getAuthInfo } from '@/api/system/user'
+import { staleAuthProfile } from '@/utils/request/sessionExpiry'
 import type { VisitMode } from '@/enums/auth'
 import { getListByDisplayType as getListByDisplayTypeApi } from '@/api/notice'
 
@@ -110,7 +111,7 @@ export async function updateLocalUserInfo(sessionCurrent?: () => boolean) {
   }
 
   const res = await getAuthInfo<Req>(sessionCurrent)
-  if (res.code !== 0 || !res.data?.user)
+  if (res.code !== 0 || !res.data?.user || staleAuthProfile(sessionCurrent))
     return res
   userStore.updateUserInfo({ headImage: res.data.user.headImage, name: res.data.user.name })
   authStore.setUserInfo(res.data.user)

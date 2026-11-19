@@ -8,3 +8,10 @@ export function staleSessionResponse(code: unknown, sessionCurrent?: () => boole
     return false
   return !sessionCurrent()
 }
+
+// 成功的 authInfo 写本地资料前再确认一次。没传检查的调用方保持原样。
+export function staleAuthProfile(sessionCurrent?: () => boolean): boolean {
+  if (!sessionCurrent)
+    return false
+  return !sessionCurrent()
+}

@@ -15,7 +15,7 @@ import {
   settleHomeListLoad,
 } from '../panel/homeListLoad.ts'
 import type { HomeListState } from '../panel/homeListLoad.ts'
-import { staleSessionResponse } from './sessionExpiry.ts'
+import { staleAuthProfile, staleSessionResponse } from './sessionExpiry.ts'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '../../..')
 
@@ -263,4 +263,17 @@ test('the request layer checks a stale homepage response before clearing the ses
   const api = files(join(root, 'src/api')).filter(path => path.endsWith('.ts'))
   const guarded = api.filter(path => source(path.slice(root.length + 1)).includes('sessionCurrent'))
   assert.deepEqual(guarded.map(path => path.slice(root.length + 1)).sort(), ['src/api/panel/itemIconGroup.ts', 'src/api/system/user.ts'])
+})
+
+test('a stale authInfo success does not update the new account profile', () => {
+  assert.equal(staleAuthProfile(undefined), false)
+  assert.equal(staleAuthProfile(() => true), false)
+  assert.equal(staleAuthProfile(() => false), true)
+  const profile = source('src/utils/cmn/index.ts')
+  const body = profile.slice(profile.indexOf('export async function updateLocalUserInfo'), profile.indexOf('export async function getNotice'))
+  const guard = body.indexOf('staleAuthProfile(sessionCurrent)')
+  assert.ok(guard > 0)
+  assert.ok(guard < body.indexOf('updateUserInfo'))
+  assert.ok(guard < body.indexOf('setUserInfo'))
+  assert.ok(guard < body.indexOf('setVisitMode'))
 })

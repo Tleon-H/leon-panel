@@ -260,8 +260,8 @@ function snapshotCard(value: unknown, accountId: number): HomeCardSnapshot | nul
   return {
     id: optionalId(card.id),
     title: boundedText(card.title),
-    url: boundedText(card.url),
-    lanUrl: boundedText(card.lanUrl),
+    url: plainText(card.url),
+    lanUrl: plainText(card.lanUrl),
     description: boundedText(card.description),
     openMethod: finite(card.openMethod),
     sort: finite(card.sort),
@@ -277,7 +277,7 @@ function snapshotIcon(value: unknown): HomeCardIconSnapshot | null {
   const icon = value as Record<string, unknown>
   return {
     itemType: finite(icon.itemType),
-    src: boundedText(icon.src),
+    src: plainText(icon.src),
     text: boundedText(icon.text),
     backgroundColor: boundedText(icon.backgroundColor),
   }
@@ -379,6 +379,10 @@ function isNonNegativeInteger(value: unknown): value is number {
 
 function finite(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0
+}
+
+function plainText(value: unknown): string {
+  return typeof value === 'string' ? value : ''
 }
 
 function boundedText(value: unknown): string {

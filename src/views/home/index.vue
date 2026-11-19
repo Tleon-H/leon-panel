@@ -208,11 +208,36 @@ function applyHomeCache(result: HomeCacheStep<ItemGroup>) {
   persistHomeCache(result)
 }
 
+function issuedSnapshotHint(): HomeSnapshotIdentity | null {
+  // 只在鉴权失败时提示要删哪一份快照。展示仍然只看这次 authInfo。
+  const accountId = authStore.userInfo?.id
+  if (typeof accountId !== 'number' || !Number.isInteger(accountId) || accountId <= 0)
+    return null
+  if (authStore.visitMode === VisitMode.VISIT_MODE_PUBLIC)
+    return { kind: 'public', accountId }
+  if (authStore.visitMode === VisitMode.VISIT_MODE_LOGIN)
+    return { kind: 'login', accountId }
+  return null
+}
+
+function dropIssuedSnapshot(target: { identity: HomeSnapshotIdentity; epoch: number } | null) {
+  if (!target)
+    return
+  try {
+    dropHomeSnapshot(browserHomeStorage(), target.identity, target.epoch)
+  }
+  catch {
+    // 存储不可用时无法删除，页面也不展示这份快照。
+  }
+}
+
 function confirmHomeAuth() {
   // 空令牌是公开访客，无效令牌会由服务端回退成访客。两种都要等这次 authInfo，不能跳过。
   if (listState.disposed)
     return
   const generation = view.authGeneration + 1
+  const issuedHint = issuedSnapshotHint()
+  const epochAtStart = homeEpoch()
   view = {
     ...view,
     auth: 'pending',
@@ -221,21 +246,30 @@ function confirmHomeAuth() {
     authGeneration: generation,
   }
   const tokenIdentity = homeListIdentity(authStore.token)
+  let clearTarget: { identity: HomeSnapshotIdentity; epoch: number } | null = null
   updateLocalUserInfo(() => {
-    return !listState.disposed && view.authGeneration === generation && homeListIdentity(authStore.token) === tokenIdentity
+    const current = !listState.disposed && view.authGeneration === generation && homeListIdentity(authStore.token) === tokenIdentity
+    clearTarget = current && issuedHint && epochAtStart !== null
+      ? { identity: issuedHint, epoch: epochAtStart }
+      : null
+    return current
   }).then((res) => {
     applyHomeCache(receiveHomeViewAuth(view, {
       generation,
       tokenIdentity,
       response: res,
+      clearHint: issuedHint,
       readCache: readCachedGroups,
       epochNow: homeEpoch(),
     }))
+    if (res.code === 1000 || res.code === 1001)
+      dropIssuedSnapshot(clearTarget)
   }).catch((error: unknown) => {
     applyHomeCache(receiveHomeViewAuth(view, {
       generation,
       tokenIdentity,
       failure: requestFailureDetails(error),
+      clearHint: issuedHint,
       readCache: () => null,
       epochNow: homeEpoch(),
     }))
@@ -247,7 +281,7 @@ function getList() {
 }
 
 function retryHomeList() {
-  if (view.auth === 'rejected')
+  if (view.auth === 'rejected' || view.auth === 'unavailable')
     confirmHomeAuth()
   requestHomeList('retry')
 }
@@ -264,13 +298,16 @@ function requestHomeList(mode: 'refresh' | 'retry') {
   if (begun.requestId === null)
     return
   const requestId = begun.requestId
+  const issuedHint = issuedSnapshotHint()
+  const epochAtStart = homeEpoch()
   // 1000/1001 会先清掉令牌，身份监听随即让这次请求变成旧请求。
-  // 是否属于已确认身份，要在清令牌之前记下来，否则相关快照清不掉。
-  let confirmedAuthFailure: { identity: HomeSnapshotIdentity; epoch: number } | null = null
+  // 删除目标要在清令牌之前记下：已确认的身份优先，否则只用发出请求时的账号。
+  let clearTarget: { identity: HomeSnapshotIdentity; epoch: number } | null = null
   getGroupList<Common.ListResponse<ItemGroup[]>>(true, () => {
     const current = homeListRequestCurrent(listState, requestId, identity) && homeListIdentity(authStore.token) === identity
-    confirmedAuthFailure = current && view.auth === 'confirmed' && view.identity && view.epoch !== null
-      ? { identity: view.identity, epoch: view.epoch }
+    const snapshotIdentity = view.auth === 'confirmed' && view.identity ? view.identity : issuedHint
+    clearTarget = current && snapshotIdentity && epochAtStart !== null
+      ? { identity: snapshotIdentity, epoch: epochAtStart }
       : null
     return current
   }).then((res) => {
@@ -278,16 +315,18 @@ function requestHomeList(mode: 'refresh' | 'retry') {
       requestId,
       tokenIdentity: identity,
       response: res,
+      clearHint: issuedHint,
       epochNow: homeEpoch(),
       readCache: readCachedGroups,
     }))
-    if (confirmedAuthFailure && (res.code === 1000 || res.code === 1001))
-      dropHomeSnapshot(browserHomeStorage(), confirmedAuthFailure.identity, confirmedAuthFailure.epoch)
+    if (res.code === 1000 || res.code === 1001)
+      dropIssuedSnapshot(clearTarget)
   }).catch((error: unknown) => {
     applyHomeCache(receiveHomeViewList(view, {
       requestId,
       tokenIdentity: identity,
       failure: requestFailureDetails(error),
+      clearHint: issuedHint,
       epochNow: homeEpoch(),
     }))
   })

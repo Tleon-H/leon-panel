@@ -4,7 +4,7 @@
 
 import type { HomeListState } from './homeListLoad'
 import type { HomeGroupSnapshot, HomeSnapshotIdentity } from './homeSnapshot'
-import { cacheableHomeGroups, identityFromAuthInfo } from './homeSnapshot'
+import { cacheableHomeGroups, homeListOwnership, identityFromAuthInfo } from './homeSnapshot'
 import {
   classifyHomeListFailure,
   disposeHomeList,
@@ -15,7 +15,7 @@ import {
 
 export interface HomeViewCache<T> {
   list: HomeListState<T>
-  auth: 'pending' | 'confirmed' | 'rejected'
+  auth: 'pending' | 'confirmed' | 'rejected' | 'unavailable'
   authGeneration: number
   identity: HomeSnapshotIdentity | null
   held: { requestId: number; tokenIdentity: string; items: unknown[] } | null
@@ -79,17 +79,17 @@ export function receiveHomeViewAuth<T>(state: HomeViewCache<T>, input: {
   failure?: { code?: unknown; status?: unknown } | null
   readCache: (identity: HomeSnapshotIdentity) => T[] | null
   epochNow: number | null
+  // 只在确认身份前的鉴权失败时用来删除对应快照，不参与展示。
+  clearHint?: HomeSnapshotIdentity | null
 }): HomeCacheStep<T> {
   if (input.generation !== state.authGeneration || state.list.disposed || input.tokenIdentity !== state.list.identity)
     return unchanged(state)
-  if (input.failure && classifyHomeListFailure(input.failure) === 'auth')
-    return rejectAuth(state)
+  if (authFailure(input.failure, input.response))
+    return rejectAuth(state, input.clearHint)
   const response = input.response
-  if (response && classifyHomeListFailure({ code: response.code }) === 'auth')
-    return rejectAuth(state)
   const identity = response && response.code === 0 ? identityFromAuthInfo(response.data) : null
   if (!identity)
-    return rejectAuth(state)
+    return disableCache(state)
 
   const confirmed: HomeViewCache<T> = { ...state, auth: 'confirmed', identity }
   if (confirmed.held && homeListRequestCurrent(confirmed.list, confirmed.held.requestId, confirmed.held.tokenIdentity))
@@ -123,6 +123,7 @@ export function receiveHomeViewList<T>(state: HomeViewCache<T>, input: {
   failure?: { code?: unknown; status?: unknown } | null
   epochNow: number | null
   readCache?: (identity: HomeSnapshotIdentity) => T[] | null
+  clearHint?: HomeSnapshotIdentity | null
 }): HomeCacheStep<T> {
   if (!homeListRequestCurrent(state.list, input.requestId, input.tokenIdentity))
     return unchanged(state)
@@ -141,7 +142,7 @@ export function receiveHomeViewList<T>(state: HomeViewCache<T>, input: {
         }),
       },
       write: null,
-      clear: state.auth === 'confirmed' ? clearOf(state) : null,
+      clear: state.auth === 'confirmed' ? clearOf(state) : hintedClear(state, input.clearHint),
     }
   }
   if (outcome !== 'success') {
@@ -160,6 +161,8 @@ export function receiveHomeViewList<T>(state: HomeViewCache<T>, input: {
     }
   }
   const items = parseHomeListPayload(input.response).items
+  if (state.auth === 'unavailable')
+    return showAuthorizedList(state, input.requestId, input.tokenIdentity, items)
   if (state.auth !== 'confirmed' || !state.identity) {
     if (state.auth === 'rejected') {
       return {
@@ -193,8 +196,7 @@ function applyOwnedList<T>(state: HomeViewCache<T>, requestId: number, tokenIden
   const identity = state.identity
   if (!identity || !homeListRequestCurrent(state.list, requestId, tokenIdentity))
     return unchanged(state)
-  const groups = cacheableHomeGroups(items, identity.accountId)
-  if (!groups) {
+  if (homeListOwnership(items, identity.accountId) === 'foreign') {
     const cached = readCache?.(identity)
     const kept = cached && state.list.items.length === 0 ? cached : state.list.items
     return {
@@ -211,6 +213,8 @@ function applyOwnedList<T>(state: HomeViewCache<T>, requestId: number, tokenIden
       clear: null,
     }
   }
+  // 页面展示后端返回的原卡片。快照另做裁剪；写不进去时这次缓存作废，活数据保留。
+  const groups = cacheableHomeGroups(items, identity.accountId)
   return {
     state: {
       ...state,
@@ -219,10 +223,10 @@ function applyOwnedList<T>(state: HomeViewCache<T>, requestId: number, tokenIden
         requestId,
         identity: tokenIdentity,
         outcome: 'success',
-        items: groups as T[],
+        items: items as T[],
       }),
     },
-    write: writable(state, groups, epochNow),
+    write: groups ? writable(state, groups, epochNow) : null,
     clear: null,
   }
 }
@@ -239,21 +243,74 @@ function clearOf<T>(state: HomeViewCache<T>): HomeCacheStep<T>['clear'] {
   return { identity: state.identity, epoch: state.epoch }
 }
 
-function rejectAuth<T>(state: HomeViewCache<T>): HomeCacheStep<T> {
-  const list = state.list.loading || state.list.failure === 'auth'
-    ? state.list
-    : { ...state.list, failure: 'retryable' as const, loading: false }
+function rejectAuth<T>(state: HomeViewCache<T>, hint?: HomeSnapshotIdentity | null): HomeCacheStep<T> {
   return {
     state: {
       ...state,
       auth: 'rejected',
       identity: null,
       held: null,
-      list,
+      list: {
+        ...state.list,
+        loading: false,
+        failure: 'auth',
+        loaded: false,
+        items: [],
+      },
+    },
+    write: null,
+    clear: clearOf(state) ?? hintedClear(state, hint),
+  }
+}
+
+function disableCache<T>(state: HomeViewCache<T>): HomeCacheStep<T> {
+  const held = state.held && homeListRequestCurrent(state.list, state.held.requestId, state.held.tokenIdentity)
+    ? state.held.items as T[]
+    : null
+  return {
+    state: {
+      ...state,
+      auth: 'unavailable',
+      identity: null,
+      held: null,
+      list: held
+        ? { ...state.list, items: held, loaded: true, loading: false, failure: 'none' }
+        : state.list,
     },
     write: null,
     clear: null,
   }
+}
+
+function showAuthorizedList<T>(state: HomeViewCache<T>, requestId: number, tokenIdentity: string, items: unknown[]): HomeCacheStep<T> {
+  return {
+    state: {
+      ...state,
+      held: null,
+      list: settleHomeListLoad(state.list, {
+        requestId,
+        identity: tokenIdentity,
+        outcome: 'success',
+        items: items as T[],
+      }),
+    },
+    write: null,
+    clear: null,
+  }
+}
+
+function authFailure(failure?: { code?: unknown; status?: unknown } | null, response?: { code?: unknown } | null): boolean {
+  if (failure && classifyHomeListFailure(failure) === 'auth')
+    return true
+  if (response && classifyHomeListFailure({ code: response.code }) === 'auth')
+    return true
+  return false
+}
+
+function hintedClear<T>(state: HomeViewCache<T>, hint?: HomeSnapshotIdentity | null): HomeCacheStep<T>['clear'] {
+  if (!hint || state.epoch === null)
+    return null
+  return { identity: hint, epoch: state.epoch }
 }
 
 function settledSuccess<T>(list: HomeListState<T>): boolean {
