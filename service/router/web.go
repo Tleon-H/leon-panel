@@ -15,7 +15,7 @@ import (
 // hashFrontendRoutes 是 src/router/index.ts 里除首页和兜底匹配以外的具体页面。
 // 前端使用 hash history，所以登录页的真实地址是 /#/login。
 // 这里只给这些地址一个入口，不把未知路径、缺失文件或接口回成页面。
-var hashFrontendRoutes = []string{"/login", "/404", "/500", "/test"}
+var hashFrontendRoutes = []string{"/login", "/404", "/500", "/test", "/clear"}
 
 // NewEngine 组装接口、静态文件和前端入口。sourcePath 仍按原规则去掉首字符后作为 URL 前缀。
 func NewEngine(webPath, sourcePath string) *gin.Engine {

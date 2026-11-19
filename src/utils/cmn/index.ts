@@ -101,17 +101,21 @@ export function getTitle(titile: string) {
   document.title = titile
 }
 
-//
-export async function updateLocalUserInfo() {
+// 首页把同一次 authInfo 的结果交给缓存确认身份，所以这里把响应交回去。
+// 业务失败没有用户数据时不写入本地账号资料。
+export async function updateLocalUserInfo(sessionCurrent?: () => boolean) {
   interface Req {
     user: User.Info
     visitMode: VisitMode
   }
 
-  const { data } = await getAuthInfo<Req>()
-  userStore.updateUserInfo({ headImage: data.user.headImage, name: data.user.name })
-  authStore.setUserInfo(data.user)
-  authStore.setVisitMode(data.visitMode)
+  const res = await getAuthInfo<Req>(sessionCurrent)
+  if (res.code !== 0 || !res.data?.user)
+    return res
+  userStore.updateUserInfo({ headImage: res.data.user.headImage, name: res.data.user.name })
+  authStore.setUserInfo(res.data.user)
+  authStore.setVisitMode(res.data.visitMode)
+  return res
 }
 
 export async function getNotice(displayType: number | number[]) {

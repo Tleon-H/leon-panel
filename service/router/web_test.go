@@ -38,6 +38,13 @@ func TestFrontendEntriesStayOnTheRealHashRoutes(t *testing.T) {
 			if strings.Contains(response.Body.String(), shell) {
 				t.Fatal("frontend entry returned the SPA document instead of the hash route")
 			}
+			head := request(engine, http.MethodHead, route)
+			if head.Code != http.StatusFound || head.Header().Get("Location") != "/#"+route {
+				t.Fatalf("HEAD %s = %d %q", route, head.Code, head.Header().Get("Location"))
+			}
+			if strings.Contains(head.Body.String(), shell) {
+				t.Fatal("HEAD returned the SPA document")
+			}
 		})
 	}
 

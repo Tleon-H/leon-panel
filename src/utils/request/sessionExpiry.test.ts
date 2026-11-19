@@ -262,5 +262,5 @@ test('the request layer checks a stale homepage response before clearing the ses
 
   const api = files(join(root, 'src/api')).filter(path => path.endsWith('.ts'))
   const guarded = api.filter(path => source(path.slice(root.length + 1)).includes('sessionCurrent'))
-  assert.deepEqual(guarded.map(path => path.slice(root.length + 1)), ['src/api/panel/itemIconGroup.ts'])
+  assert.deepEqual(guarded.map(path => path.slice(root.length + 1)).sort(), ['src/api/panel/itemIconGroup.ts', 'src/api/system/user.ts'])
 })

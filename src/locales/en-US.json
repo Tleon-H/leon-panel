@@ -348,6 +348,17 @@
     "loadFailed": "Groups and cards failed to load",
     "retry": "Retry"
   },
+  "homeCache": {
+    "title": "Clear homepage cache",
+    "scope": "This page only covers the homepage group and card snapshot saved in this browser. After a refresh, the homepage shows that identity's latest successful result once the identity is confirmed.",
+    "visit": "Opening this page does not delete or change anything.",
+    "keeps": "Login, saved accounts, interface preferences, and the groups and cards stored on the server are kept.",
+    "button": "Clear homepage cache",
+    "cleared": "The homepage group and card snapshot in this browser has been cleared.",
+    "empty": "There is no homepage snapshot to clear.",
+    "unavailable": "Browser storage is unavailable. Login, accounts, and preferences were not changed.",
+    "backHome": "Back to homepage"
+  },
   "settingUserInfo": {
     "confirmLogoutText": "Are you sure you want to logout?",
     "confirmPassword": "Confirm new password",

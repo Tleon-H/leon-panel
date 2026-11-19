@@ -19,14 +19,23 @@ import { contentMaxWidth } from '@/utils/panel/maxWidth'
 import { resolveGroupIconStyle } from '@/utils/panel/groupIconStyle'
 import { contextMenuEntries, contextNewTabFeatures, resolveContextMenuChoice } from '@/utils/panel/contextMenu'
 import type { ContextMenuEntry } from '@/utils/panel/contextMenu'
-import { beginHomeListLoad, classifyHomeListFailure, createHomeListState, disposeHomeList, homeListFeedback, homeListIdentity, homeListRequestCurrent, noteHomeListIdentity, parseHomeListPayload, settleHomeListLoad } from '@/utils/panel/homeListLoad'
+import { beginHomeListLoad, createHomeListState, disposeHomeList, homeListFeedback, homeListIdentity, homeListRequestCurrent, noteHomeListIdentity } from '@/utils/panel/homeListLoad'
 import type { HomeListState } from '@/utils/panel/homeListLoad'
+import { attachHomeRequest, createHomeViewCache, receiveHomeViewAuth, receiveHomeViewList, resetHomeViewAuth } from '@/utils/panel/homeCache'
+import type { HomeCacheStep, HomeViewCache } from '@/utils/panel/homeCache'
+import { browserHomeStorage, dropHomeSnapshot, readHomeSnapshot, readHomeSnapshotEpoch, writeHomeSnapshot } from '@/utils/panel/homeSnapshot'
+import type { HomeSnapshotIdentity } from '@/utils/panel/homeSnapshot'
 import { requestFailureDetails } from '@/utils/request/failure'
+
+interface ItemCard extends Panel.ItemInfo {
+  userId?: number
+}
 
 interface ItemGroup extends Panel.ItemIconGroup {
   sortStatus?: boolean
   hoverStatus: boolean
-  items?: Panel.ItemInfo[]
+  userId?: number
+  items?: ItemCard[]
 }
 
 const ms = useMessage()
@@ -55,6 +64,7 @@ const settingModalShow = ref(false)
 
 const items = ref<ItemGroup[]>([])
 let listState: HomeListState<ItemGroup> = createHomeListState(homeListIdentity(authStore.token))
+let view: HomeViewCache<ItemGroup> = createHomeViewCache(listState)
 const homeLoading = ref(false)
 const homeRetryVisible = ref(false)
 const homeShowNoData = ref(false)
@@ -145,10 +155,91 @@ function publishHomeList() {
 function commitHomeList(next: HomeListState<ItemGroup>) {
   if (next === listState)
     return
-  if (next.items !== items.value)
-    items.value = next.items
-  listState = next
+  const presented = next.items.map(group => ({
+    ...group,
+    hoverStatus: group.hoverStatus ?? false,
+  }))
+  const stored = { ...next, items: presented }
+  items.value = presented
+  listState = stored
+  view = { ...view, list: stored }
   applySearchFilter()
+}
+
+function homeEpoch(): number | null {
+  try {
+    return readHomeSnapshotEpoch(browserHomeStorage())
+  }
+  catch {
+    return null
+  }
+}
+
+function readCachedGroups(identity: HomeSnapshotIdentity): ItemGroup[] | null {
+  try {
+    const groups = readHomeSnapshot(browserHomeStorage(), identity, Date.now())
+    if (!groups)
+      return null
+    return groups.map(group => ({ ...group, hoverStatus: false }))
+  }
+  catch {
+    return null
+  }
+}
+
+function persistHomeCache(result: HomeCacheStep<ItemGroup>) {
+  if (!result.write && !result.clear)
+    return
+  try {
+    const storage = browserHomeStorage()
+    if (result.clear)
+      dropHomeSnapshot(storage, result.clear.identity, result.clear.epoch)
+    if (result.write)
+      writeHomeSnapshot(storage, result.write.identity, result.write.groups, result.write.epoch, Date.now())
+  }
+  catch {
+    // 浏览器存储不可用时只保留这次页面里的结果。
+  }
+}
+
+function applyHomeCache(result: HomeCacheStep<ItemGroup>) {
+  view = result.state
+  commitHomeList(result.state.list)
+  persistHomeCache(result)
+}
+
+function confirmHomeAuth() {
+  // 空令牌是公开访客，无效令牌会由服务端回退成访客。两种都要等这次 authInfo，不能跳过。
+  if (listState.disposed)
+    return
+  const generation = view.authGeneration + 1
+  view = {
+    ...view,
+    auth: 'pending',
+    identity: null,
+    held: null,
+    authGeneration: generation,
+  }
+  const tokenIdentity = homeListIdentity(authStore.token)
+  updateLocalUserInfo(() => {
+    return !listState.disposed && view.authGeneration === generation && homeListIdentity(authStore.token) === tokenIdentity
+  }).then((res) => {
+    applyHomeCache(receiveHomeViewAuth(view, {
+      generation,
+      tokenIdentity,
+      response: res,
+      readCache: readCachedGroups,
+      epochNow: homeEpoch(),
+    }))
+  }).catch((error: unknown) => {
+    applyHomeCache(receiveHomeViewAuth(view, {
+      generation,
+      tokenIdentity,
+      failure: requestFailureDetails(error),
+      readCache: () => null,
+      epochNow: homeEpoch(),
+    }))
+  })
 }
 
 function getList() {
@@ -156,6 +247,8 @@ function getList() {
 }
 
 function retryHomeList() {
+  if (view.auth === 'rejected')
+    confirmHomeAuth()
   requestHomeList('retry')
 }
 
@@ -166,27 +259,36 @@ function requestHomeList(mode: 'refresh' | 'retry') {
   const begun = beginHomeListLoad(listState, identity, mode)
   if (begun.requestId === null && begun.state === listState)
     return
-  commitHomeList(begun.state)
+  view = attachHomeRequest(view, begun.state, begun.requestId, begun.requestId === null ? view.epoch : homeEpoch())
+  commitHomeList(view.list)
   if (begun.requestId === null)
     return
   const requestId = begun.requestId
+  // 1000/1001 会先清掉令牌，身份监听随即让这次请求变成旧请求。
+  // 是否属于已确认身份，要在清令牌之前记下来，否则相关快照清不掉。
+  let confirmedAuthFailure: { identity: HomeSnapshotIdentity; epoch: number } | null = null
   getGroupList<Common.ListResponse<ItemGroup[]>>(true, () => {
-    return homeListRequestCurrent(listState, requestId, identity) && homeListIdentity(authStore.token) === identity
+    const current = homeListRequestCurrent(listState, requestId, identity) && homeListIdentity(authStore.token) === identity
+    confirmedAuthFailure = current && view.auth === 'confirmed' && view.identity && view.epoch !== null
+      ? { identity: view.identity, epoch: view.epoch }
+      : null
+    return current
   }).then((res) => {
-    const parsed = parseHomeListPayload<ItemGroup>(res)
-    commitHomeList(settleHomeListLoad(listState, {
+    applyHomeCache(receiveHomeViewList(view, {
       requestId,
-      identity,
-      outcome: parsed.outcome,
-      items: parsed.items,
+      tokenIdentity: identity,
+      response: res,
+      epochNow: homeEpoch(),
+      readCache: readCachedGroups,
     }))
+    if (confirmedAuthFailure && (res.code === 1000 || res.code === 1001))
+      dropHomeSnapshot(browserHomeStorage(), confirmedAuthFailure.identity, confirmedAuthFailure.epoch)
   }).catch((error: unknown) => {
-    const details = requestFailureDetails(error)
-    commitHomeList(settleHomeListLoad(listState, {
+    applyHomeCache(receiveHomeViewList(view, {
       requestId,
-      identity,
-      outcome: classifyHomeListFailure(details),
-      items: [],
+      tokenIdentity: identity,
+      failure: requestFailureDetails(error),
+      epochNow: homeEpoch(),
     }))
   })
 }
@@ -340,14 +442,15 @@ watch(() => homeListIdentity(authStore.token), (identity, previous) => {
   const noted = noteHomeListIdentity(listState, identity)
   if (!noted.changed)
     return
-  commitHomeList(noted.state)
+  view = resetHomeViewAuth(view, noted.state)
+  commitHomeList(view.list)
+  confirmHomeAuth()
   if (identity)
     getList()
 })
 
 onMounted(() => {
-  // 更新用户信息
-  updateLocalUserInfo()
+  confirmHomeAuth()
   getList()
 
   // 更新同步云端配置
@@ -360,6 +463,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   listState = disposeHomeList(listState)
+  view = { ...view, list: listState, held: null }
 })
 
 const activeSearchItem = computed(() => searchMatches.value[activeMatchIndex.value])

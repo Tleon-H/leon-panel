@@ -23,7 +23,7 @@ test('hash routes and the Go entry list describe the same pages', () => {
   assert.doesNotMatch(routerSource, /createWebHistory\(/)
 
   const routes = concreteRoutes(routerSource)
-  assert.deepEqual(routes, ['/login', '/404', '/500', '/test'])
+  assert.deepEqual(routes, ['/login', '/404', '/500', '/test', '/clear'])
   const listed = serverSource.match(/hashFrontendRoutes = \[\]string\{([^}]+)\}/)
   assert.ok(listed)
   const serverRoutes = [...listed[1].matchAll(/"([^"]+)"/g)].map(match => match[1])
