@@ -483,6 +483,10 @@ watch(() => homeListIdentity(authStore.token), (identity, previous) => {
     return
   view = resetHomeViewAuth(view, noted.state)
   commitHomeList(view.list)
+  // 令牌从有到无是退出或当前 1001 清掉会话。只清视图，不再发空令牌 authInfo。
+  // 正常的空令牌访客仍由 onMounted 确认；换成另一个非空令牌才在这里确认。
+  if (!identity && previous)
+    return
   confirmHomeAuth()
   if (identity)
     getList()
