@@ -121,7 +121,7 @@ function handlePreviewBackToSettings() {
 
 function handlePreviewApply() {
   const presetId = panelState.previewPresetId
-  if (!presetId)
+  if (!presetId || !panelState.isCloudConfigReady)
     return
   const scopes = { ...activePreviewScopes.value }
   if (!hasSelectedScope(scopes)) {
@@ -129,10 +129,11 @@ function handlePreviewApply() {
     return
   }
   const preset = APPEARANCE_PRESETS[presetId]
-  panelState.applyAppearancePreset(presetId, scopes)
+  if (!panelState.applyAppearancePreset(presetId, scopes))
+    return
   settingModalShow.value = false
   panelState.savePanelConfigToCloud().then((result) => {
-    if (result.stale)
+    if (result.stale || result.blocked)
       return
     if (result.ok) {
       ms.success(t('apps.baseSettings.presets.applied', {
@@ -803,7 +804,9 @@ function handleAddItem(itemIconGroupId?: number) {
                       v-for="item, index in itemGroup.items"
                       :key="index"
                       class="leon-card-item"
+                      role="link"
                       tabindex="0"
+                      :aria-label="item.title"
                       :title="item.description"
                       :class="item === activeSearchItem ? 'leon-search-hit' : ''"
                       @contextmenu="(e) => handleContextMenu(e, itemGroupIndex, item)"
@@ -849,7 +852,9 @@ function handleAddItem(itemIconGroupId?: number) {
                       v-for="item, index in itemGroup.items"
                       :key="index"
                       class="leon-card-item"
+                      role="link"
                       tabindex="0"
+                      :aria-label="item.title"
                       :title="item.description"
                       :class="item === activeSearchItem ? 'leon-search-hit' : ''"
                       @contextmenu="(e) => handleContextMenu(e, itemGroupIndex, item)"
@@ -912,6 +917,7 @@ function handleAddItem(itemIconGroupId?: number) {
       v-if="panelState.isPreviewingAppearance && activePreviewPreset"
       class="leon-preview-bar"
       role="region"
+      :aria-label="$t('apps.baseSettings.presets.previewBanner', { name: $t(activePreviewPreset.nameKey) })"
       aria-live="polite"
       data-testid="appearance-preview-bar"
     >
@@ -967,7 +973,13 @@ function handleAddItem(itemIconGroupId?: number) {
           <button type="button" class="leon-preview-btn leon-preview-btn-secondary" data-testid="preview-cancel" @click="handlePreviewCancel">
             {{ $t('apps.baseSettings.presets.exitPreview') }}
           </button>
-          <button type="button" class="leon-preview-btn leon-preview-btn-primary" data-testid="preview-apply" @click="handlePreviewApply">
+          <button
+            type="button"
+            class="leon-preview-btn leon-preview-btn-primary"
+            :disabled="!panelState.isCloudConfigReady"
+            data-testid="preview-apply"
+            @click="handlePreviewApply"
+          >
             {{ $t('apps.baseSettings.presets.applySelected') }}
           </button>
         </div>

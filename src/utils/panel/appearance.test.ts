@@ -9,7 +9,10 @@ import {
   LEGACY_DEFAULT_CARD_BG,
   applyAppearancePreset,
   applyCardSurfaceDefaults,
+  applyWallpaperSource,
   contrastRatio,
+  createPanelCloudController,
+  inferWallpaperToneFromSrc,
   isLegacyDefaultCardBackground,
   isPanelStateOwnedByAccount,
   normalizePanelAppearance,
@@ -20,7 +23,7 @@ import {
   serializePanelConfig,
   shouldAutoSavePanelConfig,
 } from './appearance.ts'
-import type { AppearancePanelConfig } from './appearance.ts'
+import type { AppearancePanelConfig, PanelCloudResponse } from './appearance.ts'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '../../..')
 
@@ -55,7 +58,8 @@ test('legacy panel config without preset fields normalizes safely without alteri
   assert.equal(normalized.iconStyle, 1)
   assert.equal(normalized.iconTextColor, '#ffffff')
   assert.equal(normalized.cardSurface, 'default')
-  assert.equal(normalized.wallpaperTone, 'dark')
+  assert.equal(normalized.wallpaperTone, undefined)
+  assert.equal(resolveHomepageThemeVars(normalized).isLightCanvas, false)
   assert.equal(normalized.iconBadgeStyle, 'default')
   assert.equal(normalized.cardBackgroundColor, LEGACY_DEFAULT_CARD_BG)
   assert.equal(normalized.cardBlur, 0)
@@ -79,7 +83,7 @@ test('selective preset application only modifies checked scopes and preserves cu
   assert.equal(wallpaperOnly.iconTextColor, '#ffffff')
   // Original object must remain untouched (preview / cancel safety)
   assert.equal(base.backgroundImageSrc, '/uploads/custom-user-bg.webp')
-  assert.equal(base.wallpaperTone, 'dark')
+  assert.equal(base.wallpaperTone, undefined)
 
   // Card style only: keeps custom wallpaper and icon style
   const cardOnly = applyAppearancePreset(base, 'ocean-glass', {
@@ -354,9 +358,7 @@ test('preview isolation, persistence, and account switch wiring stay intact', ()
   assert.match(helper, /lastSyncedPanelJson: _lastSyncedPanelJson/)
   assert.match(helper, /isPanelStateOwnedByAccount\(/)
   assert.match(store, /activePanelConfig\(/)
-  assert.match(store, /cloudSyncGeneration/)
-  assert.match(store, /cloudSaveGeneration/)
-  assert.match(store, /cloudSaveQueue/)
+  assert.match(store, /createPanelCloudController</)
   assert.match(store, /savePanelConfigToCloud\(/)
   assert.match(store, /startAppearancePreview\(/)
   assert.match(store, /cancelAppearancePreview\(/)
@@ -376,4 +378,411 @@ test('preview isolation, persistence, and account switch wiring stay intact', ()
   assert.match(style, /preset-scope-iconStyle/)
   assert.match(less, /\.leon-preview-btn-ghost/)
   assert.match(less, /\.leon-preview-btn-secondary/)
+})
+
+test('legacy custom text color without explicit wallpaperTone is preserved through normalizePanelAppearance and activePanelConfig while preset configurations remain protected', () => {
+  const legacyCustomDarkText: AppearancePanelConfig = {
+    ...legacyConfig(),
+    backgroundImageSrc: '/uploads/my-light-photo.jpg',
+    iconTextColor: '#000000',
+  }
+  // Even after normalizePanelAppearance (which is what activePanelConfig and AppIcon run),
+  // wallpaperTone must remain undefined so legacy custom dark text (#000000) is preserved
+  const normalizedLegacy = normalizePanelAppearance(legacyCustomDarkText)
+  assert.equal(normalizedLegacy.wallpaperTone, undefined)
+  assert.equal(resolveSmallTitleColor(normalizedLegacy), '#000000')
+  assert.equal(resolveCardAppearance(normalizedLegacy, { backgroundColor: LEGACY_DEFAULT_CARD_BG }).textColor, '#000000')
+
+  const legacyCustomBrandText: AppearancePanelConfig = normalizePanelAppearance({
+    ...legacyConfig(),
+    iconTextColor: '#334155',
+  })
+  assert.equal(resolveSmallTitleColor(legacyCustomBrandText), '#334155')
+  assert.equal(resolveCardAppearance(legacyCustomBrandText, { backgroundColor: LEGACY_DEFAULT_CARD_BG }).textColor, '#334155')
+
+  // Once user explicitly chooses a wallpaperTone or applies a preset, WCAG protection activates
+  const explicitDarkTone: AppearancePanelConfig = normalizePanelAppearance({
+    ...legacyCustomDarkText,
+    wallpaperTone: 'dark',
+  })
+  assert.equal(explicitDarkTone.wallpaperTone, 'dark')
+  assert.equal(resolveSmallTitleColor(explicitDarkTone), '#f8fafc')
+  assert.equal(resolveCardAppearance(explicitDarkTone, { backgroundColor: LEGACY_DEFAULT_CARD_BG }).textColor, '#f8fafc')
+
+  const explicitLightTone: AppearancePanelConfig = normalizePanelAppearance({
+    ...legacyCustomDarkText,
+    wallpaperTone: 'light',
+  })
+  assert.equal(resolveSmallTitleColor(explicitLightTone), '#000000')
+})
+
+test('changing wallpaper source centralized helper updates wallpaperTone appropriately and allows subsequent manual override', () => {
+  assert.equal(inferWallpaperToneFromSrc('/assets/wallpapers/mist-paper.svg'), 'light')
+  assert.equal(inferWallpaperToneFromSrc('/assets/wallpapers/ocean-glass.svg'), 'dark')
+  assert.equal(inferWallpaperToneFromSrc('/assets/wallpapers/midnight-graphite.svg'), 'dark')
+  assert.equal(inferWallpaperToneFromSrc('/uploads/custom-night.jpg'), 'dark')
+  assert.equal(inferWallpaperToneFromSrc('https://example.com/bg.png'), 'dark')
+
+  // Apply Mist Paper preset (wallpaperTone becomes 'light')
+  const mistApplied = applyAppearancePreset(legacyConfig(), 'mist-paper', {
+    wallpaper: true,
+    cardStyle: false,
+    iconStyle: false,
+  })
+  assert.equal(mistApplied.wallpaperTone, 'light')
+
+  // Switching to a custom uploaded/gallery/URL image resets tone to 'dark' instead of inheriting 'light'
+  const afterCustomWallpaper = applyWallpaperSource(mistApplied, '/uploads/my-dark-wallpaper.webp')
+  assert.equal(afterCustomWallpaper.backgroundImageSrc, '/uploads/my-dark-wallpaper.webp')
+  assert.equal(afterCustomWallpaper.wallpaperTone, 'dark')
+  const darkTheme = resolveHomepageThemeVars(afterCustomWallpaper)
+  assert.equal(darkTheme.isLightCanvas, false)
+  assert.equal(darkTheme.cssVars['--leon-chrome-text'], '#ffffff')
+
+  // Switching to Mist Paper preset SVG sets tone to 'light'
+  const afterMistSvg = applyWallpaperSource(afterCustomWallpaper, '/assets/wallpapers/mist-paper.svg')
+  assert.equal(afterMistSvg.wallpaperTone, 'light')
+
+  // User can still manually override wallpaperTone after setting a custom wallpaper
+  const manualLightOverride: AppearancePanelConfig = {
+    ...afterCustomWallpaper,
+    wallpaperTone: 'light',
+  }
+  assert.equal(resolveHomepageThemeVars(manualLightOverride).isLightCanvas, true)
+  assert.notEqual(serializePanelConfig(afterCustomWallpaper), serializePanelConfig(manualLightOverride))
+})
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
+function createDefaultTestConfig(): AppearancePanelConfig {
+  const cfg = normalizePanelAppearance({
+    backgroundImageSrc: '/assets/defaultBackground.webp',
+    backgroundBlur: 0,
+    backgroundMaskNumber: 0,
+    cardSurface: 'default',
+    iconStyle: 1,
+    iconBadgeStyle: 'default',
+    iconTextColor: '#ffffff',
+    iconTextInfoHideDescription: false,
+    iconTextIconHideTitle: false,
+    logoText: 'Leon Panel',
+    searchBoxShow: false,
+    searchBoxSearchIcon: false,
+    maxWidth: 1200,
+    maxWidthUnit: 'px',
+    marginX: 5,
+    marginTop: 10,
+    marginBottom: 10,
+    netModeChangeButtonShow: true,
+  })
+  delete cfg.wallpaperTone
+  return cfg
+}
+
+test('loading gate blocks preset apply, wallpaper changes, and saves while initial GET is pending, and guest mode stays read-only', async () => {
+  let token = 'token-user-1'
+  let userId: number | null = 1
+  const pendingGet = deferred<PanelCloudResponse<AppearancePanelConfig>>()
+  const pushedPayloads: AppearancePanelConfig[] = []
+
+  const controller = createPanelCloudController<AppearancePanelConfig>({
+    getToken: () => token,
+    getUserId: () => userId,
+    createDefaultConfig: createDefaultTestConfig,
+    fetchCloudConfig: () => pendingGet.promise,
+    pushCloudConfig: async (panel) => {
+      pushedPayloads.push(panel)
+      return { code: 0 }
+    },
+  })
+
+  // Before load starts ('idle'), editing and saving are blocked
+  assert.equal(controller.canEdit(), false)
+  assert.equal(controller.applyPreset('mist-paper', { wallpaper: true, cardStyle: false, iconStyle: false }), false)
+  const blockedIdleSave = await controller.saveToCloud()
+  assert.equal(blockedIdleSave.ok, false)
+  assert.equal(blockedIdleSave.blocked, true)
+  assert.equal(pushedPayloads.length, 0)
+
+  // Start initial GET ('loading'): all mutations and saves must be rejected
+  const loadPromise = controller.loadFromCloud()
+  assert.equal(controller.state.cloudConfigState, 'loading')
+  assert.equal(controller.canEdit(), false)
+  assert.equal(controller.startPreview('ocean-glass'), false)
+  assert.equal(controller.applyPreset('mist-paper', { wallpaper: true, cardStyle: false, iconStyle: false }), false)
+  assert.equal(controller.setWallpaper('/uploads/early.webp'), false)
+  const blockedLoadingSave = await controller.saveToCloud()
+  assert.equal(blockedLoadingSave.ok, false)
+  assert.equal(blockedLoadingSave.blocked, true)
+  assert.equal(pushedPayloads.length, 0)
+
+  // Resolve initial GET with user's rich cloud configuration (default surface + legacy custom #000000 text)
+  pendingGet.resolve({
+    code: 0,
+    data: {
+      panel: {
+        logoText: 'My Private Cloud',
+        searchBoxShow: true,
+        cardSurface: 'default',
+        cardBlur: 0,
+        backgroundImageSrc: '/uploads/original-bg.webp',
+        iconTextColor: '#000000',
+        maxWidthUnit: 'px',
+      },
+    },
+  })
+  const loadRes = await loadPromise
+  assert.equal(loadRes.ok, true)
+  assert.equal(controller.state.cloudConfigState, 'ready')
+  assert.equal(controller.canEdit(), true)
+  assert.equal(controller.state.panelConfig.logoText, 'My Private Cloud')
+  assert.equal(controller.state.panelConfig.searchBoxShow, true)
+  // Legacy config without wallpaperTone keeps undefined through store's activePanelConfig -> AppIcon renders #000000!
+  const activeConfig = normalizePanelAppearance(controller.state.panelConfig)
+  assert.equal(activeConfig.wallpaperTone, undefined)
+  assert.equal(resolveSmallTitleColor(activeConfig), '#000000')
+  assert.equal(resolveCardAppearance(activeConfig, { backgroundColor: LEGACY_DEFAULT_CARD_BG }).textColor, '#000000')
+
+  // Applying wallpaper-only preset now preserves all non-wallpaper cloud fields!
+  assert.equal(controller.applyPreset('mist-paper', { wallpaper: true, cardStyle: false, iconStyle: false }), true)
+  const saveRes = await controller.saveToCloud()
+  assert.equal(saveRes.ok, true)
+  assert.equal(pushedPayloads.length, 1)
+  assert.equal(pushedPayloads[0].backgroundImageSrc, '/assets/wallpapers/mist-paper.svg')
+  assert.equal(pushedPayloads[0].wallpaperTone, 'light')
+  assert.equal(pushedPayloads[0].logoText, 'My Private Cloud')
+  assert.equal(pushedPayloads[0].searchBoxShow, true)
+  assert.equal(pushedPayloads[0].cardSurface, 'default')
+
+  // Guest mode (empty token) is strictly read-only even if state was ready
+  token = ''
+  userId = null
+  assert.equal(controller.canEdit(), false)
+  assert.equal(controller.applyPreset('ocean-glass'), false)
+  assert.equal(controller.setWallpaper('/uploads/guest.webp'), false)
+  const guestSave = await controller.saveToCloud()
+  assert.equal(guestSave.ok, false)
+  assert.equal(guestSave.blocked, true)
+  assert.equal(pushedPayloads.length, 1)
+})
+
+test('explicit record-not-found unlocks editing with default config, while transient GET errors keep previous config and unlock after retry', async () => {
+  const token = 'token-user-2'
+  let nextGetResponse: () => Promise<PanelCloudResponse<AppearancePanelConfig>> = async () => ({
+    code: -1,
+    msg: 'Server error',
+  })
+  const pushedPayloads: AppearancePanelConfig[] = []
+
+  const controller = createPanelCloudController<AppearancePanelConfig>({
+    getToken: () => token,
+    getUserId: () => 2,
+    createDefaultConfig: createDefaultTestConfig,
+    fetchCloudConfig: () => nextGetResponse(),
+    pushCloudConfig: async (panel) => {
+      pushedPayloads.push(panel)
+      return { code: 0 }
+    },
+  })
+
+  // 1. Explicit no-record response (code -1 from ErrorDataNotFound) marks ready with defaults
+  const firstLoad = await controller.loadFromCloud()
+  assert.equal(firstLoad.ok, true)
+  assert.equal(controller.state.cloudConfigState, 'ready')
+  assert.equal(controller.canEdit(), true)
+
+  // User customizes logoText in this valid session
+  controller.setPanelConfig({
+    ...controller.state.panelConfig,
+    logoText: 'Keep Me On Error',
+  })
+
+  // 2. Subsequent cloud refresh fails with database error (code 1200) -> enters 'error', keeps existing valid config, blocks saves
+  nextGetResponse = async () => ({
+    code: 1200,
+    msg: 'Server error[Database error]',
+  })
+  const failedLoad = await controller.loadFromCloud()
+  assert.equal(failedLoad.ok, false)
+  assert.equal(controller.state.cloudConfigState, 'error')
+  assert.equal(controller.canEdit(), false)
+  assert.equal(controller.state.panelConfig.logoText, 'Keep Me On Error')
+  assert.equal(controller.applyPreset('ocean-glass'), false)
+  const blockedSave = await controller.saveToCloud()
+  assert.equal(blockedSave.ok, false)
+  assert.equal(blockedSave.blocked, true)
+
+  // 3. Network exception also stays in 'error' and blocks writes
+  nextGetResponse = async () => {
+    throw new Error('network down')
+  }
+  const networkFailedLoad = await controller.loadFromCloud()
+  assert.equal(networkFailedLoad.ok, false)
+  assert.equal(controller.state.cloudConfigState, 'error')
+  assert.equal(controller.canEdit(), false)
+  assert.equal(controller.state.panelConfig.logoText, 'Keep Me On Error')
+
+  // 4. Retry succeeds -> unlocks editing and saving
+  nextGetResponse = async () => ({
+    code: 0,
+    data: {
+      panel: {
+        logoText: 'Restored From Server',
+        maxWidthUnit: 'px',
+      },
+    },
+  })
+  const retriedLoad = await controller.loadFromCloud()
+  assert.equal(retriedLoad.ok, true)
+  assert.equal(controller.state.cloudConfigState, 'ready')
+  assert.equal(controller.canEdit(), true)
+  assert.equal(controller.state.panelConfig.logoText, 'Restored From Server')
+})
+
+test('failed save retains dirty state for retry and only updates lastSyncedPanelJson on success', async () => {
+  let shouldFailSave = true
+  const pushedPayloads: AppearancePanelConfig[] = []
+
+  const controller = createPanelCloudController<AppearancePanelConfig>({
+    getToken: () => 'token-user-3',
+    getUserId: () => 3,
+    createDefaultConfig: createDefaultTestConfig,
+    fetchCloudConfig: async () => ({ code: -1 }),
+    pushCloudConfig: async (panel) => {
+      pushedPayloads.push(panel)
+      if (shouldFailSave)
+        return { code: 1200, msg: 'Database error' }
+      return { code: 0 }
+    },
+  })
+
+  await controller.loadFromCloud()
+  const initialSynced = controller.state.lastSyncedPanelJson
+  assert.equal(shouldAutoSavePanelConfig(controller.state.panelConfig, controller.state.lastSyncedPanelJson), false)
+
+  // Apply preset -> config is now dirty compared to lastSyncedPanelJson
+  assert.equal(controller.applyPreset('ocean-glass'), true)
+  assert.equal(shouldAutoSavePanelConfig(controller.state.panelConfig, controller.state.lastSyncedPanelJson), true)
+
+  // First save fails -> lastSyncedPanelJson must NOT advance, config remains dirty for retry
+  const failedSave = await controller.saveToCloud()
+  assert.equal(failedSave.ok, false)
+  assert.equal(failedSave.msg, 'Database error')
+  assert.equal(controller.state.lastSyncedPanelJson, initialSynced)
+  assert.equal(shouldAutoSavePanelConfig(controller.state.panelConfig, controller.state.lastSyncedPanelJson), true)
+
+  // Retry save succeeds -> lastSyncedPanelJson advances and config is no longer dirty
+  shouldFailSave = false
+  const retrySave = await controller.saveToCloud()
+  assert.equal(retrySave.ok, true)
+  assert.notEqual(controller.state.lastSyncedPanelJson, initialSynced)
+  assert.equal(shouldAutoSavePanelConfig(controller.state.panelConfig, controller.state.lastSyncedPanelJson), false)
+  assert.equal(pushedPayloads.length, 2)
+})
+
+test('rapid consecutive saves serialize in order, skip superseded writes, and account switch invalidates in-flight GET and SET responses', async () => {
+  let token = 'token-account-a'
+  let userId: number | null = 10
+  const firstSave = deferred<{ code: number; msg?: string }>()
+  const secondSave = deferred<{ code: number; msg?: string }>()
+  const pushedPayloads: Array<{ token: string; logoText?: string }> = []
+  let saveCallCount = 0
+
+  const pendingGetA = deferred<PanelCloudResponse<AppearancePanelConfig>>()
+  const pendingGetB = deferred<PanelCloudResponse<AppearancePanelConfig>>()
+  let getCallCount = 0
+
+  const controller = createPanelCloudController<AppearancePanelConfig>({
+    getToken: () => token,
+    getUserId: () => userId,
+    createDefaultConfig: createDefaultTestConfig,
+    fetchCloudConfig: () => {
+      getCallCount++
+      return getCallCount === 1 ? pendingGetA.promise : pendingGetB.promise
+    },
+    pushCloudConfig: (panel) => {
+      saveCallCount++
+      pushedPayloads.push({ token, logoText: panel.logoText })
+      return saveCallCount === 1 ? firstSave.promise : secondSave.promise
+    },
+  })
+
+  // Hydrate account A
+  const loadA = controller.loadFromCloud()
+  pendingGetA.resolve({ code: 0, data: { panel: { logoText: 'Account A Initial', maxWidthUnit: 'px' } } })
+  await loadA
+  assert.equal(controller.canEdit(), true)
+
+  // Rapid consecutive edits A1 then A2 while A1 save is in-flight
+  controller.setPanelConfig({ ...controller.state.panelConfig, logoText: 'Edit 1' })
+  const save1Promise = controller.saveToCloud()
+
+  controller.setPanelConfig({ ...controller.state.panelConfig, logoText: 'Edit 2 (Final)' })
+  const save2Promise = controller.saveToCloud()
+
+  // Resolve first in-flight HTTP request
+  firstSave.resolve({ code: 0 })
+  const res1 = await save1Promise
+  // save1 was superseded by save2 before it finished
+  assert.equal(res1.ok, false)
+  assert.equal(res1.stale, true)
+
+  // Resolve second save
+  secondSave.resolve({ code: 0 })
+  const res2 = await save2Promise
+  assert.equal(res2.ok, true)
+  assert.equal(pushedPayloads[pushedPayloads.length - 1].logoText, 'Edit 2 (Final)')
+  assert.equal(shouldAutoSavePanelConfig(controller.state.panelConfig, controller.state.lastSyncedPanelJson), false)
+
+  // Now test account switch while an old GET or SET is in flight
+  const staleGetA = deferred<PanelCloudResponse<AppearancePanelConfig>>()
+  let capturedGetSessionCurrent: (() => boolean) | undefined
+  let getUserIdCalledAtConstruction = false
+  const controllerSwitch = createPanelCloudController<AppearancePanelConfig>({
+    getToken: () => token,
+    getUserId: () => {
+      getUserIdCalledAtConstruction = true
+      return userId
+    },
+    createDefaultConfig: createDefaultTestConfig,
+    fetchCloudConfig: (sessionCurrent) => {
+      capturedGetSessionCurrent = sessionCurrent
+      return staleGetA.promise
+    },
+    pushCloudConfig: async () => ({ code: 0 }),
+  })
+  // Controller construction must be lazy and never invoke getUserId/Pinia before an action runs
+  assert.equal(getUserIdCalledAtConstruction, false)
+
+  const inFlightLoadA = controllerSwitch.loadFromCloud()
+  assert.equal(controllerSwitch.state.cloudConfigState, 'loading')
+  assert.equal(capturedGetSessionCurrent?.(), true)
+
+  // Switch to Account B immediately
+  token = 'token-account-b'
+  userId = 20
+  controllerSwitch.clearForAccountSwitch()
+  assert.equal(controllerSwitch.state.cloudConfigState, 'idle')
+  assert.equal(controllerSwitch.canEdit(), false)
+  // sessionCurrent callback passed to the request layer must immediately report false so late 1000/1001 will not clear Account B session
+  assert.equal(capturedGetSessionCurrent?.(), false)
+
+  // Late response from Account A arrives -> must be ignored as stale and not unlock or overwrite Account B
+  staleGetA.resolve({
+    code: 0,
+    data: { panel: { logoText: 'Leaked From Account A', maxWidthUnit: 'px' } },
+  })
+  const staleLoadResult = await inFlightLoadA
+  assert.equal(staleLoadResult.ok, false)
+  assert.equal(staleLoadResult.stale, true)
+  assert.equal(controllerSwitch.state.cloudConfigState, 'idle')
+  assert.equal(controllerSwitch.state.panelConfig.logoText, 'Leon Panel')
 })

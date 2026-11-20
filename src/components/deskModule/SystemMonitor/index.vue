@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { VueDraggable } from 'vue-draggable-plus'
 import { NButton, NDropdown, useDialog, useMessage } from 'naive-ui'
 import AppIconSystemMonitor from './AppIconSystemMonitor/index.vue'
@@ -10,6 +10,7 @@ import { usePanelState } from '@/store'
 import { PanelPanelConfigStyleEnum } from '@/enums'
 import { SvgIcon } from '@/components/common'
 import { t } from '@/locales'
+import { resolveSmallTitleColor } from '@/utils/panel/appearance'
 
 interface MonitorGroup extends Panel.ItemIconGroup {
   sortStatus?: boolean
@@ -22,6 +23,7 @@ const props = defineProps<{
   showTitle?: boolean
 }>()
 const panelState = usePanelState()
+const monitorSmallTitleColor = computed(() => resolveSmallTitleColor(panelState.activePanelConfig))
 
 const dialog = useDialog()
 const ms = useMessage()
@@ -217,7 +219,7 @@ function handleRightMenuSelect(key: string | number) {
               :card-type-style="panelState.activePanelConfig.iconStyle"
               :monitor-type="item.monitorType"
               :card-style="cardStyle"
-              :icon-text-color="panelState.activePanelConfig.iconTextColor"
+              :icon-text-color="monitorSmallTitleColor"
             />
           </div>
         </VueDraggable>
@@ -243,7 +245,7 @@ function handleRightMenuSelect(key: string | number) {
               :card-type-style="panelState.activePanelConfig.iconStyle"
               :monitor-type="item.monitorType"
               :card-style="cardStyle"
-              :icon-text-color="panelState.activePanelConfig.iconTextColor"
+              :icon-text-color="monitorSmallTitleColor"
             />
           </div>
         </vuedraggable>

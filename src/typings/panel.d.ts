@@ -35,6 +35,7 @@ declare namespace Panel {
     type CardSurfacePresetId = 'default' | AppearancePresetId
     type IconBadgeStyleId = 'default' | 'glass' | 'soft' | 'outline'
     type WallpaperTone = 'dark' | 'light'
+    type CloudConfigLoadState = 'idle' | 'loading' | 'ready' | 'error'
 
     interface AppearancePresetScopes {
         wallpaper: boolean
@@ -51,6 +52,8 @@ declare namespace Panel {
         previewPresetId?: AppearancePresetId | null
         previewScopes?: AppearancePresetScopes
         lastSyncedPanelJson?: string
+        cloudConfigState?: CloudConfigLoadState
+        cloudConfigError?: string
     }
 
     interface panelConfig{

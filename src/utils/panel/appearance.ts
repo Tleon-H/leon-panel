@@ -335,12 +335,50 @@ export function hasSelectedScope(scopes: AppearancePresetScopes): boolean {
   return scopes.wallpaper || scopes.cardStyle || scopes.iconStyle
 }
 
+export function inferWallpaperToneFromSrc(src?: string | null): WallpaperTone {
+  if (!src)
+    return 'dark'
+  const trimmed = src.trim()
+  for (const id of APPEARANCE_PRESET_IDS) {
+    const preset = APPEARANCE_PRESETS[id]
+    if (trimmed === preset.wallpaper.backgroundImageSrc || trimmed.endsWith(preset.wallpaper.backgroundImageSrc))
+      return preset.wallpaper.wallpaperTone
+  }
+  return 'dark'
+}
+
+export function applyWallpaperSource<T extends AppearancePanelConfig>(
+  current: T,
+  backgroundImageSrc: string,
+): T {
+  return normalizePanelAppearance({
+    ...current,
+    backgroundImageSrc,
+    wallpaperTone: inferWallpaperToneFromSrc(backgroundImageSrc),
+  })
+}
+
+export function isPresetTextProtectionActive(rawConfig: AppearancePanelConfig): boolean {
+  if (isWallpaperTone(rawConfig.wallpaperTone))
+    return true
+  if (isAppearancePresetId(rawConfig.cardSurface))
+    return true
+  if (isIconBadgeStyleId(rawConfig.iconBadgeStyle) && rawConfig.iconBadgeStyle !== 'default')
+    return true
+  const src = rawConfig.backgroundImageSrc?.trim() ?? ''
+  for (const id of APPEARANCE_PRESET_IDS) {
+    if (src.endsWith(APPEARANCE_PRESETS[id].wallpaper.backgroundImageSrc))
+      return true
+  }
+  return false
+}
+
 export function normalizePanelAppearance<T extends AppearancePanelConfig>(config: T): T {
   const surface: CardSurfacePresetId = isCardSurfacePresetId(config.cardSurface) ? config.cardSurface : 'default'
   const surfaceDefaults = SURFACE_DEFAULTS[surface]
-  const inferredTone: WallpaperTone = isWallpaperTone(config.wallpaperTone)
+  const explicitTone: WallpaperTone | undefined = isWallpaperTone(config.wallpaperTone)
     ? config.wallpaperTone
-    : (config.backgroundImageSrc?.includes('/assets/wallpapers/mist-paper.svg') ? 'light' : 'dark')
+    : undefined
   const iconBadgeStyle: IconBadgeStyleId = isIconBadgeStyleId(config.iconBadgeStyle) ? config.iconBadgeStyle : 'default'
 
   const cardBlur = config.cardBlur === undefined
@@ -350,9 +388,8 @@ export function normalizePanelAppearance<T extends AppearancePanelConfig>(config
     ? surfaceDefaults.borderRadius
     : clampNumber(config.cardBorderRadius, 8, 24, surfaceDefaults.borderRadius)
 
-  return {
+  const normalized: T = {
     ...config,
-    wallpaperTone: inferredTone,
     cardSurface: surface,
     cardBackgroundColor: (typeof config.cardBackgroundColor === 'string' && config.cardBackgroundColor.trim() !== '')
       ? config.cardBackgroundColor
@@ -367,6 +404,11 @@ export function normalizePanelAppearance<T extends AppearancePanelConfig>(config
       : surfaceDefaults.accentColor,
     iconBadgeStyle,
   }
+  if (explicitTone)
+    normalized.wallpaperTone = explicitTone
+  else
+    delete normalized.wallpaperTone
+  return normalized
 }
 
 export function applyAppearancePreset<T extends AppearancePanelConfig>(
@@ -544,7 +586,8 @@ export function resolveHomepageThemeVars(rawConfig: AppearancePanelConfig): Home
   const config = normalizePanelAppearance(rawConfig)
   const surface = config.cardSurface ?? 'default'
   const base = SURFACE_DEFAULTS[surface]
-  const isLightCanvas = config.wallpaperTone === 'light'
+  const effectiveTone = config.wallpaperTone ?? inferWallpaperToneFromSrc(config.backgroundImageSrc)
+  const isLightCanvas = effectiveTone === 'light'
   const canvasFallback = isLightCanvas
     ? '#eef2f5'
     : surface === 'ocean-glass'
@@ -681,6 +724,9 @@ export function resolveCardAppearance(
   if (isDefaultWhite) {
     textColor = safePrimary
   }
+  else if (!isPresetTextProtectionActive(rawConfig)) {
+    textColor = configuredText
+  }
   else {
     // Preserve explicit custom text color unless contrast against the actual card surface drops below WCAG AA (4.5:1)
     const ratio = contrastRatio(configuredText, backgroundColor, theme.canvasFallback)
@@ -716,6 +762,9 @@ export function resolveSmallTitleColor(rawConfig: AppearancePanelConfig): string
   if (isDefaultWhite)
     return fallback
 
+  if (!isPresetTextProtectionActive(rawConfig))
+    return configured
+
   // Bidirectional contrast check against the actual wallpaper tone/canvas:
   // protects dark text on dark wallpaper AND light text on light wallpaper.
   const ratio = contrastRatio(configured, theme.canvasFallback)
@@ -731,6 +780,7 @@ export function serializePanelConfig(config: AppearancePanelConfig): string {
   const canonical: Record<string, unknown> = {}
   for (const key of sortedKeys)
     canonical[key] = (normalized as unknown as Record<string, unknown>)[key]
+  canonical.__explicitWallpaperTone = isWallpaperTone(config.wallpaperTone) ? config.wallpaperTone : null
   return JSON.stringify(canonical)
 }
 
@@ -757,4 +807,336 @@ export function isPanelStateOwnedByAccount(
   if (storedId === null)
     return currentId === null
   return storedId === currentId
+}
+
+export type CloudConfigLoadState = 'idle' | 'loading' | 'ready' | 'error'
+
+export interface PanelCloudResponse<TConfig extends AppearancePanelConfig = AppearancePanelConfig> {
+  code: number
+  msg?: string
+  data?: {
+    panel?: Partial<TConfig> | null
+  } | null
+}
+
+export interface PanelSaveResult {
+  ok: boolean
+  stale?: boolean
+  blocked?: boolean
+  msg?: string
+}
+
+export interface PanelCloudTargetState<TConfig extends AppearancePanelConfig = AppearancePanelConfig> {
+  panelConfig: TConfig
+  lastSyncedPanelJson?: string
+  cloudConfigState?: CloudConfigLoadState
+  cloudConfigError?: string
+  ownerUserId?: number | null
+  previewPresetId?: AppearancePresetId | null
+  previewScopes?: AppearancePresetScopes
+}
+
+export interface PanelCloudSyncDeps<TConfig extends AppearancePanelConfig = AppearancePanelConfig> {
+  getState?: () => PanelCloudTargetState<TConfig>
+  getToken: () => string
+  getUserId: () => number | null
+  createDefaultConfig: () => TConfig
+  normalizeConfig?: (raw: Partial<TConfig> | null | undefined, defaults: TConfig) => TConfig
+  fetchCloudConfig: (sessionCurrent: () => boolean) => Promise<PanelCloudResponse<TConfig>>
+  pushCloudConfig: (panel: TConfig, sessionCurrent: () => boolean) => Promise<{ code: number; msg?: string }>
+  onRecordState?: () => void
+}
+
+export function isCloudConfigNotFound(res?: { code?: unknown; msg?: unknown } | null): boolean {
+  if (!res)
+    return false
+  return res.code === -1 || res.code === 1202
+}
+
+export function createPanelCloudController<TConfig extends AppearancePanelConfig = AppearancePanelConfig>(
+  deps: PanelCloudSyncDeps<TConfig>,
+  initialConfig?: TConfig,
+) {
+  let internalState: PanelCloudTargetState<TConfig> | null = null
+
+  function target(): PanelCloudTargetState<TConfig> {
+    if (deps.getState)
+      return deps.getState()
+    if (!internalState) {
+      const initial = initialConfig ? { ...initialConfig } : deps.createDefaultConfig()
+      internalState = {
+        panelConfig: initial,
+        lastSyncedPanelJson: serializePanelConfig(initial),
+        cloudConfigState: 'idle',
+        cloudConfigError: '',
+        ownerUserId: deps.getUserId(),
+        previewPresetId: null,
+        previewScopes: { ...DEFAULT_APPEARANCE_SCOPES },
+      }
+    }
+    return internalState
+  }
+
+  let cloudSyncGeneration = 0
+  let cloudSaveGeneration = 0
+  let cloudSaveQueue: Promise<void> = Promise.resolve()
+
+  function buildNormalized(raw: Partial<TConfig> | null | undefined): TConfig {
+    const defaults = deps.createDefaultConfig()
+    if (deps.normalizeConfig)
+      return deps.normalizeConfig(raw, defaults)
+    return normalizePanelAppearance<TConfig>({
+      ...defaults,
+      ...(raw ?? {}),
+    })
+  }
+
+  function snapshotPayload(config: TConfig): TConfig {
+    return normalizePanelAppearance<TConfig>({ ...config })
+  }
+
+  function canEdit(): boolean {
+    const token = deps.getToken().trim()
+    return token !== '' && target().cloudConfigState === 'ready'
+  }
+
+  function markSynced(config?: TConfig) {
+    const s = target()
+    s.lastSyncedPanelJson = serializePanelConfig(config ?? s.panelConfig)
+  }
+
+  async function loadFromCloud(): Promise<{ ok: boolean; stale?: boolean; msg?: string }> {
+    const s = target()
+    const expectedToken = deps.getToken()
+    const generation = ++cloudSyncGeneration
+    s.cloudConfigState = 'loading'
+    s.cloudConfigError = ''
+
+    const isCurrent = () => generation === cloudSyncGeneration && deps.getToken() === expectedToken
+
+    try {
+      const res = await deps.fetchCloudConfig(isCurrent)
+      if (!isCurrent())
+        return { ok: false, stale: true }
+
+      const currentTarget = target()
+      if (res && res.code === 0) {
+        const next = buildNormalized(res.data?.panel)
+        currentTarget.panelConfig = next
+        markSynced(next)
+        currentTarget.cloudConfigState = 'ready'
+        currentTarget.cloudConfigError = ''
+        currentTarget.ownerUserId = deps.getUserId()
+        deps.onRecordState?.()
+        return { ok: true }
+      }
+
+      if (isCloudConfigNotFound(res)) {
+        const next = deps.createDefaultConfig()
+        currentTarget.panelConfig = next
+        currentTarget.previewPresetId = null
+        markSynced(next)
+        currentTarget.cloudConfigState = 'ready'
+        currentTarget.cloudConfigError = ''
+        currentTarget.ownerUserId = deps.getUserId()
+        deps.onRecordState?.()
+        return { ok: true }
+      }
+
+      currentTarget.cloudConfigState = 'error'
+      currentTarget.cloudConfigError = (typeof res?.msg === 'string' && res.msg.trim() !== '') ? res.msg : ''
+      return { ok: false, msg: currentTarget.cloudConfigError }
+    }
+    catch (err: unknown) {
+      if (!isCurrent())
+        return { ok: false, stale: true }
+      const currentTarget = target()
+      currentTarget.cloudConfigState = 'error'
+      const msg = (err && typeof err === 'object' && 'msg' in err && typeof (err as { msg?: unknown }).msg === 'string')
+        ? ((err as { msg: string }).msg)
+        : ''
+      currentTarget.cloudConfigError = msg
+      return { ok: false, msg }
+    }
+  }
+
+  async function saveToCloud(): Promise<PanelSaveResult> {
+    const s = target()
+    const expectedToken = deps.getToken()
+    if (!expectedToken.trim() || s.cloudConfigState !== 'ready')
+      return { ok: false, blocked: true }
+
+    const generation = ++cloudSaveGeneration
+    // Prevent an older in-flight GET from overwriting a valid ready state write.
+    cloudSyncGeneration++
+
+    const snapshot = snapshotPayload(s.panelConfig)
+    const snapshotJson = serializePanelConfig(snapshot)
+    s.ownerUserId = deps.getUserId()
+    deps.onRecordState?.()
+
+    let result: PanelSaveResult = { ok: false, stale: true }
+    const isCurrent = () => generation === cloudSaveGeneration && deps.getToken() === expectedToken
+
+    const run = cloudSaveQueue.then(async () => {
+      if (!isCurrent() || target().cloudConfigState !== 'ready') {
+        result = { ok: false, stale: true }
+        return
+      }
+      try {
+        const res = await deps.pushCloudConfig(snapshot, isCurrent)
+        if (!isCurrent()) {
+          result = { ok: false, stale: true }
+          return
+        }
+        if (res && res.code === 0) {
+          target().lastSyncedPanelJson = snapshotJson
+          result = { ok: true }
+        }
+        else {
+          result = { ok: false, msg: res?.msg }
+        }
+      }
+      catch (err: unknown) {
+        if (!isCurrent()) {
+          result = { ok: false, stale: true }
+        }
+        else {
+          const msg = (err && typeof err === 'object' && 'msg' in err && typeof (err as { msg?: unknown }).msg === 'string')
+            ? ((err as { msg: string }).msg)
+            : undefined
+          result = { ok: false, msg }
+        }
+      }
+    })
+
+    cloudSaveQueue = run.catch(() => undefined)
+    await run
+    return result
+  }
+
+  function startPreview(presetId: AppearancePresetId, scopes?: Partial<AppearancePresetScopes>): boolean {
+    if (!canEdit())
+      return false
+    const s = target()
+    s.previewPresetId = presetId
+    s.previewScopes = normalizeScopes(scopes ?? s.previewScopes)
+    return true
+  }
+
+  function updatePreviewScopes(scopes: Partial<AppearancePresetScopes>): boolean {
+    if (!canEdit())
+      return false
+    const s = target()
+    s.previewScopes = normalizeScopes({
+      ...s.previewScopes,
+      ...scopes,
+    })
+    return true
+  }
+
+  function cancelPreview() {
+    target().previewPresetId = null
+  }
+
+  function applyPreset(presetId: AppearancePresetId, scopes?: Partial<AppearancePresetScopes>): boolean {
+    if (!canEdit())
+      return false
+    const s = target()
+    const effectiveScopes = normalizeScopes(scopes ?? s.previewScopes)
+    const next = applyAppearancePreset(s.panelConfig, presetId, effectiveScopes)
+    s.panelConfig = next
+    s.previewPresetId = null
+    s.ownerUserId = deps.getUserId()
+    deps.onRecordState?.()
+    return true
+  }
+
+  function setWallpaper(src: string): boolean {
+    if (!canEdit())
+      return false
+    const s = target()
+    s.panelConfig = applyWallpaperSource(s.panelConfig, src)
+    s.ownerUserId = deps.getUserId()
+    deps.onRecordState?.()
+    return true
+  }
+
+  function setCardSurface(surface: CardSurfacePresetId): boolean {
+    if (!canEdit())
+      return false
+    const s = target()
+    s.panelConfig = applyCardSurfaceDefaults(s.panelConfig, surface)
+    s.ownerUserId = deps.getUserId()
+    deps.onRecordState?.()
+    return true
+  }
+
+  function resetToDefaults(): boolean {
+    if (!canEdit())
+      return false
+    const s = target()
+    s.panelConfig = deps.createDefaultConfig()
+    s.previewPresetId = null
+    s.ownerUserId = deps.getUserId()
+    deps.onRecordState?.()
+    return true
+  }
+
+  function resetRuntimeState() {
+    cloudSyncGeneration++
+    cloudSaveGeneration++
+    const s = target()
+    const next = deps.createDefaultConfig()
+    s.panelConfig = next
+    s.previewPresetId = null
+    s.cloudConfigState = 'idle'
+    s.cloudConfigError = ''
+    markSynced(next)
+  }
+
+  function clearForAccountSwitch() {
+    cloudSyncGeneration++
+    cloudSaveGeneration++
+    const s = target()
+    const next = deps.createDefaultConfig()
+    s.panelConfig = next
+    s.ownerUserId = null
+    s.previewPresetId = null
+    s.previewScopes = { ...DEFAULT_APPEARANCE_SCOPES }
+    s.cloudConfigState = 'idle'
+    s.cloudConfigError = ''
+    markSynced(next)
+  }
+
+  return {
+    get state() {
+      const s = target()
+      return {
+        panelConfig: s.panelConfig,
+        lastSyncedPanelJson: s.lastSyncedPanelJson ?? '',
+        cloudConfigState: s.cloudConfigState ?? 'idle',
+        cloudConfigError: s.cloudConfigError ?? '',
+        ownerUserId: s.ownerUserId ?? null,
+        previewPresetId: s.previewPresetId ?? null,
+        previewScopes: s.previewScopes ?? { ...DEFAULT_APPEARANCE_SCOPES },
+      }
+    },
+    setPanelConfig(next: TConfig) {
+      target().panelConfig = next
+    },
+    canEdit,
+    markSynced,
+    loadFromCloud,
+    saveToCloud,
+    startPreview,
+    updatePreviewScopes,
+    cancelPreview,
+    applyPreset,
+    setWallpaper,
+    setCardSurface,
+    resetToDefaults,
+    resetRuntimeState,
+    clearForAccountSwitch,
+  }
 }

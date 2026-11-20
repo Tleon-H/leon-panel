@@ -9,11 +9,10 @@ const LOCAL_NAME = 'panelStorage'
 const defaultFooterHtml = '<div class="flex justify-center text-slate-300" style="margin-top:100px">Leon Panel · 基于开源 <a href="https://github.com/hslr-s/sun-panel" target="_blank" class="ml-[5px]">Sun-Panel</a> v1.3.0</div>'
 
 export function defaultStatePanelConfig(): Panel.panelConfig {
-  return normalizePanelAppearance({
+  return normalizePanelAppearance<Panel.panelConfig>({
     backgroundImageSrc: defaultBackground,
     backgroundBlur: 0,
     backgroundMaskNumber: 0,
-    wallpaperTone: 'dark',
     cardSurface: 'default',
     iconStyle: PanelPanelConfigStyleEnum.icon,
     iconBadgeStyle: 'default',
@@ -49,6 +48,8 @@ export function defaultState(): Panel.State {
     previewPresetId: null,
     previewScopes: { ...DEFAULT_APPEARANCE_SCOPES },
     lastSyncedPanelJson: serializePanelConfig(panelConfig),
+    cloudConfigState: 'idle',
+    cloudConfigError: '',
   }
 }
 
@@ -67,13 +68,15 @@ export function getLocalState(): Panel.State {
   if (localState && localState.ownerUserId !== undefined && !isPanelStateOwnedByAccount(localState.ownerUserId, activeUserId))
     return defaultState()
 
-  const state = {
+  const state: Panel.State = {
     ...defaultState(),
     ...localState,
     previewPresetId: null,
     previewScopes: { ...DEFAULT_APPEARANCE_SCOPES },
+    cloudConfigState: 'idle',
+    cloudConfigError: '',
   }
-  state.panelConfig = normalizePanelAppearance({
+  state.panelConfig = normalizePanelAppearance<Panel.panelConfig>({
     ...defaultStatePanelConfig(),
     ...state.panelConfig,
     maxWidth: normalizeMaxWidth(state.panelConfig?.maxWidth),
@@ -87,6 +90,8 @@ export function setLocalState(state: Panel.State) {
     previewPresetId: _previewPresetId,
     previewScopes: _previewScopes,
     lastSyncedPanelJson: _lastSyncedPanelJson,
+    cloudConfigState: _cloudConfigState,
+    cloudConfigError: _cloudConfigError,
     ...persisted
   } = state
   ss.set(LOCAL_NAME, persisted)

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { UploadFileInfo } from 'naive-ui'
-import { NButton, NCard, NCheckbox, NColorPicker, NGrid, NGridItem, NInput, NInputGroup, NInputNumber, NModal, NPopconfirm, NSelect, NSlider, NSwitch, NUpload, NUploadDragger, useMessage } from 'naive-ui'
+import { NAlert, NButton, NCard, NCheckbox, NColorPicker, NGrid, NGridItem, NInput, NInputGroup, NInputNumber, NModal, NPopconfirm, NSelect, NSlider, NSpin, NSwitch, NUpload, NUploadDragger, useMessage } from 'naive-ui'
 import { useAuthStore, usePanelState } from '@/store'
 import { PanelPanelConfigStyleEnum } from '@/enums/panel'
 import { t } from '@/locales'
@@ -12,8 +12,8 @@ import {
   APPEARANCE_PRESETS,
   APPEARANCE_PRESET_IDS,
   DEFAULT_APPEARANCE_SCOPES,
-  applyCardSurfaceDefaults,
   hasSelectedScope,
+  inferWallpaperToneFromSrc,
   shouldAutoSavePanelConfig,
 } from '@/utils/panel/appearance'
 import type { AppearancePresetId, AppearancePresetScopes, CardSurfacePresetId } from '@/utils/panel/appearance'
@@ -30,7 +30,16 @@ const selectedScopes = ref<AppearancePresetScopes>({
 })
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null
+let skipNextAutoSave = false
+const saveFailedMessage = ref('')
 const mountedToken = authStore.token || ''
+const isEditable = computed(() => panelState.isCloudConfigReady)
+const displayedWallpaperTone = computed(() => panelState.panelConfig.wallpaperTone ?? inferWallpaperToneFromSrc(panelState.panelConfig.backgroundImageSrc))
+
+onMounted(() => {
+  if (authStore.token && panelState.cloudConfigState === 'idle')
+    panelState.updatePanelConfigByCloud()
+})
 
 const presetList = computed(() => APPEARANCE_PRESET_IDS.map(id => APPEARANCE_PRESETS[id]))
 
@@ -116,19 +125,26 @@ watch(
   () => authStore.token,
   () => {
     clearSaveTimer()
+    saveFailedMessage.value = ''
   },
 )
 
 watch(
   () => panelState.panelConfig,
   (config) => {
+    if (!panelState.isCloudConfigReady)
+      return
+    if (skipNextAutoSave) {
+      skipNextAutoSave = false
+      return
+    }
     if (!shouldAutoSavePanelConfig(config, panelState.lastSyncedPanelJson ?? null))
       return
     panelState.recordState()
     clearSaveTimer()
     saveTimer = setTimeout(() => {
       saveTimer = null
-      if (!shouldAutoSavePanelConfig(panelState.panelConfig, panelState.lastSyncedPanelJson ?? null))
+      if (!panelState.isCloudConfigReady || !shouldAutoSavePanelConfig(panelState.panelConfig, panelState.lastSyncedPanelJson ?? null))
         return
       uploadCloud()
     }, 450)
@@ -141,6 +157,7 @@ onBeforeUnmount(() => {
   clearSaveTimer()
   if (
     hadTimer
+    && panelState.isCloudConfigReady
     && (authStore.token || '') === mountedToken
     && shouldAutoSavePanelConfig(panelState.panelConfig, panelState.lastSyncedPanelJson ?? null)
   )
@@ -159,6 +176,8 @@ function scopeSummary(scopes: AppearancePresetScopes): string {
 }
 
 function previewPreset(presetId: AppearancePresetId) {
+  if (!panelState.isCloudConfigReady)
+    return
   if (!hasSelectedScope(selectedScopes.value)) {
     ms.warning(t('apps.baseSettings.presets.selectAtLeastOne'))
     return
@@ -167,13 +186,19 @@ function previewPreset(presetId: AppearancePresetId) {
 }
 
 function applyPreset(presetId: AppearancePresetId) {
+  if (!panelState.isCloudConfigReady)
+    return
   if (!hasSelectedScope(selectedScopes.value)) {
     ms.warning(t('apps.baseSettings.presets.selectAtLeastOne'))
     return
   }
   clearSaveTimer()
+  skipNextAutoSave = true
   const scopesSnapshot = { ...selectedScopes.value }
-  panelState.applyAppearancePreset(presetId, scopesSnapshot)
+  if (!panelState.applyAppearancePreset(presetId, scopesSnapshot)) {
+    skipNextAutoSave = false
+    return
+  }
   const preset = APPEARANCE_PRESETS[presetId]
   uploadCloud(true).then((ok) => {
     if (ok) {
@@ -186,7 +211,11 @@ function applyPreset(presetId: AppearancePresetId) {
 }
 
 function handleCardSurfaceChange(surface: CardSurfacePresetId) {
-  panelState.panelConfig = applyCardSurfaceDefaults(panelState.panelConfig, surface)
+  panelState.setCardSurface(surface)
+}
+
+function handleWallpaperUrlInput(src: string) {
+  panelState.setWallpaperSource(src)
 }
 
 function handleUploadBackgroundFinish({
@@ -196,132 +225,196 @@ function handleUploadBackgroundFinish({
   file: UploadFileInfo
   event?: ProgressEvent
 }) {
+  if (!panelState.isCloudConfigReady)
+    return file
   const res = JSON.parse((event?.target as XMLHttpRequest).response)
   if (res.code === 0 && res.data?.imageUrl)
-    panelState.panelConfig.backgroundImageSrc = res.data.imageUrl
+    panelState.setWallpaperSource(res.data.imageUrl)
   else
     ms.error(t('common.uploadFail'))
   return file
 }
 
 function usePublicWallpaper(src: string) {
-  panelState.panelConfig.backgroundImageSrc = src
+  panelState.setWallpaperSource(src)
   showPublicWallpapers.value = false
 }
 
 function useOwnWallpaper(src: string) {
-  panelState.panelConfig.backgroundImageSrc = src
+  panelState.setWallpaperSource(src)
   showOwnWallpapers.value = false
 }
 
 function updateMaxWidth(value: number | null) {
+  if (!panelState.isCloudConfigReady)
+    return
   panelState.panelConfig.maxWidth = maxWidthFromControl(value)
+}
+
+function retryLoadCloudConfig() {
+  panelState.updatePanelConfigByCloud()
 }
 
 function uploadCloud(silentSuccess = false): Promise<boolean> {
   clearSaveTimer()
   return panelState.savePanelConfigToCloud().then((result) => {
-    if (result.stale)
+    if (result.stale || result.blocked)
       return false
     if (result.ok) {
+      saveFailedMessage.value = ''
       if (!silentSuccess)
         ms.success(t('apps.baseSettings.configSaved'))
       return true
     }
-    if (result.msg)
-      ms.error(t('apps.baseSettings.configFailed', { message: result.msg }))
-    else
-      ms.error(t('common.networkError'))
+    if (result.msg) {
+      const errText = t('apps.baseSettings.configFailed', { message: result.msg })
+      saveFailedMessage.value = errText
+      ms.error(errText)
+    }
+    else {
+      const errText = t('common.networkError')
+      saveFailedMessage.value = errText
+      ms.error(errText)
+    }
     return false
   })
 }
 
 function resetPanelConfig() {
+  if (!panelState.isCloudConfigReady)
+    return
   clearSaveTimer()
-  panelState.resetPanelConfig()
+  skipNextAutoSave = true
+  if (!panelState.restoreDefaultPanelConfig()) {
+    skipNextAutoSave = false
+    return
+  }
   uploadCloud()
 }
 </script>
 
 <template>
   <div class="bg-slate-200 dark:bg-zinc-900 rounded-[10px] p-[8px] overflow-auto">
-    <NCard style="border-radius:10px" size="small" data-testid="appearance-presets-card">
-      <div class="text-slate-500 mb-[5px] font-bold">
-        {{ $t('apps.baseSettings.presets.title') }}
+    <NAlert
+      v-if="panelState.cloudConfigState === 'loading' || panelState.cloudConfigState === 'idle'"
+      type="info"
+      class="mb-[10px]"
+      data-testid="panel-config-loading"
+    >
+      <div class="flex items-center gap-2">
+        <NSpin size="small" />
+        <span>{{ $t('apps.baseSettings.configLoading') }}</span>
       </div>
-      <p class="text-xs text-slate-500 dark:text-slate-300 leading-5 mb-2">
-        {{ $t('apps.baseSettings.presets.hint') }}
-      </p>
+    </NAlert>
 
-      <div class="flex flex-wrap items-center gap-x-4 gap-y-2 mb-3">
-        <span class="text-xs font-medium text-slate-600 dark:text-slate-300">
-          {{ $t('apps.baseSettings.presets.scopeLabel') }}
-        </span>
-        <NCheckbox v-model:checked="selectedScopes.wallpaper" data-testid="preset-scope-wallpaper">
-          {{ $t('apps.baseSettings.presets.scopeWallpaper') }}
-        </NCheckbox>
-        <NCheckbox v-model:checked="selectedScopes.cardStyle" data-testid="preset-scope-cardStyle">
-          {{ $t('apps.baseSettings.presets.scopeCardStyle') }}
-        </NCheckbox>
-        <NCheckbox v-model:checked="selectedScopes.iconStyle" data-testid="preset-scope-iconStyle">
-          {{ $t('apps.baseSettings.presets.scopeIconStyle') }}
-        </NCheckbox>
+    <NAlert
+      v-else-if="panelState.cloudConfigState === 'error'"
+      type="error"
+      class="mb-[10px]"
+      data-testid="panel-config-load-error"
+    >
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <span>{{ panelState.cloudConfigError || $t('apps.baseSettings.configLoadFailed') }}</span>
+        <NButton size="tiny" type="error" secondary data-testid="panel-config-load-retry" @click="retryLoadCloudConfig">
+          {{ $t('apps.baseSettings.configLoadRetry') }}
+        </NButton>
       </div>
+    </NAlert>
 
-      <div class="preset-grid">
-        <div
-          v-for="preset in presetList"
-          :key="preset.id"
-          class="preset-option"
-          :class="{ 'is-active': panelState.panelConfig.cardSurface === preset.id }"
-          :data-testid="`preset-card-${preset.id}`"
-        >
-          <div class="preset-swatch" :style="{ background: preset.swatch.canvas }">
-            <div
-              class="preset-swatch-card"
-              :style="{
-                background: preset.swatch.card,
-                borderColor: preset.swatch.border,
-              }"
-            >
-              <span class="preset-swatch-dot" :style="{ background: preset.swatch.accent }" />
-              <div class="preset-swatch-lines">
-                <span class="preset-swatch-line" :style="{ background: preset.swatch.text }" />
-                <span class="preset-swatch-line short" :style="{ background: preset.swatch.text }" />
+    <NAlert
+      v-if="saveFailedMessage && isEditable"
+      type="warning"
+      class="mb-[10px]"
+      data-testid="panel-config-save-error"
+    >
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <span>{{ saveFailedMessage }}</span>
+        <NButton size="tiny" type="warning" secondary data-testid="panel-config-save-retry" @click="uploadCloud()">
+          {{ $t('apps.baseSettings.configSaveRetry') }}
+        </NButton>
+      </div>
+    </NAlert>
+
+    <fieldset :disabled="!isEditable" class="leon-style-fieldset">
+      <NCard style="border-radius:10px" size="small" data-testid="appearance-presets-card">
+        <div class="text-slate-500 mb-[5px] font-bold">
+          {{ $t('apps.baseSettings.presets.title') }}
+        </div>
+        <p class="text-xs text-slate-500 dark:text-slate-300 leading-5 mb-2">
+          {{ $t('apps.baseSettings.presets.hint') }}
+        </p>
+
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-2 mb-3">
+          <span class="text-xs font-medium text-slate-600 dark:text-slate-300">
+            {{ $t('apps.baseSettings.presets.scopeLabel') }}
+          </span>
+          <NCheckbox v-model:checked="selectedScopes.wallpaper" :disabled="!isEditable" data-testid="preset-scope-wallpaper">
+            {{ $t('apps.baseSettings.presets.scopeWallpaper') }}
+          </NCheckbox>
+          <NCheckbox v-model:checked="selectedScopes.cardStyle" :disabled="!isEditable" data-testid="preset-scope-cardStyle">
+            {{ $t('apps.baseSettings.presets.scopeCardStyle') }}
+          </NCheckbox>
+          <NCheckbox v-model:checked="selectedScopes.iconStyle" :disabled="!isEditable" data-testid="preset-scope-iconStyle">
+            {{ $t('apps.baseSettings.presets.scopeIconStyle') }}
+          </NCheckbox>
+        </div>
+
+        <div class="preset-grid">
+          <div
+            v-for="preset in presetList"
+            :key="preset.id"
+            class="preset-option"
+            :class="{ 'is-active': panelState.panelConfig.cardSurface === preset.id }"
+            :data-testid="`preset-card-${preset.id}`"
+          >
+            <div class="preset-swatch" :style="{ background: preset.swatch.canvas }">
+              <div
+                class="preset-swatch-card"
+                :style="{
+                  background: preset.swatch.card,
+                  borderColor: preset.swatch.border,
+                }"
+              >
+                <span class="preset-swatch-dot" :style="{ background: preset.swatch.accent }" />
+                <div class="preset-swatch-lines">
+                  <span class="preset-swatch-line" :style="{ background: preset.swatch.text }" />
+                  <span class="preset-swatch-line short" :style="{ background: preset.swatch.text }" />
+                </div>
               </div>
             </div>
-          </div>
 
-          <div class="preset-meta">
-            <div class="font-semibold text-sm">
-              {{ $t(preset.nameKey) }}
+            <div class="preset-meta">
+              <div class="font-semibold text-sm">
+                {{ $t(preset.nameKey) }}
+              </div>
+              <div class="text-xs text-slate-500 dark:text-slate-300 mt-0.5 leading-4">
+                {{ $t(preset.descKey) }}
+              </div>
             </div>
-            <div class="text-xs text-slate-500 dark:text-slate-300 mt-0.5 leading-4">
-              {{ $t(preset.descKey) }}
-            </div>
-          </div>
 
-          <div class="flex flex-wrap gap-2 mt-2">
-            <NButton
-              size="small"
-              secondary
-              :data-testid="`preset-preview-${preset.id}`"
-              @click="previewPreset(preset.id)"
-            >
-              {{ $t('apps.baseSettings.presets.preview') }}
-            </NButton>
-            <NButton
-              size="small"
-              type="primary"
-              :data-testid="`preset-apply-${preset.id}`"
-              @click="applyPreset(preset.id)"
-            >
-              {{ $t('apps.baseSettings.presets.applySelected') }}
-            </NButton>
+            <div class="flex flex-wrap gap-2 mt-2">
+              <NButton
+                size="small"
+                secondary
+                :disabled="!isEditable"
+                :data-testid="`preset-preview-${preset.id}`"
+                @click="previewPreset(preset.id)"
+              >
+                {{ $t('apps.baseSettings.presets.preview') }}
+              </NButton>
+              <NButton
+                size="small"
+                type="primary"
+                :disabled="!isEditable"
+                :data-testid="`preset-apply-${preset.id}`"
+                @click="applyPreset(preset.id)"
+              >
+                {{ $t('apps.baseSettings.presets.applySelected') }}
+              </NButton>
+            </div>
           </div>
         </div>
-      </div>
-    </NCard>
+      </NCard>
 
     <NCard style="border-radius:10px" class="mt-[10px]" size="small">
       <div class="text-slate-500 mb-[5px] font-bold">
@@ -543,10 +636,10 @@ function resetPanelConfig() {
         </NUploadDragger>
       </NUpload>
       <div class="mt-2 flex flex-wrap gap-2">
-        <NButton size="small" data-testid="open-own-wallpapers" @click="showOwnWallpapers = true">
+        <NButton size="small" :disabled="!isEditable" data-testid="open-own-wallpapers" @click="showOwnWallpapers = true">
           {{ $t('apps.ownGallery.open') }}
         </NButton>
-        <NButton size="small" data-testid="open-public-wallpapers" @click="showPublicWallpapers = true">
+        <NButton size="small" :disabled="!isEditable" data-testid="open-public-wallpapers" @click="showPublicWallpapers = true">
           {{ $t('apps.publicGallery.open') }}
         </NButton>
       </div>
@@ -563,19 +656,29 @@ function resetPanelConfig() {
         </div>
         <div class="flex items-center mt-[5px]">
           <NSelect
-            v-model:value="panelState.panelConfig.wallpaperTone"
+            :value="displayedWallpaperTone"
             :options="wallpaperToneOptions"
+            :disabled="!isEditable"
             data-testid="wallpaper-tone-select"
+            @update:value="(val: 'dark' | 'light') => (panelState.panelConfig.wallpaperTone = val)"
           />
         </div>
       </div>
 
       <div class="flex items-center mt-[5px]">
         <span class="mr-[10px]">{{ $t('apps.baseSettings.customImageAddress') }}</span>
-        <NSwitch v-model:value="showWallpaperInput" />
+        <NSwitch v-model:value="showWallpaperInput" :disabled="!isEditable" />
       </div>
       <div v-if="showWallpaperInput" class="mt-1">
-        <NInput v-model:value="panelState.panelConfig.backgroundImageSrc" type="text" size="small" clearable data-testid="wallpaper-url-input" />
+        <NInput
+          :value="panelState.panelConfig.backgroundImageSrc"
+          type="text"
+          size="small"
+          clearable
+          :disabled="!isEditable"
+          data-testid="wallpaper-url-input"
+          @update:value="handleWallpaperUrlInput"
+        />
       </div>
 
       <div class="flex items-center mt-[10px]">
@@ -651,21 +754,34 @@ function resetPanelConfig() {
         @positive-click="resetPanelConfig"
       >
         <template #trigger>
-          <NButton size="small" quaternary type="error">
+          <NButton size="small" quaternary type="error" :disabled="!isEditable">
             {{ $t('common.reset') }}
           </NButton>
         </template>
         {{ $t('apps.baseSettings.resetWarnText') }}
       </NPopconfirm>
 
-      <NButton size="small" quaternary type="success" class="ml-[10px]" @click="uploadCloud()">
+      <NButton size="small" quaternary type="success" class="ml-[10px]" :disabled="!isEditable" @click="uploadCloud()">
         {{ $t('common.save') }}
       </NButton>
     </NCard>
+    </fieldset>
   </div>
 </template>
 
 <style scoped>
+.leon-style-fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.leon-style-fieldset:disabled {
+  opacity: 0.65;
+  pointer-events: none;
+}
+
 .text-shadow {
   text-shadow: 0px 0px 5px gray;
 }
