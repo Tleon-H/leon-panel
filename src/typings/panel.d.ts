@@ -31,18 +31,41 @@ declare namespace Panel {
         backgroundColor ?: string
     }
 
+    type AppearancePresetId = 'ocean-glass' | 'mist-paper' | 'midnight-graphite'
+    type CardSurfacePresetId = 'default' | AppearancePresetId
+    type IconBadgeStyleId = 'default' | 'glass' | 'soft' | 'outline'
+    type WallpaperTone = 'dark' | 'light'
+
+    interface AppearancePresetScopes {
+        wallpaper: boolean
+        cardStyle: boolean
+        iconStyle: boolean
+    }
+
     interface State {
         rightSiderCollapsed: boolean
         leftSiderCollapsed: boolean
         networkMode:PanelStateNetworkModeEnum | null
+        ownerUserId?: number | null
         panelConfig:panelConfig
+        previewPresetId?: AppearancePresetId | null
+        previewScopes?: AppearancePresetScopes
+        lastSyncedPanelJson?: string
     }
 
     interface panelConfig{
         backgroundImageSrc?:string
         backgroundBlur?:number
         backgroundMaskNumber?:number
+        wallpaperTone?: WallpaperTone
+        cardSurface?: CardSurfacePresetId
+        cardBackgroundColor?: string
+        cardBorderColor?: string
+        cardBlur?: number
+        cardBorderRadius?: number
+        cardAccentColor?: string
         iconStyle?:PanelPanelConfigStyleEnum
+        iconBadgeStyle?: IconBadgeStyleId
         iconTextColor?:string
         iconTextInfoHideDescription?:boolean
         iconTextIconHideTitle?:boolean

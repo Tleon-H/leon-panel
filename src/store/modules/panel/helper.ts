@@ -1,5 +1,7 @@
 import { ss } from '@/utils/storage'
+import { getStorage as getAuthStorage } from '@/store/modules/auth/helper'
 import { normalizeMaxWidth } from '@/utils/panel/maxWidth'
+import { DEFAULT_APPEARANCE_SCOPES, isPanelStateOwnedByAccount, normalizePanelAppearance, serializePanelConfig } from '@/utils/panel/appearance'
 import { PanelPanelConfigStyleEnum, PanelStateNetworkModeEnum } from '@/enums'
 import defaultBackground from '@/assets/defaultBackground.webp'
 const LOCAL_NAME = 'panelStorage'
@@ -7,11 +9,14 @@ const LOCAL_NAME = 'panelStorage'
 const defaultFooterHtml = '<div class="flex justify-center text-slate-300" style="margin-top:100px">Leon Panel · 基于开源 <a href="https://github.com/hslr-s/sun-panel" target="_blank" class="ml-[5px]">Sun-Panel</a> v1.3.0</div>'
 
 export function defaultStatePanelConfig(): Panel.panelConfig {
-  return {
+  return normalizePanelAppearance({
     backgroundImageSrc: defaultBackground,
     backgroundBlur: 0,
     backgroundMaskNumber: 0,
+    wallpaperTone: 'dark',
+    cardSurface: 'default',
     iconStyle: PanelPanelConfigStyleEnum.icon,
+    iconBadgeStyle: 'default',
     iconTextColor: '#ffffff',
     iconTextInfoHideDescription: false,
     iconTextIconHideTitle: false,
@@ -30,31 +35,61 @@ export function defaultStatePanelConfig(): Panel.panelConfig {
     systemMonitorShowTitle: true,
     systemMonitorPublicVisitModeShow: false,
     netModeChangeButtonShow: true,
-
-  }
+  })
 }
 
 export function defaultState(): Panel.State {
+  const panelConfig = { ...defaultStatePanelConfig() }
   return {
     rightSiderCollapsed: false,
     leftSiderCollapsed: false,
     networkMode: PanelStateNetworkModeEnum.wan,
-    panelConfig: { ...defaultStatePanelConfig() },
+    ownerUserId: null,
+    panelConfig,
+    previewPresetId: null,
+    previewScopes: { ...DEFAULT_APPEARANCE_SCOPES },
+    lastSyncedPanelJson: serializePanelConfig(panelConfig),
   }
+}
+
+function currentActiveUserId(): number | null {
+  const auth = getAuthStorage()
+  if (!auth?.token)
+    return null
+  const id = auth.userInfo?.id
+  return (typeof id === 'number' && Number.isInteger(id) && id > 0) ? id : null
 }
 
 export function getLocalState(): Panel.State {
   const localState = ss.get(LOCAL_NAME)
-  const state = { ...defaultState(), ...localState }
-  state.panelConfig = {
+  const activeUserId = currentActiveUserId()
+
+  if (localState && localState.ownerUserId !== undefined && !isPanelStateOwnedByAccount(localState.ownerUserId, activeUserId))
+    return defaultState()
+
+  const state = {
+    ...defaultState(),
+    ...localState,
+    previewPresetId: null,
+    previewScopes: { ...DEFAULT_APPEARANCE_SCOPES },
+  }
+  state.panelConfig = normalizePanelAppearance({
+    ...defaultStatePanelConfig(),
     ...state.panelConfig,
     maxWidth: normalizeMaxWidth(state.panelConfig?.maxWidth),
-  }
+  })
+  state.lastSyncedPanelJson = serializePanelConfig(state.panelConfig)
   return state
 }
 
 export function setLocalState(state: Panel.State) {
-  ss.set(LOCAL_NAME, state)
+  const {
+    previewPresetId: _previewPresetId,
+    previewScopes: _previewScopes,
+    lastSyncedPanelJson: _lastSyncedPanelJson,
+    ...persisted
+  } = state
+  ss.set(LOCAL_NAME, persisted)
 }
 
 export function removeLocalState() {

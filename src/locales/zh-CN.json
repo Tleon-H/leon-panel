@@ -103,7 +103,51 @@
       "topMargin": "上边距",
       "uploadOrDragText": "点击上传替换图片或拖拽到框内",
       "vague": "模糊",
-      "wallpaper": "壁纸"
+      "wallpaper": "壁纸",
+      "wallpaperTone": "背景明暗基调",
+      "wallpaperToneDark": "深色背景（浅色文字）",
+      "wallpaperToneLight": "浅色背景（深色文字）",
+      "cardStyleSection": "卡片样式",
+      "cardSurface": "卡片材质",
+      "cardSurfaceDefault": "经典默认",
+      "cardBackgroundColor": "卡片底色",
+      "cardBlur": "卡片毛玻璃模糊",
+      "cardRadius": "卡片圆角",
+      "cardAccentColor": "强调与焦点色",
+      "iconBadgeStyle": "图标容器样式",
+      "iconBadgeDefault": "经典默认",
+      "iconBadgeGlass": "海蓝玻璃框",
+      "iconBadgeSoft": "纸感柔底框",
+      "iconBadgeOutline": "石墨青蓝描边",
+      "presets": {
+        "title": "首页外观预设",
+        "hint": "可先全屏预览首页效果，再仅按勾选的项目修改全局外观；不会改动分组单独样式、单卡自定义图标和链接，应用后仍可逐项微调。",
+        "scopeLabel": "选择应用项目：",
+        "scopeWallpaper": "壁纸",
+        "scopeCardStyle": "卡片样式",
+        "scopeIconStyle": "图标样式",
+        "preview": "预览",
+        "previewing": "预览中",
+        "applySelected": "应用所选",
+        "exitPreview": "退出预览",
+        "backToSettings": "返回设置",
+        "previewBanner": "正在预览：{name}",
+        "previewBannerTip": "退出预览将恢复原样，不会保存修改。",
+        "selectAtLeastOne": "请至少勾选一项要应用的设置",
+        "applied": "已应用「{name}」所选外观（{scopes}）",
+        "oceanGlass": {
+          "name": "海蓝玻璃",
+          "desc": "深蓝背景、半透明毛玻璃卡片与柔和浅字"
+        },
+        "mistPaper": {
+          "name": "雾白纸感",
+          "desc": "浅雾背景、暖白纸感卡片与高对比深色文字"
+        },
+        "midnightGraphite": {
+          "name": "深夜石墨",
+          "desc": "夜色背景、近黑卡片、浅色文字与青蓝点缀"
+        }
+      }
     },
     "exportImport": {
       "appName": "导出导入",

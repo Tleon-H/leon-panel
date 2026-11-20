@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="mist-base" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f6f4ef" />
+      <stop offset="50%" stop-color="#eff2f6" />
+      <stop offset="100%" stop-color="#e5ebf1" />
+    </linearGradient>
+    <radialGradient id="mist-warm-a" cx="18%" cy="16%" r="55%">
+      <stop offset="0%" stop-color="#fffdf8" stop-opacity="0.92" />
+      <stop offset="65%" stop-color="#f5efe4" stop-opacity="0.45" />
+      <stop offset="100%" stop-color="#eff2f6" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="mist-cool-b" cx="84%" cy="80%" r="56%">
+      <stop offset="0%" stop-color="#d7e2ec" stop-opacity="0.62" />
+      <stop offset="55%" stop-color="#e4ebf2" stop-opacity="0.32" />
+      <stop offset="100%" stop-color="#eef2f6" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="mist-veil" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.58" />
+      <stop offset="55%" stop-color="#f8f6f0" stop-opacity="0.28" />
+      <stop offset="100%" stop-color="#dbe4ee" stop-opacity="0.18" />
+    </linearGradient>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#mist-base)" />
+  <rect width="1920" height="1080" fill="url(#mist-warm-a)" />
+  <rect width="1920" height="1080" fill="url(#mist-cool-b)" />
+  <path d="M-100 680 C 360 560, 740 740, 1220 610 C 1540 520, 1780 570, 2020 490 L 2020 1120 L -100 1120 Z" fill="url(#mist-veil)" />
+  <path d="M-80 260 C 380 180, 780 320, 1240 220 C 1560 150, 1800 200, 2000 140 L 2000 460 C 1660 530, 1320 420, 920 500 C 520 580, 200 450, -80 520 Z" fill="#ffffff" fill-opacity="0.32" />
+  <circle cx="1460" cy="240" r="340" fill="#fffaf0" fill-opacity="0.46" />
+  <circle cx="380" cy="840" r="360" fill="#d8e3ed" fill-opacity="0.28" />
+</svg>

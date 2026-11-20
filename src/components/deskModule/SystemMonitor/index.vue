@@ -179,8 +179,8 @@ function handleRightMenuSelect(key: string | number) {
       @mouseleave="handleSetHoverStatus(false)"
     >
       <!-- 分组标题 -->
-      <div class="system-monitor-header text-white text-xl font-extrabold mb-[20px] ml-[10px] flex items-center">
-        <span v-if="showTitle" class="text-shadow">
+      <div class="system-monitor-header leon-chrome-text text-xl font-extrabold mb-[20px] ml-[10px] flex items-center">
+        <span v-if="showTitle" class="group-title text-shadow">
           {{ $t('deskModule.systemMonitor.systemState') }}
         </span>
         <div
@@ -189,16 +189,16 @@ function handleRightMenuSelect(key: string | number) {
           :class="monitorGroup.hoverStatus ? 'is-open' : ''"
         >
           <span class="mr-2 cursor-pointer" @click="handleAddItem()">
-            <SvgIcon class="text-white font-xl" icon="typcn:plus" />
+            <SvgIcon class="leon-chrome-text font-xl" icon="typcn:plus" />
           </span>
           <span class="mr-2 cursor-pointer" @click="handleSetSortStatus(!monitorGroup.sortStatus)">
-            <SvgIcon class="text-white font-xl" icon="ri:drag-drop-line" />
+            <SvgIcon class="leon-chrome-text font-xl" icon="ri:drag-drop-line" />
           </span>
         </div>
       </div>
 
       <!-- 详情图标 -->
-      <template v-if="panelState.panelConfig.iconStyle === PanelPanelConfigStyleEnum.info">
+      <template v-if="panelState.activePanelConfig.iconStyle === PanelPanelConfigStyleEnum.info">
         <VueDraggable
           v-model="monitorDatas" item-key="sort" :animation="300"
           class="icon-info-box"
@@ -214,17 +214,17 @@ function handleRightMenuSelect(key: string | number) {
             <AppIconSystemMonitor
               :extend-param="item.extendParam"
               :icon-text-icon-hide-title="false"
-              :card-type-style="panelState.panelConfig.iconStyle"
+              :card-type-style="panelState.activePanelConfig.iconStyle"
               :monitor-type="item.monitorType"
               :card-style="cardStyle"
-              :icon-text-color="panelState.panelConfig.iconTextColor"
+              :icon-text-color="panelState.activePanelConfig.iconTextColor"
             />
           </div>
         </VueDraggable>
       </template>
 
       <!-- APP图标宫型盒子 -->
-      <template v-if="panelState.panelConfig.iconStyle === PanelPanelConfigStyleEnum.icon">
+      <template v-if="panelState.activePanelConfig.iconStyle === PanelPanelConfigStyleEnum.icon">
         <VueDraggable
           v-model="monitorDatas" item-key="sort" :animation="300"
           class="icon-small-box"
@@ -240,10 +240,10 @@ function handleRightMenuSelect(key: string | number) {
             <AppIconSystemMonitor
               :extend-param="item.extendParam"
               :icon-text-icon-hide-title="false"
-              :card-type-style="panelState.panelConfig.iconStyle"
+              :card-type-style="panelState.activePanelConfig.iconStyle"
               :monitor-type="item.monitorType"
               :card-style="cardStyle"
-              :icon-text-color="panelState.panelConfig.iconTextColor"
+              :icon-text-color="panelState.activePanelConfig.iconTextColor"
             />
           </div>
         </vuedraggable>

@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="ocean-base" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#051326" />
+      <stop offset="48%" stop-color="#0a2444" />
+      <stop offset="100%" stop-color="#0e3860" />
+    </linearGradient>
+    <radialGradient id="ocean-glow-a" cx="22%" cy="18%" r="58%">
+      <stop offset="0%" stop-color="#228be6" stop-opacity="0.42" />
+      <stop offset="55%" stop-color="#134e84" stop-opacity="0.18" />
+      <stop offset="100%" stop-color="#061428" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="ocean-glow-b" cx="82%" cy="76%" r="54%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.32" />
+      <stop offset="50%" stop-color="#0c4a6e" stop-opacity="0.16" />
+      <stop offset="100%" stop-color="#051326" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="ocean-ribbon-1" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#7dd3fc" stop-opacity="0.02" />
+      <stop offset="45%" stop-color="#7dd3fc" stop-opacity="0.16" />
+      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.03" />
+    </linearGradient>
+    <linearGradient id="ocean-ribbon-2" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#bae6fd" stop-opacity="0.14" />
+      <stop offset="60%" stop-color="#0284c7" stop-opacity="0.08" />
+      <stop offset="100%" stop-color="#082f49" stop-opacity="0" />
+    </linearGradient>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#ocean-base)" />
+  <rect width="1920" height="1080" fill="url(#ocean-glow-a)" />
+  <rect width="1920" height="1080" fill="url(#ocean-glow-b)" />
+  <path d="M-80 760 C 320 620, 680 860, 1140 700 C 1480 580, 1740 650, 2000 540 L 2000 1120 L -80 1120 Z" fill="url(#ocean-ribbon-1)" />
+  <path d="M-120 380 C 260 240, 640 440, 1080 310 C 1440 205, 1720 320, 2020 210 L 2020 640 C 1680 730, 1340 590, 960 700 C 560 815, 220 630, -120 740 Z" fill="url(#ocean-ribbon-2)" />
+  <circle cx="1520" cy="210" r="320" fill="#38bdf8" fill-opacity="0.07" />
+  <circle cx="340" cy="880" r="380" fill="#0ea5e9" fill-opacity="0.08" />
+</svg>
