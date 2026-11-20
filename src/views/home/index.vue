@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { VueDraggable } from 'vue-draggable-plus'
 import { NBackTop, NButton, NButtonGroup, NDropdown, NModal, NSkeleton, NSpin, useDialog, useMessage } from 'naive-ui'
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { AppIcon, AppStarter, EditItem } from './components'
 import { Clock, SearchBox, SystemMonitor } from '@/components/deskModule'
 import { SvgIcon } from '@/components/common'
@@ -19,6 +19,9 @@ import { contentMaxWidth } from '@/utils/panel/maxWidth'
 import { resolveGroupIconStyle } from '@/utils/panel/groupIconStyle'
 import { contextMenuEntries, contextNewTabFeatures, resolveContextMenuChoice } from '@/utils/panel/contextMenu'
 import type { ContextMenuEntry } from '@/utils/panel/contextMenu'
+import { beginHomeListLoad, classifyHomeListFailure, createHomeListState, disposeHomeList, homeListFeedback, homeListIdentity, homeListRequestCurrent, noteHomeListIdentity, parseHomeListPayload, settleHomeListLoad } from '@/utils/panel/homeListLoad'
+import type { HomeListState } from '@/utils/panel/homeListLoad'
+import { requestFailureDetails } from '@/utils/request/failure'
 
 interface ItemGroup extends Panel.ItemIconGroup {
   sortStatus?: boolean
@@ -51,6 +54,11 @@ const currentAddItenIconGroupId = ref<number | undefined>()
 const settingModalShow = ref(false)
 
 const items = ref<ItemGroup[]>([])
+let listState: HomeListState<ItemGroup> = createHomeListState(homeListIdentity(authStore.token))
+const homeLoading = ref(false)
+const homeRetryVisible = ref(false)
+const homeShowNoData = ref(false)
+const homeShowSearchEmpty = ref(false)
 
 function groupIconStyle(group: ItemGroup) {
   return resolveGroupIconStyle(group.iconStyle, panelState.panelConfig.iconStyle)
@@ -119,33 +127,85 @@ function handWindowIframeIdLoad(payload: Event) {
   windowIframeIsLoad.value = false
 }
 
-let iconLoadRequest = 0
+function publishHomeList() {
+  const feedback = homeListFeedback({
+    loading: listState.loading,
+    failure: listState.failure,
+    loaded: listState.loaded,
+    itemCount: items.value.length,
+    searchActive: searchActive.value,
+    matchCount: searchMatches.value.length,
+  })
+  homeLoading.value = feedback.busy
+  homeRetryVisible.value = feedback.showRetry
+  homeShowNoData.value = feedback.showNoData
+  homeShowSearchEmpty.value = feedback.showSearchEmpty
+}
+
+function commitHomeList(next: HomeListState<ItemGroup>) {
+  if (next === listState)
+    return
+  if (next.items !== items.value)
+    items.value = next.items
+  listState = next
+  applySearchFilter()
+}
 
 function getList() {
-  const requestId = ++iconLoadRequest
-  getGroupList<Common.ListResponse<ItemGroup[]>>(true).then(({ code, data }) => {
-    if (requestId !== iconLoadRequest || code !== 0)
-      return
-    items.value = data.list || []
-    applySearchFilter()
+  requestHomeList('refresh')
+}
+
+function retryHomeList() {
+  requestHomeList('retry')
+}
+
+function requestHomeList(mode: 'refresh' | 'retry') {
+  if (listState.disposed)
+    return
+  const identity = homeListIdentity(authStore.token)
+  const begun = beginHomeListLoad(listState, identity, mode)
+  if (begun.requestId === null && begun.state === listState)
+    return
+  commitHomeList(begun.state)
+  if (begun.requestId === null)
+    return
+  const requestId = begun.requestId
+  getGroupList<Common.ListResponse<ItemGroup[]>>(true, () => {
+    return homeListRequestCurrent(listState, requestId, identity) && homeListIdentity(authStore.token) === identity
+  }).then((res) => {
+    const parsed = parseHomeListPayload<ItemGroup>(res)
+    commitHomeList(settleHomeListLoad(listState, {
+      requestId,
+      identity,
+      outcome: parsed.outcome,
+      items: parsed.items,
+    }))
+  }).catch((error: unknown) => {
+    const details = requestFailureDetails(error)
+    commitHomeList(settleHomeListLoad(listState, {
+      requestId,
+      identity,
+      outcome: classifyHomeListFailure(details),
+      items: [],
+    }))
   })
 }
 
-function updateItemIconGroupByNet(itemIconGroupId: number, requestId = iconLoadRequest) {
+function updateItemIconGroupByNet(itemIconGroupId: number, requestId = listState.generation) {
   getListByGroupId<Common.ListResponse<Panel.ItemInfo[]>>(itemIconGroupId).then((res) => {
     if (res.code !== 0)
       return
     const applied = acceptLoadedIcons({
       groups: items.value,
       requestId,
-      currentRequestId: iconLoadRequest,
+      currentRequestId: listState.generation,
       groupId: itemIconGroupId,
       icons: res.data.list || [],
     })
     if (!applied)
       return
     applySearchFilter()
-  })
+  }).catch(() => undefined)
 }
 
 function handleRightMenuSelect(key: string | number) {
@@ -274,6 +334,17 @@ watch(settingModalShow, (visible) => {
   getList()
 })
 
+watch(() => homeListIdentity(authStore.token), (identity, previous) => {
+  if (identity === previous || listState.disposed)
+    return
+  const noted = noteHomeListIdentity(listState, identity)
+  if (!noted.changed)
+    return
+  commitHomeList(noted.state)
+  if (identity)
+    getList()
+})
+
 onMounted(() => {
   // 更新用户信息
   updateLocalUserInfo()
@@ -287,6 +358,10 @@ onMounted(() => {
     setTitle(panelState.panelConfig.logoText)
 })
 
+onBeforeUnmount(() => {
+  listState = disposeHomeList(listState)
+})
+
 const activeSearchItem = computed(() => searchMatches.value[activeMatchIndex.value])
 
 function applySearchFilter() {
@@ -295,6 +370,7 @@ function applySearchFilter() {
   searchMatches.value = result.matches as Panel.ItemInfo[]
   filterItems.value = result.active ? result.groups as ItemGroup[] : items.value
   activeMatchIndex.value = searchMatches.value.length > 0 ? Math.min(Math.max(activeMatchIndex.value, 0), searchMatches.value.length - 1) : -1
+  publishHomeList()
 }
 
 // 前端搜索过滤
@@ -329,7 +405,7 @@ function handleSetSortStatus(groupIndex: number, sortStatus: boolean) {
   if (!sortStatus) {
     // 单独更新组
     if (items.value[groupIndex] && items.value[groupIndex].id)
-        updateItemIconGroupByNet(items.value[groupIndex].id as number)
+      updateItemIconGroupByNet(items.value[groupIndex].id as number)
   }
 }
 
@@ -349,6 +425,16 @@ function handleAddItem(itemIconGroupId?: number) {
 
 <template>
   <div class="w-full h-full sun-main">
+    <div
+      v-if="homeLoading"
+      class="leon-home-loading"
+      role="progressbar"
+      aria-busy="true"
+      aria-valuemin="0"
+      aria-valuemax="100"
+      data-testid="home-loading-bar"
+      :aria-label="$t('panelHome.loading')"
+    />
     <div
       class="cover wallpaper" :style="{
         filter: `blur(${panelState.panelConfig.backgroundBlur}px)`,
@@ -390,7 +476,7 @@ function handleAddItem(itemIconGroupId?: number) {
               @move-match="handleMoveMatch"
               @open-local="openActiveMatch"
             />
-            <p v-if="searchActive && searchMatches.length === 0" class="leon-search-empty" role="status">
+            <p v-if="homeShowSearchEmpty" class="leon-search-empty" role="status" data-testid="home-search-empty">
               {{ $t('deskModule.searchBox.empty') }}
             </p>
           </div>
@@ -411,117 +497,135 @@ function handleAddItem(itemIconGroupId?: number) {
             />
           </div>
 
-          <!-- 组纵向排列 -->
           <div
-            v-for="(itemGroup, itemGroupIndex) in filterItems" :key="itemGroupIndex"
-            class="item-list leon-section"
-            :class="itemGroup.sortStatus ? 'shadow-2xl border shadow-[0_0_30px_10px_rgba(0,0,0,0.3)]  p-[10px] rounded-2xl' : ''"
-            @mouseenter="handleSetHoverStatus(itemGroupIndex, true)"
-            @mouseleave="handleSetHoverStatus(itemGroupIndex, false)"
+            class="leon-card-region"
+            data-testid="home-card-region"
+            :aria-busy="homeLoading ? 'true' : 'false'"
           >
-            <!-- 分组标题 -->
-            <div class="text-white text-xl font-extrabold mb-[20px] ml-[10px] flex items-center">
-              <span class="group-title text-shadow">
-                {{ itemGroup.title }}
-              </span>
-              <div
-                v-if="authStore.visitMode === VisitMode.VISIT_MODE_LOGIN"
-                class="group-buttons leon-hover-actions ml-2 flex"
-                :class="itemGroup.hoverStatus ? 'is-open' : ''"
-              >
-                <span class="mr-2 cursor-pointer" :title="t('common.add')" @click="handleAddItem(itemGroup.id)">
-                  <SvgIcon class="text-white font-xl" icon="typcn:plus" />
+            <div v-if="homeRetryVisible" class="leon-home-retry" role="alert" data-testid="home-list-error">
+              <p class="leon-home-retry-text">
+                {{ $t('panelHome.loadFailed') }}
+              </p>
+              <button type="button" class="leon-home-retry-button" data-testid="home-list-retry" @click="retryHomeList">
+                {{ $t('panelHome.retry') }}
+              </button>
+            </div>
+            <p v-if="homeShowNoData" class="leon-home-empty" role="status" data-testid="home-no-data">
+              {{ $t('common.noData') }}
+            </p>
+
+            <!-- 组纵向排列 -->
+            <div
+              v-for="(itemGroup, itemGroupIndex) in filterItems" :key="itemGroupIndex"
+              class="item-list leon-section"
+              :class="itemGroup.sortStatus ? 'shadow-2xl border shadow-[0_0_30px_10px_rgba(0,0,0,0.3)]  p-[10px] rounded-2xl' : ''"
+              @mouseenter="handleSetHoverStatus(itemGroupIndex, true)"
+              @mouseleave="handleSetHoverStatus(itemGroupIndex, false)"
+            >
+              <!-- 分组标题 -->
+              <div class="text-white text-xl font-extrabold mb-[20px] ml-[10px] flex items-center">
+                <span class="group-title text-shadow">
+                  {{ itemGroup.title }}
                 </span>
-                <span class="mr-2 cursor-pointer " :title="t('common.sort')" @click="handleSetSortStatus(itemGroupIndex, !itemGroup.sortStatus)">
-                  <SvgIcon class="text-white font-xl" icon="ri:drag-drop-line" />
-                </span>
-              </div>
-            </div>
-
-            <!-- 详情图标 -->
-            <div v-if="groupIconStyle(itemGroup) === PanelPanelConfigStyleEnum.info">
-              <div v-if="itemGroup.items">
-                <VueDraggable
-                  v-model="itemGroup.items" item-key="sort" :animation="300"
-                  class="icon-info-box"
-                  filter=".not-drag"
-                  :disabled="!itemGroup.sortStatus"
+                <div
+                  v-if="authStore.visitMode === VisitMode.VISIT_MODE_LOGIN"
+                  class="group-buttons leon-hover-actions ml-2 flex"
+                  :class="itemGroup.hoverStatus ? 'is-open' : ''"
                 >
-                  <div v-for="item, index in itemGroup.items" :key="index" :title="item.description" :class="item === activeSearchItem ? 'leon-search-hit' : ''" @contextmenu="(e) => handleContextMenu(e, itemGroupIndex, item)">
-                    <AppIcon
-                      :class="itemGroup.sortStatus ? 'cursor-move' : 'cursor-pointer'"
-                      :item-info="item"
-                      :icon-text-color="panelState.panelConfig.iconTextColor"
-                      :icon-text-info-hide-description="panelState.panelConfig.iconTextInfoHideDescription || false"
-                      :icon-text-icon-hide-title="panelState.panelConfig.iconTextIconHideTitle || false"
-                      :style="0"
-                      @click="handleItemClick(itemGroupIndex, item)"
-                    />
-                  </div>
-
-                  <div v-if="itemGroup.items.length === 0" class="not-drag">
-                    <AppIcon
-                      :class="itemGroup.sortStatus ? 'cursor-move' : 'cursor-pointer'"
-                      :item-info="{ icon: { itemType: 3, text: 'subway:add' }, title: t('common.add'), url: '', openMethod: 0 }"
-                      :icon-text-color="panelState.panelConfig.iconTextColor"
-                      :icon-text-info-hide-description="panelState.panelConfig.iconTextInfoHideDescription || false"
-                      :icon-text-icon-hide-title="panelState.panelConfig.iconTextIconHideTitle || false"
-                      :style="0"
-                      @click="handleAddItem(itemGroup.id)"
-                    />
-                  </div>
-                </VueDraggable>
+                  <span class="mr-2 cursor-pointer" :title="t('common.add')" @click="handleAddItem(itemGroup.id)">
+                    <SvgIcon class="text-white font-xl" icon="typcn:plus" />
+                  </span>
+                  <span class="mr-2 cursor-pointer " :title="t('common.sort')" @click="handleSetSortStatus(itemGroupIndex, !itemGroup.sortStatus)">
+                    <SvgIcon class="text-white font-xl" icon="ri:drag-drop-line" />
+                  </span>
+                </div>
               </div>
-            </div>
 
-            <!-- APP图标宫型盒子 -->
-            <div v-if="groupIconStyle(itemGroup) === PanelPanelConfigStyleEnum.icon">
-              <div v-if="itemGroup.items">
-                <VueDraggable
-                  v-model="itemGroup.items" item-key="sort" :animation="300"
-                  class="icon-small-box"
+              <!-- 详情图标 -->
+              <div v-if="groupIconStyle(itemGroup) === PanelPanelConfigStyleEnum.info">
+                <div v-if="itemGroup.items">
+                  <VueDraggable
+                    v-model="itemGroup.items" item-key="sort" :animation="300"
+                    class="icon-info-box"
+                    filter=".not-drag"
+                    :disabled="!itemGroup.sortStatus"
+                  >
+                    <div v-for="item, index in itemGroup.items" :key="index" :title="item.description" :class="item === activeSearchItem ? 'leon-search-hit' : ''" @contextmenu="(e) => handleContextMenu(e, itemGroupIndex, item)">
+                      <AppIcon
+                        :class="itemGroup.sortStatus ? 'cursor-move' : 'cursor-pointer'"
+                        :item-info="item"
+                        :icon-text-color="panelState.panelConfig.iconTextColor"
+                        :icon-text-info-hide-description="panelState.panelConfig.iconTextInfoHideDescription || false"
+                        :icon-text-icon-hide-title="panelState.panelConfig.iconTextIconHideTitle || false"
+                        :style="0"
+                        @click="handleItemClick(itemGroupIndex, item)"
+                      />
+                    </div>
 
-                  filter=".not-drag"
-                  :disabled="!itemGroup.sortStatus"
-                >
-                  <div v-for="item, index in itemGroup.items" :key="index" :title="item.description" :class="item === activeSearchItem ? 'leon-search-hit' : ''" @contextmenu="(e) => handleContextMenu(e, itemGroupIndex, item)">
-                    <AppIcon
-                      :class="itemGroup.sortStatus ? 'cursor-move' : 'cursor-pointer'"
-                      :item-info="item"
-                      :icon-text-color="panelState.panelConfig.iconTextColor"
-                      :icon-text-info-hide-description="!panelState.panelConfig.iconTextInfoHideDescription"
-                      :icon-text-icon-hide-title="panelState.panelConfig.iconTextIconHideTitle || false"
-                      :style="1"
-                      @click="handleItemClick(itemGroupIndex, item)"
-                    />
-                  </div>
-
-                  <div v-if="itemGroup.items.length === 0" class="not-drag">
-                    <AppIcon
-                      class="cursor-pointer"
-                      :item-info="{ icon: { itemType: 3, text: 'subway:add' }, title: $t('common.add'), url: '', openMethod: 0 }"
-                      :icon-text-color="panelState.panelConfig.iconTextColor"
-                      :icon-text-info-hide-description="!panelState.panelConfig.iconTextInfoHideDescription"
-                      :icon-text-icon-hide-title="panelState.panelConfig.iconTextIconHideTitle || false"
-                      :style="1"
-                      @click="handleAddItem(itemGroup.id)"
-                    />
-                  </div>
-                </vuedraggable>
+                    <div v-if="itemGroup.items.length === 0" class="not-drag">
+                      <AppIcon
+                        :class="itemGroup.sortStatus ? 'cursor-move' : 'cursor-pointer'"
+                        :item-info="{ icon: { itemType: 3, text: 'subway:add' }, title: t('common.add'), url: '', openMethod: 0 }"
+                        :icon-text-color="panelState.panelConfig.iconTextColor"
+                        :icon-text-info-hide-description="panelState.panelConfig.iconTextInfoHideDescription || false"
+                        :icon-text-icon-hide-title="panelState.panelConfig.iconTextIconHideTitle || false"
+                        :style="0"
+                        @click="handleAddItem(itemGroup.id)"
+                      />
+                    </div>
+                  </VueDraggable>
+                </div>
               </div>
-            </div>
 
-            <!-- 编辑栏 -->
-            <div v-if="itemGroup.sortStatus" class="flex mt-[10px]">
-              <div>
-                <NButton color="#2a2a2a6b" @click="handleSaveSort(itemGroup)">
-                  <template #icon>
-                    <SvgIcon class="text-white font-xl" icon="material-symbols:save" />
-                  </template>
-                  <div>
-                    {{ $t('common.saveSort') }}
-                  </div>
-                </NButton>
+              <!-- APP图标宫型盒子 -->
+              <div v-if="groupIconStyle(itemGroup) === PanelPanelConfigStyleEnum.icon">
+                <div v-if="itemGroup.items">
+                  <VueDraggable
+                    v-model="itemGroup.items" item-key="sort" :animation="300"
+                    class="icon-small-box"
+
+                    filter=".not-drag"
+                    :disabled="!itemGroup.sortStatus"
+                  >
+                    <div v-for="item, index in itemGroup.items" :key="index" :title="item.description" :class="item === activeSearchItem ? 'leon-search-hit' : ''" @contextmenu="(e) => handleContextMenu(e, itemGroupIndex, item)">
+                      <AppIcon
+                        :class="itemGroup.sortStatus ? 'cursor-move' : 'cursor-pointer'"
+                        :item-info="item"
+                        :icon-text-color="panelState.panelConfig.iconTextColor"
+                        :icon-text-info-hide-description="!panelState.panelConfig.iconTextInfoHideDescription"
+                        :icon-text-icon-hide-title="panelState.panelConfig.iconTextIconHideTitle || false"
+                        :style="1"
+                        @click="handleItemClick(itemGroupIndex, item)"
+                      />
+                    </div>
+
+                    <div v-if="itemGroup.items.length === 0" class="not-drag">
+                      <AppIcon
+                        class="cursor-pointer"
+                        :item-info="{ icon: { itemType: 3, text: 'subway:add' }, title: $t('common.add'), url: '', openMethod: 0 }"
+                        :icon-text-color="panelState.panelConfig.iconTextColor"
+                        :icon-text-info-hide-description="!panelState.panelConfig.iconTextInfoHideDescription"
+                        :icon-text-icon-hide-title="panelState.panelConfig.iconTextIconHideTitle || false"
+                        :style="1"
+                        @click="handleAddItem(itemGroup.id)"
+                      />
+                    </div>
+                  </vuedraggable>
+                </div>
+              </div>
+
+              <!-- 编辑栏 -->
+              <div v-if="itemGroup.sortStatus" class="flex mt-[10px]">
+                <div>
+                  <NButton color="#2a2a2a6b" @click="handleSaveSort(itemGroup)">
+                    <template #icon>
+                      <SvgIcon class="text-white font-xl" icon="material-symbols:save" />
+                    </template>
+                    <div>
+                      {{ $t('common.saveSort') }}
+                    </div>
+                  </NButton>
+                </div>
               </div>
             </div>
           </div>
@@ -558,7 +662,7 @@ function handleAddItem(itemIconGroupId?: number) {
           </template>
         </NButton>
 
-        <NButton v-if="authStore.visitMode === VisitMode.VISIT_MODE_LOGIN" color="#2a2a2a6b" @click="settingModalShow = !settingModalShow">
+        <NButton v-if="authStore.visitMode === VisitMode.VISIT_MODE_LOGIN" color="#2a2a2a6b" data-testid="home-open-settings" @click="settingModalShow = !settingModalShow">
           <template #icon>
             <SvgIcon class="text-white font-xl" icon="majesticons-applications" />
           </template>

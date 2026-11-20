@@ -1,6 +1,8 @@
 import type { AxiosProgressEvent, AxiosResponse, GenericAbortSignal } from 'axios'
 import request from './axios'
 import { apiRespErrMsg, message } from './apiMessage'
+import { asRequestFailure } from './failure'
+import { staleSessionResponse } from './sessionExpiry'
 import { prepareHttpRequest } from './payload'
 import { t } from '@/locales'
 import { useAppStore, useAuthStore } from '@/store'
@@ -17,6 +19,7 @@ export interface HttpOption {
   signal?: GenericAbortSignal
   beforeRequest?: () => void
   afterRequest?: () => void
+  sessionCurrent?: () => boolean
 }
 
 export interface Response<T = any> {
@@ -28,12 +31,16 @@ export interface Response<T = any> {
 }
 
 function http<T = any>(
-  { url, data, method, headers, onDownloadProgress, signal, beforeRequest, afterRequest }: HttpOption,
+  { url, data, method, headers, onDownloadProgress, signal, beforeRequest, afterRequest, sessionCurrent }: HttpOption,
 ) {
   const authStore = useAuthStore()
   const appStore = useAppStore()
   const successHandler = (res: AxiosResponse<Response<T>>) => {
     if (res.data.code === 0)
+      return res.data
+
+    // 先于清会话判断。被取代的首页请求迟到返回 1000/1001 时，不能登出当前有效会话。
+    if ((res.data.code === 1000 || res.data.code === 1001) && staleSessionResponse(res.data.code, sessionCurrent))
       return res.data
 
     if (res.data.code === 1001) {
@@ -79,13 +86,13 @@ function http<T = any>(
       return res.data
   }
 
-  const failHandler = (error: Response<Error>) => {
+  const failHandler = (error: unknown) => {
     afterRequest?.()
     message.error(t('common.networkError'), {
       duration: 50000,
       closable: true,
     })
-    throw new Error(error?.msg || 'Error')
+    throw asRequestFailure(error)
   }
 
   beforeRequest?.()
@@ -104,7 +111,7 @@ function http<T = any>(
 }
 
 export function get<T = any>(
-  { url, data, method = 'GET', onDownloadProgress, signal, beforeRequest, afterRequest }: HttpOption,
+  { url, data, method = 'GET', onDownloadProgress, signal, beforeRequest, afterRequest, sessionCurrent }: HttpOption,
 ): Promise<Response<T>> {
   return http<T>({
     url,
@@ -114,11 +121,12 @@ export function get<T = any>(
     signal,
     beforeRequest,
     afterRequest,
+    sessionCurrent,
   })
 }
 
 export function post<T = any>(
-  { url, data, method = 'POST', headers, onDownloadProgress, signal, beforeRequest, afterRequest }: HttpOption,
+  { url, data, method = 'POST', headers, onDownloadProgress, signal, beforeRequest, afterRequest, sessionCurrent }: HttpOption,
 ): Promise<Response<T>> {
   return http<T>({
     url,
@@ -129,6 +137,7 @@ export function post<T = any>(
     signal,
     beforeRequest,
     afterRequest,
+    sessionCurrent,
   })
 }
 
