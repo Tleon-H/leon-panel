@@ -6,9 +6,10 @@ import { post } from '@/utils/request'
 //   })
 // }
 
-export function getAuthInfo<T>() {
+export function getAuthInfo<T>(sessionCurrent?: () => boolean) {
   return post<T>({
     url: '/user/getAuthInfo',
+    sessionCurrent,
   })
 }
 
