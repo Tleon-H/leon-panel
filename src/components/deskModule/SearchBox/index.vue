@@ -219,7 +219,7 @@ onMounted(() => {
 
 <template>
   <div class="search-box w-full">
-    <div class="search-container flex rounded-2xl items-center justify-center text-white w-full" :style="{ background, color: textColor }" :class="{ focused: isFocused }">
+    <div class="search-container flex rounded-2xl items-center justify-center w-full" :style="{ background, color: textColor }" :class="{ focused: isFocused }">
       <div class="search-box-btn-engine w-[40px] flex justify-center cursor-pointer" @click="handleEngineClick">
         <img v-if="engineIcon(current)" class="engine-mark" :src="engineIcon(current)" alt="">
         <span v-else class="engine-letter">{{ engineLetter(current) }}</span>
@@ -295,18 +295,17 @@ onMounted(() => {
 
 <style scoped>
 .search-container {
-  border: 1px solid #ccc;
-  transition: box-shadow 0.5s,backdrop-filter 0.5s;
+  border: 1px solid var(--leon-search-border, #ccc);
+  transition: box-shadow 0.3s, backdrop-filter 0.3s, border-color 0.2s;
   padding: 2px 10px;
-  backdrop-filter:blur(2px);
+  backdrop-filter: blur(8px);
   flex-wrap: nowrap;
 }
 
 .focused, .search-container:hover {
-  box-shadow: 0px 0px 30px -5px rgba(41, 41, 41, 0.45);
-  -webkit-box-shadow: 0px 0px 30px -5px rgba(0, 0, 0, 0.45);
-  -moz-box-shadow: 0px 0px 30px -5px rgba(0, 0, 0, 0.45);
-  backdrop-filter:blur(5px)
+  border-color: var(--leon-accent-color, #7dd3fc);
+  box-shadow: 0px 0px 0px 2px rgba(56, 189, 248, 0.2), 0px 8px 24px -6px rgba(15, 23, 42, 0.28);
+  backdrop-filter: blur(12px);
 }
 
 input {
@@ -321,6 +320,10 @@ input {
   outline: none;
   font-size: 17px;
   color: inherit;
+}
+
+input::placeholder {
+  color: var(--leon-search-placeholder, rgba(255, 255, 255, 0.78));
 }
 
 .engine-row,
@@ -372,7 +375,7 @@ input {
 }
 
 .engine-action {
-  border: 1px solid rgba(255, 255, 255, 0.45);
+  border: 1px solid var(--leon-search-border, rgba(255, 255, 255, 0.45));
   background: transparent;
   color: inherit;
   border-radius: 8px;
@@ -389,7 +392,7 @@ input {
   display: block;
   width: 100%;
   margin-top: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.45);
+  border: 1px solid var(--leon-search-border, rgba(255, 255, 255, 0.45));
   border-radius: 8px;
 }
 

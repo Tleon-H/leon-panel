@@ -4,11 +4,13 @@ import { NAvatar } from 'naive-ui'
 import { computed, ref, watch, withDefaults } from 'vue'
 import { t } from '@/locales'
 import { createRemoteIconController, fallbackLabel, isRemoteIconType, rejectAfter, type RemoteIconPhase } from '@/utils/icon/remoteIcon'
+import { resolveIconForegroundColor } from '@/utils/panel/appearance'
 
 interface Prop {
   itemIcon?: Panel.ItemIcon | null
   size?: number // 默认70
   forceBackground?: string // 强制背景色
+  foregroundColor?: string // 图标文字 / Iconify / 回退字母前景色
   fallbackText?: string
 }
 
@@ -29,6 +31,10 @@ const iconExt = computed(() => {
   return props.itemIcon?.src?.split('.').pop()
 })
 const backgroundColor = computed(() => (props.forceBackground ?? props.itemIcon?.backgroundColor) || defaultBackground)
+const avatarStyle = computed(() => ({
+  backgroundColor: backgroundColor.value,
+  color: props.foregroundColor || resolveIconForegroundColor(backgroundColor.value),
+}))
 const letter = computed(() => fallbackLabel(props.itemIcon?.itemType, props.itemIcon?.text, props.fallbackText))
 const remoteKey = computed(() => {
   if (!isRemoteIconType(props.itemIcon?.itemType))
@@ -84,7 +90,7 @@ function onImgError(event: Event) {
     <slot>
       <template v-if="itemIcon">
         <template v-if="itemIcon.itemType === 1">
-          <NAvatar :size="props.size" :style="{ backgroundColor }">
+          <NAvatar :size="props.size" :style="avatarStyle">
             {{ itemIcon.text }}
           </NAvatar>
         </template>
@@ -104,20 +110,20 @@ function onImgError(event: Event) {
         </template>
 
         <template v-else-if="showOnlineIcon">
-          <NAvatar :size="props.size" :style="{ backgroundColor }">
+          <NAvatar :size="props.size" :style="avatarStyle">
             <Icon style="font-size: 35px;" :icon="itemIcon.text || ''" />
           </NAvatar>
         </template>
 
         <template v-else>
-          <NAvatar :size="props.size" :title="t('iconItem.iconLoadFailed')" :style="{ backgroundColor }">
+          <NAvatar :size="props.size" :title="t('iconItem.iconLoadFailed')" :style="avatarStyle">
             {{ letter }}
           </NAvatar>
         </template>
       </template>
 
       <template v-else>
-        <NAvatar :size="props.size" />
+        <NAvatar :size="props.size" :style="avatarStyle" />
       </template>
     </slot>
   </div>

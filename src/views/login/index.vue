@@ -37,6 +37,7 @@ const loginPost = async () => {
       const next = rememberAccount(savedAccounts.value, res.data)
       saveAccountSessions(next)
       savedAccounts.value = next
+      panelState.removeState()
       authStore.setToken(res.data.token)
       authStore.setUserInfo(res.data)
 

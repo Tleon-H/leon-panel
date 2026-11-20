@@ -79,6 +79,10 @@
       "clock": "Clock component",
       "clockSecondShow": "Show seconds",
       "configFailed": "Configuration save failed, {message}",
+      "configLoading": "Loading server panel configuration, please wait…",
+      "configLoadFailed": "Failed to load server panel configuration. Keeping current style and pausing edits.",
+      "configLoadRetry": "Retry loading",
+      "configSaveRetry": "Retry saving",
       "configSaved": "Configuration saved",
       "contentArea": "Content area",
       "customFooter": "Custom footer",
@@ -103,7 +107,51 @@
       "topMargin": "Top margin",
       "uploadOrDragText": "Click to upload or drag and drop into the box to replace the image",
       "vague": "Blur",
-      "wallpaper": "Wallpaper"
+      "wallpaper": "Wallpaper",
+      "wallpaperTone": "Background text tone",
+      "wallpaperToneDark": "Dark background (light text)",
+      "wallpaperToneLight": "Light background (dark text)",
+      "cardStyleSection": "Card style",
+      "cardSurface": "Card surface",
+      "cardSurfaceDefault": "Classic default",
+      "cardBackgroundColor": "Card background color",
+      "cardBlur": "Card backdrop blur",
+      "cardRadius": "Card corner radius",
+      "cardAccentColor": "Accent and focus color",
+      "iconBadgeStyle": "Icon badge style",
+      "iconBadgeDefault": "Classic default",
+      "iconBadgeGlass": "Ocean glass frame",
+      "iconBadgeSoft": "Soft paper frame",
+      "iconBadgeOutline": "Graphite cyan rim",
+      "presets": {
+        "title": "Homepage Appearance Presets",
+        "hint": "Preview any preset live on the homepage, then apply only the checked scopes. Group overrides, custom card icons, and links stay untouched, and every item can still be adjusted individually afterward.",
+        "scopeLabel": "Apply scopes:",
+        "scopeWallpaper": "Wallpaper",
+        "scopeCardStyle": "Card style",
+        "scopeIconStyle": "Icon style",
+        "preview": "Preview",
+        "previewing": "Previewing",
+        "applySelected": "Apply selected",
+        "exitPreview": "Exit preview",
+        "backToSettings": "Back to settings",
+        "previewBanner": "Previewing: {name}",
+        "previewBannerTip": "Exiting preview restores your previous appearance without saving.",
+        "selectAtLeastOne": "Select at least one item to apply",
+        "applied": "Applied \"{name}\" ({scopes})",
+        "oceanGlass": {
+          "name": "Ocean Glass",
+          "desc": "Deep ocean blue backdrop with translucent frosted glass cards"
+        },
+        "mistPaper": {
+          "name": "Mist Paper",
+          "desc": "Soft misty backdrop with warm white paper cards and crisp dark ink"
+        },
+        "midnightGraphite": {
+          "name": "Midnight Graphite",
+          "desc": "Nocturnal backdrop with near-black cards, light text, and cyan-blue accents"
+        }
+      }
     },
     "exportImport": {
       "appName": "Export/Import",

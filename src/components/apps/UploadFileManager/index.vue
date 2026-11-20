@@ -2,7 +2,6 @@
 import { NAlert, NButton, NButtonGroup, NCard, NCheckbox, NEllipsis, NGrid, NGridItem, NImage, NImageGroup, NInput, NPagination, NSelect, NSpin, useDialog, useMessage } from 'naive-ui'
 import { computed, onMounted, ref, watch } from 'vue'
 import { deletes, getList, setPublic, updateCategory, uploadFiles } from '@/api/system/file'
-import { set as savePanelConfig } from '@/api/panel/userConfig'
 import { RoundCardModal, SvgIcon } from '@/components/common'
 import { copyToClipboard, timeFormat } from '@/utils/cmn'
 import { displayFileCategory, fileCategories, ownFileQuery, pageAfterListChange, uploadCategoryForEntry, type FileCategory } from '@/utils/file/category'
@@ -287,8 +286,18 @@ function handleInfoClick(fileInfo: File.Info) {
 }
 
 function handleSetWallpaper(imgSrc: string) {
-  panelStore.panelConfig.backgroundImageSrc = imgSrc
-  savePanelConfig({ panel: panelStore.panelConfig })
+  if (!panelStore.setWallpaperSource(imgSrc))
+    return
+  void panelStore.savePanelConfigToCloud().then((result) => {
+    if (result.stale || result.blocked)
+      return
+    if (result.ok)
+      ms.success(t('apps.baseSettings.configSaved'))
+    else if (result.msg)
+      ms.error(t('apps.baseSettings.configFailed', { message: result.msg }))
+    else
+      ms.error(t('common.networkError'))
+  })
 }
 
 watch(() => authStore.userInfo?.id, (next, previous) => {
@@ -420,7 +429,7 @@ onMounted(() => {
                         <SvgIcon icon="mdi-information-box-outline" />
                       </template>
                     </NButton>
-                    <NButton size="tiny" tertiary style="cursor: pointer;" :title="$t('apps.uploadsFileManager.setWallpaper')" @click="handleSetWallpaper(item.src)">
+                    <NButton size="tiny" tertiary style="cursor: pointer;" :disabled="!panelStore.isCloudConfigReady" :title="$t('apps.uploadsFileManager.setWallpaper')" @click="handleSetWallpaper(item.src)">
                       <template #icon>
                         <SvgIcon icon="lucide:wallpaper" />
                       </template>

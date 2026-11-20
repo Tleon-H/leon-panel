@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { VueDraggable } from 'vue-draggable-plus'
-import { NBackTop, NButton, NButtonGroup, NDropdown, NModal, NSkeleton, NSpin, useDialog, useMessage } from 'naive-ui'
+import { NBackTop, NButton, NButtonGroup, NCheckbox, NDropdown, NModal, NSkeleton, NSpin, useDialog, useMessage } from 'naive-ui'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { AppIcon, AppStarter, EditItem } from './components'
 import { Clock, SearchBox, SystemMonitor } from '@/components/deskModule'
@@ -17,6 +17,8 @@ import { router } from '@/router'
 import { t } from '@/locales'
 import { contentMaxWidth } from '@/utils/panel/maxWidth'
 import { resolveGroupIconStyle } from '@/utils/panel/groupIconStyle'
+import { APPEARANCE_PRESETS, APPEARANCE_PRESET_IDS, DEFAULT_APPEARANCE_SCOPES, hasSelectedScope, resolveHomepageThemeVars } from '@/utils/panel/appearance'
+import type { AppearancePresetId, AppearancePresetScopes } from '@/utils/panel/appearance'
 import { contextMenuEntries, contextNewTabFeatures, resolveContextMenuChoice } from '@/utils/panel/contextMenu'
 import type { ContextMenuEntry } from '@/utils/panel/contextMenu'
 import { beginHomeListLoad, createHomeListState, disposeHomeList, homeListFeedback, homeListIdentity, homeListRequestCurrent, noteHomeListIdentity } from '@/utils/panel/homeListLoad'
@@ -70,8 +72,89 @@ const homeRetryVisible = ref(false)
 const homeShowNoData = ref(false)
 const homeShowSearchEmpty = ref(false)
 
+const activePanelConfig = computed(() => panelState.activePanelConfig)
+const homepageTheme = computed(() => resolveHomepageThemeVars(activePanelConfig.value))
+const previewPresetList = computed(() => APPEARANCE_PRESET_IDS.map(id => APPEARANCE_PRESETS[id]))
+const activePreviewPreset = computed(() => (panelState.previewPresetId ? APPEARANCE_PRESETS[panelState.previewPresetId] : null))
+const activePreviewScopes = computed<AppearancePresetScopes>(() => panelState.previewScopes ?? DEFAULT_APPEARANCE_SCOPES)
+const appStarterVisible = computed({
+  get: () => settingModalShow.value && !panelState.isPreviewingAppearance,
+  set: (visible: boolean) => {
+    settingModalShow.value = visible
+  },
+})
+
 function groupIconStyle(group: ItemGroup) {
+  if (panelState.isPreviewingAppearance)
+    return resolveGroupIconStyle(group.iconStyle, activePanelConfig.value.iconStyle)
   return resolveGroupIconStyle(group.iconStyle, panelState.panelConfig.iconStyle)
+}
+
+function previewScopeSummary(scopes: AppearancePresetScopes): string {
+  const labels: string[] = []
+  if (scopes.wallpaper)
+    labels.push(t('apps.baseSettings.presets.scopeWallpaper'))
+  if (scopes.cardStyle)
+    labels.push(t('apps.baseSettings.presets.scopeCardStyle'))
+  if (scopes.iconStyle)
+    labels.push(t('apps.baseSettings.presets.scopeIconStyle'))
+  return labels.join('、')
+}
+
+function handlePreviewSwitch(presetId: AppearancePresetId) {
+  panelState.startAppearancePreview(presetId, { ...activePreviewScopes.value })
+}
+
+function handlePreviewScopeChange(scopeKey: keyof AppearancePresetScopes, checked: boolean) {
+  panelState.updateAppearancePreviewScopes({ [scopeKey]: checked })
+}
+
+function handlePreviewCancel() {
+  panelState.cancelAppearancePreview()
+  settingModalShow.value = false
+}
+
+function handlePreviewBackToSettings() {
+  panelState.cancelAppearancePreview()
+  settingModalShow.value = true
+}
+
+function handlePreviewApply() {
+  const presetId = panelState.previewPresetId
+  if (!presetId || !panelState.isCloudConfigReady)
+    return
+  const scopes = { ...activePreviewScopes.value }
+  if (!hasSelectedScope(scopes)) {
+    ms.warning(t('apps.baseSettings.presets.selectAtLeastOne'))
+    return
+  }
+  const preset = APPEARANCE_PRESETS[presetId]
+  if (!panelState.applyAppearancePreset(presetId, scopes))
+    return
+  settingModalShow.value = false
+  panelState.savePanelConfigToCloud().then((result) => {
+    if (result.stale || result.blocked)
+      return
+    if (result.ok) {
+      ms.success(t('apps.baseSettings.presets.applied', {
+        name: t(preset.nameKey),
+        scopes: previewScopeSummary(scopes),
+      }))
+    }
+    else if (result.msg) {
+      ms.error(t('apps.baseSettings.configFailed', { message: result.msg }))
+    }
+    else {
+      ms.error(t('common.networkError'))
+    }
+  })
+}
+
+function handlePreviewKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape' && panelState.isPreviewingAppearance) {
+    event.preventDefault()
+    handlePreviewCancel()
+  }
 }
 
 const filterItems = ref<ItemGroup[]>([])
@@ -478,6 +561,8 @@ watch(settingModalShow, (visible) => {
 watch(() => homeListIdentity(authStore.token), (identity, previous) => {
   if (identity === previous || listState.disposed)
     return
+  panelState.cancelAppearancePreview()
+  panelState.resetPanelConfig()
   const noted = noteHomeListIdentity(listState, identity)
   if (!noted.changed)
     return
@@ -488,11 +573,13 @@ watch(() => homeListIdentity(authStore.token), (identity, previous) => {
   if (!identity && previous)
     return
   confirmHomeAuth()
+  panelState.updatePanelConfigByCloud()
   if (identity)
     getList()
 })
 
 onMounted(() => {
+  window.addEventListener('keydown', handlePreviewKeydown)
   confirmHomeAuth()
   getList()
 
@@ -505,6 +592,8 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handlePreviewKeydown)
+  panelState.cancelAppearancePreview()
   listState = disposeHomeList(listState)
   view = { ...view, list: listState, held: null }
 })
@@ -512,7 +601,7 @@ onBeforeUnmount(() => {
 const activeSearchItem = computed(() => searchMatches.value[activeMatchIndex.value])
 
 function applySearchFilter() {
-  const result = filterIconGroups(items.value, searchKeyword.value, !!panelState.panelConfig.searchBoxSearchIcon)
+  const result = filterIconGroups(items.value, searchKeyword.value, !!activePanelConfig.value.searchBoxSearchIcon)
   searchActive.value = result.active
   searchMatches.value = result.matches as Panel.ItemInfo[]
   filterItems.value = result.active ? result.groups as ItemGroup[] : items.value
@@ -571,7 +660,18 @@ function handleAddItem(itemIconGroupId?: number) {
 </script>
 
 <template>
-  <div class="w-full h-full sun-main">
+  <div
+    class="w-full h-full sun-main"
+    :class="[
+      homepageTheme.isLightCanvas ? 'leon-tone-light' : 'leon-tone-dark',
+      `leon-card-surface-${homepageTheme.cardSurface}`,
+      { 'leon-preview-active': panelState.isPreviewingAppearance },
+    ]"
+    :style="homepageTheme.cssVars"
+    :data-card-surface="homepageTheme.cardSurface"
+    :data-wallpaper-tone="homepageTheme.isLightCanvas ? 'light' : 'dark'"
+    :data-preview-preset="panelState.previewPresetId || ''"
+  >
     <div
       v-if="homeLoading"
       class="leon-home-loading"
@@ -584,40 +684,43 @@ function handleAddItem(itemIconGroupId?: number) {
     />
     <div
       class="cover wallpaper" :style="{
-        filter: `blur(${panelState.panelConfig.backgroundBlur}px)`,
-        background: `url(${panelState.panelConfig.backgroundImageSrc}) no-repeat`,
+        filter: `blur(${activePanelConfig.backgroundBlur}px)`,
+        background: `url(${activePanelConfig.backgroundImageSrc}) no-repeat`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
       }"
     />
-    <div class="mask" :style="{ backgroundColor: `rgba(0,0,0,${panelState.panelConfig.backgroundMaskNumber})` }" />
+    <div class="mask" :style="{ backgroundColor: `rgba(0,0,0,${activePanelConfig.backgroundMaskNumber})` }" />
     <div ref="scrollContainerRef" class="absolute w-full h-full overflow-auto">
       <div
         class="p-2.5 mx-auto"
+        :class="{ 'pb-[140px]': panelState.isPreviewingAppearance }"
         :style="{
-          marginTop: `${panelState.panelConfig.marginTop}%`,
-          marginBottom: `${panelState.panelConfig.marginBottom}%`,
-          maxWidth: contentMaxWidth(panelState.panelConfig.maxWidth, panelState.panelConfig.maxWidthUnit),
+          marginTop: `${activePanelConfig.marginTop}%`,
+          marginBottom: `${activePanelConfig.marginBottom}%`,
+          maxWidth: contentMaxWidth(activePanelConfig.maxWidth, activePanelConfig.maxWidthUnit),
         }"
       >
         <!-- 头 -->
         <div class="mx-[auto] w-[80%] leon-home-header">
-          <div class="flex mx-[auto] items-center justify-center text-white">
+          <div class="flex mx-[auto] items-center justify-center leon-chrome-text">
             <div class="logo">
               <span class="text-2xl md:text-6xl font-bold text-shadow">
-                {{ panelState.panelConfig.logoText }}
+                {{ activePanelConfig.logoText }}
               </span>
             </div>
-            <div class="divider text-base lg:text-2xl mx-[10px]">
+            <div class="divider leon-header-divider text-base lg:text-2xl mx-[10px]">
               |
             </div>
             <div class="text-shadow">
-              <Clock :hide-second="!panelState.panelConfig.clockShowSecond" />
+              <Clock :hide-second="!activePanelConfig.clockShowSecond" />
             </div>
           </div>
-          <div v-if="panelState.panelConfig.searchBoxShow" class="flex flex-col mt-[20px] mx-auto sm:w-full lg:w-[80%]">
+          <div v-if="activePanelConfig.searchBoxShow" class="flex flex-col mt-[20px] mx-auto sm:w-full lg:w-[80%]">
             <SearchBox
-              :local-search-enabled="!!panelState.panelConfig.searchBoxSearchIcon"
+              :background="homepageTheme.searchBackground"
+              :text-color="homepageTheme.searchTextColor"
+              :local-search-enabled="!!activePanelConfig.searchBoxSearchIcon"
               :match-count="searchMatches.length"
               @item-search="itemFrontEndSearch"
               @move-match="handleMoveMatch"
@@ -630,17 +733,17 @@ function handleAddItem(itemIconGroupId?: number) {
         </div>
 
         <!-- 应用盒子 -->
-        <div :style="{ marginLeft: `${panelState.panelConfig.marginX}px`, marginRight: `${panelState.panelConfig.marginX}px` }">
+        <div :style="{ marginLeft: `${activePanelConfig.marginX}px`, marginRight: `${activePanelConfig.marginX}px` }">
           <!-- 系统监控状态 -->
           <div
-            v-if="panelState.panelConfig.systemMonitorShow
-              && ((panelState.panelConfig.systemMonitorPublicVisitModeShow && authStore.visitMode === VisitMode.VISIT_MODE_PUBLIC)
+            v-if="activePanelConfig.systemMonitorShow
+              && ((activePanelConfig.systemMonitorPublicVisitModeShow && authStore.visitMode === VisitMode.VISIT_MODE_PUBLIC)
                 || authStore.visitMode === VisitMode.VISIT_MODE_LOGIN)"
             class="flex mx-auto"
           >
             <SystemMonitor
               :allow-edit="authStore.visitMode === VisitMode.VISIT_MODE_LOGIN"
-              :show-title="panelState.panelConfig.systemMonitorShowTitle"
+              :show-title="activePanelConfig.systemMonitorShowTitle"
             />
           </div>
 
@@ -670,7 +773,7 @@ function handleAddItem(itemIconGroupId?: number) {
               @mouseleave="handleSetHoverStatus(itemGroupIndex, false)"
             >
               <!-- 分组标题 -->
-              <div class="text-white text-xl font-extrabold mb-[20px] ml-[10px] flex items-center">
+              <div class="leon-chrome-text text-xl font-extrabold mb-[20px] ml-[10px] flex items-center">
                 <span class="group-title text-shadow">
                   {{ itemGroup.title }}
                 </span>
@@ -680,10 +783,10 @@ function handleAddItem(itemIconGroupId?: number) {
                   :class="itemGroup.hoverStatus ? 'is-open' : ''"
                 >
                   <span class="mr-2 cursor-pointer" :title="t('common.add')" @click="handleAddItem(itemGroup.id)">
-                    <SvgIcon class="text-white font-xl" icon="typcn:plus" />
+                    <SvgIcon class="leon-chrome-text font-xl" icon="typcn:plus" />
                   </span>
                   <span class="mr-2 cursor-pointer " :title="t('common.sort')" @click="handleSetSortStatus(itemGroupIndex, !itemGroup.sortStatus)">
-                    <SvgIcon class="text-white font-xl" icon="ri:drag-drop-line" />
+                    <SvgIcon class="leon-chrome-text font-xl" icon="ri:drag-drop-line" />
                   </span>
                 </div>
               </div>
@@ -697,13 +800,24 @@ function handleAddItem(itemIconGroupId?: number) {
                     filter=".not-drag"
                     :disabled="!itemGroup.sortStatus"
                   >
-                    <div v-for="item, index in itemGroup.items" :key="index" :title="item.description" :class="item === activeSearchItem ? 'leon-search-hit' : ''" @contextmenu="(e) => handleContextMenu(e, itemGroupIndex, item)">
+                    <div
+                      v-for="item, index in itemGroup.items"
+                      :key="index"
+                      class="leon-card-item"
+                      role="link"
+                      tabindex="0"
+                      :aria-label="item.title"
+                      :title="item.description"
+                      :class="item === activeSearchItem ? 'leon-search-hit' : ''"
+                      @contextmenu="(e) => handleContextMenu(e, itemGroupIndex, item)"
+                      @keydown.enter.prevent="handleItemClick(itemGroupIndex, item)"
+                    >
                       <AppIcon
                         :class="itemGroup.sortStatus ? 'cursor-move' : 'cursor-pointer'"
                         :item-info="item"
-                        :icon-text-color="panelState.panelConfig.iconTextColor"
-                        :icon-text-info-hide-description="panelState.panelConfig.iconTextInfoHideDescription || false"
-                        :icon-text-icon-hide-title="panelState.panelConfig.iconTextIconHideTitle || false"
+                        :icon-text-color="activePanelConfig.iconTextColor"
+                        :icon-text-info-hide-description="activePanelConfig.iconTextInfoHideDescription || false"
+                        :icon-text-icon-hide-title="activePanelConfig.iconTextIconHideTitle || false"
                         :style="0"
                         @click="handleItemClick(itemGroupIndex, item)"
                       />
@@ -713,9 +827,9 @@ function handleAddItem(itemIconGroupId?: number) {
                       <AppIcon
                         :class="itemGroup.sortStatus ? 'cursor-move' : 'cursor-pointer'"
                         :item-info="{ icon: { itemType: 3, text: 'subway:add' }, title: t('common.add'), url: '', openMethod: 0 }"
-                        :icon-text-color="panelState.panelConfig.iconTextColor"
-                        :icon-text-info-hide-description="panelState.panelConfig.iconTextInfoHideDescription || false"
-                        :icon-text-icon-hide-title="panelState.panelConfig.iconTextIconHideTitle || false"
+                        :icon-text-color="activePanelConfig.iconTextColor"
+                        :icon-text-info-hide-description="activePanelConfig.iconTextInfoHideDescription || false"
+                        :icon-text-icon-hide-title="activePanelConfig.iconTextIconHideTitle || false"
                         :style="0"
                         @click="handleAddItem(itemGroup.id)"
                       />
@@ -734,13 +848,24 @@ function handleAddItem(itemIconGroupId?: number) {
                     filter=".not-drag"
                     :disabled="!itemGroup.sortStatus"
                   >
-                    <div v-for="item, index in itemGroup.items" :key="index" :title="item.description" :class="item === activeSearchItem ? 'leon-search-hit' : ''" @contextmenu="(e) => handleContextMenu(e, itemGroupIndex, item)">
+                    <div
+                      v-for="item, index in itemGroup.items"
+                      :key="index"
+                      class="leon-card-item"
+                      role="link"
+                      tabindex="0"
+                      :aria-label="item.title"
+                      :title="item.description"
+                      :class="item === activeSearchItem ? 'leon-search-hit' : ''"
+                      @contextmenu="(e) => handleContextMenu(e, itemGroupIndex, item)"
+                      @keydown.enter.prevent="handleItemClick(itemGroupIndex, item)"
+                    >
                       <AppIcon
                         :class="itemGroup.sortStatus ? 'cursor-move' : 'cursor-pointer'"
                         :item-info="item"
-                        :icon-text-color="panelState.panelConfig.iconTextColor"
-                        :icon-text-info-hide-description="!panelState.panelConfig.iconTextInfoHideDescription"
-                        :icon-text-icon-hide-title="panelState.panelConfig.iconTextIconHideTitle || false"
+                        :icon-text-color="activePanelConfig.iconTextColor"
+                        :icon-text-info-hide-description="!activePanelConfig.iconTextInfoHideDescription"
+                        :icon-text-icon-hide-title="activePanelConfig.iconTextIconHideTitle || false"
                         :style="1"
                         @click="handleItemClick(itemGroupIndex, item)"
                       />
@@ -750,9 +875,9 @@ function handleAddItem(itemIconGroupId?: number) {
                       <AppIcon
                         class="cursor-pointer"
                         :item-info="{ icon: { itemType: 3, text: 'subway:add' }, title: $t('common.add'), url: '', openMethod: 0 }"
-                        :icon-text-color="panelState.panelConfig.iconTextColor"
-                        :icon-text-info-hide-description="!panelState.panelConfig.iconTextInfoHideDescription"
-                        :icon-text-icon-hide-title="panelState.panelConfig.iconTextIconHideTitle || false"
+                        :icon-text-color="activePanelConfig.iconTextColor"
+                        :icon-text-info-hide-description="!activePanelConfig.iconTextInfoHideDescription"
+                        :icon-text-icon-hide-title="activePanelConfig.iconTextIconHideTitle || false"
                         :style="1"
                         @click="handleAddItem(itemGroup.id)"
                       />
@@ -764,9 +889,9 @@ function handleAddItem(itemIconGroupId?: number) {
               <!-- 编辑栏 -->
               <div v-if="itemGroup.sortStatus" class="flex mt-[10px]">
                 <div>
-                  <NButton color="#2a2a2a6b" @click="handleSaveSort(itemGroup)">
+                  <NButton :color="homepageTheme.controlBackground" :text-color="homepageTheme.controlTextColor" class="leon-control-btn" @click="handleSaveSort(itemGroup)">
                     <template #icon>
-                      <SvgIcon class="text-white font-xl" icon="material-symbols:save" />
+                      <SvgIcon class="font-xl" icon="material-symbols:save" />
                     </template>
                     <div>
                       {{ $t('common.saveSort') }}
@@ -777,7 +902,7 @@ function handleAddItem(itemIconGroupId?: number) {
             </div>
           </div>
         </div>
-        <div class="mt-5 footer" v-html="panelState.panelConfig.footerHtml" />
+        <div class="mt-5 footer" v-html="activePanelConfig.footerHtml" />
       </div>
     </div>
 
@@ -787,55 +912,152 @@ function handleAddItem(itemIconGroupId?: number) {
       :options="getDropdownMenuOptions()" :show="dropdownShow" :on-clickoutside="onClickoutside" @select="handleRightMenuSelect"
     />
 
+    <!-- 实时外观预设预览栏 -->
+    <div
+      v-if="panelState.isPreviewingAppearance && activePreviewPreset"
+      class="leon-preview-bar"
+      role="region"
+      :aria-label="$t('apps.baseSettings.presets.previewBanner', { name: $t(activePreviewPreset.nameKey) })"
+      aria-live="polite"
+      data-testid="appearance-preview-bar"
+    >
+      <div class="leon-preview-bar-header">
+        <div class="leon-preview-bar-title">
+          <strong>{{ $t('apps.baseSettings.presets.previewBanner', { name: $t(activePreviewPreset.nameKey) }) }}</strong>
+          <span class="leon-preview-bar-tip">{{ $t('apps.baseSettings.presets.previewBannerTip') }}</span>
+        </div>
+        <div class="leon-preview-bar-presets">
+          <button
+            v-for="preset in previewPresetList"
+            :key="preset.id"
+            type="button"
+            class="leon-preview-pill"
+            :class="{ 'is-active': panelState.previewPresetId === preset.id }"
+            :data-testid="`preview-switch-${preset.id}`"
+            @click="handlePreviewSwitch(preset.id)"
+          >
+            {{ $t(preset.nameKey) }}
+          </button>
+        </div>
+      </div>
+
+      <div class="leon-preview-bar-controls">
+        <div class="leon-preview-bar-scopes">
+          <NCheckbox
+            :checked="activePreviewScopes.wallpaper"
+            data-testid="preview-scope-wallpaper"
+            @update:checked="(val: boolean) => handlePreviewScopeChange('wallpaper', val)"
+          >
+            {{ $t('apps.baseSettings.presets.scopeWallpaper') }}
+          </NCheckbox>
+          <NCheckbox
+            :checked="activePreviewScopes.cardStyle"
+            data-testid="preview-scope-cardStyle"
+            @update:checked="(val: boolean) => handlePreviewScopeChange('cardStyle', val)"
+          >
+            {{ $t('apps.baseSettings.presets.scopeCardStyle') }}
+          </NCheckbox>
+          <NCheckbox
+            :checked="activePreviewScopes.iconStyle"
+            data-testid="preview-scope-iconStyle"
+            @update:checked="(val: boolean) => handlePreviewScopeChange('iconStyle', val)"
+          >
+            {{ $t('apps.baseSettings.presets.scopeIconStyle') }}
+          </NCheckbox>
+        </div>
+
+        <div class="leon-preview-bar-actions">
+          <button type="button" class="leon-preview-btn leon-preview-btn-ghost" data-testid="preview-back-settings" @click="handlePreviewBackToSettings">
+            {{ $t('apps.baseSettings.presets.backToSettings') }}
+          </button>
+          <button type="button" class="leon-preview-btn leon-preview-btn-secondary" data-testid="preview-cancel" @click="handlePreviewCancel">
+            {{ $t('apps.baseSettings.presets.exitPreview') }}
+          </button>
+          <button
+            type="button"
+            class="leon-preview-btn leon-preview-btn-primary"
+            :disabled="!panelState.isCloudConfigReady"
+            data-testid="preview-apply"
+            @click="handlePreviewApply"
+          >
+            {{ $t('apps.baseSettings.presets.applySelected') }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- 悬浮按钮 -->
-    <div class="fixed-element shadow-[0_0_10px_2px_rgba(0,0,0,0.2)]">
+    <div v-show="!panelState.isPreviewingAppearance" class="fixed-element shadow-[0_0_10px_2px_rgba(0,0,0,0.2)]">
       <NButtonGroup vertical>
         <!-- 网络模式切换按钮组 -->
         <NButton
-          v-if="panelState.networkMode === PanelStateNetworkModeEnum.lan && panelState.panelConfig.netModeChangeButtonShow" color="#2a2a2a6b"
-          :title="t('panelHome.changeToWanModel')" @click="handleChangeNetwork(PanelStateNetworkModeEnum.wan)"
+          v-if="panelState.networkMode === PanelStateNetworkModeEnum.lan && activePanelConfig.netModeChangeButtonShow"
+          :color="homepageTheme.controlBackground"
+          :text-color="homepageTheme.controlTextColor"
+          class="leon-control-btn"
+          :title="t('panelHome.changeToWanModel')"
+          @click="handleChangeNetwork(PanelStateNetworkModeEnum.wan)"
         >
           <template #icon>
-            <SvgIcon class="text-white font-xl" icon="material-symbols:lan-outline-rounded" />
+            <SvgIcon class="font-xl" icon="material-symbols:lan-outline-rounded" />
           </template>
         </NButton>
 
         <NButton
-          v-if="panelState.networkMode === PanelStateNetworkModeEnum.wan && panelState.panelConfig.netModeChangeButtonShow" color="#2a2a2a6b"
-          :title="t('panelHome.changeToLanModel')" @click="handleChangeNetwork(PanelStateNetworkModeEnum.lan)"
+          v-if="panelState.networkMode === PanelStateNetworkModeEnum.wan && activePanelConfig.netModeChangeButtonShow"
+          :color="homepageTheme.controlBackground"
+          :text-color="homepageTheme.controlTextColor"
+          class="leon-control-btn"
+          :title="t('panelHome.changeToLanModel')"
+          @click="handleChangeNetwork(PanelStateNetworkModeEnum.lan)"
         >
           <template #icon>
-            <SvgIcon class="text-white font-xl" icon="mdi:wan" />
+            <SvgIcon class="font-xl" icon="mdi:wan" />
           </template>
         </NButton>
 
-        <NButton v-if="authStore.visitMode === VisitMode.VISIT_MODE_LOGIN" color="#2a2a2a6b" data-testid="home-open-settings" @click="settingModalShow = !settingModalShow">
+        <NButton
+          v-if="authStore.visitMode === VisitMode.VISIT_MODE_LOGIN"
+          :color="homepageTheme.controlBackground"
+          :text-color="homepageTheme.controlTextColor"
+          class="leon-control-btn"
+          data-testid="home-open-settings"
+          @click="settingModalShow = !settingModalShow"
+        >
           <template #icon>
-            <SvgIcon class="text-white font-xl" icon="majesticons-applications" />
+            <SvgIcon class="font-xl" icon="majesticons-applications" />
           </template>
         </NButton>
 
-        <NButton v-if="authStore.visitMode === VisitMode.VISIT_MODE_PUBLIC" color="#2a2a2a6b" :title="$t('panelHome.goToLogin')" @click="router.push('/login')">
+        <NButton
+          v-if="authStore.visitMode === VisitMode.VISIT_MODE_PUBLIC"
+          :color="homepageTheme.controlBackground"
+          :text-color="homepageTheme.controlTextColor"
+          class="leon-control-btn"
+          :title="$t('panelHome.goToLogin')"
+          @click="router.push('/login')"
+        >
           <template #icon>
-            <SvgIcon class="text-white font-xl" icon="material-symbols:account-circle" />
+            <SvgIcon class="font-xl" icon="material-symbols:account-circle" />
           </template>
         </NButton>
       </NButtonGroup>
 
-      <AppStarter v-model:visible="settingModalShow" />
+      <AppStarter v-model:visible="appStarterVisible" />
       <!-- <Setting v-model:visible="settingModalShow" /> -->
     </div>
 
     <NBackTop
+      v-if="!panelState.isPreviewingAppearance"
       :listen-to="() => scrollContainerRef"
       :right="10"
       :bottom="10"
       style="background-color:transparent;border: none;box-shadow: none;"
     >
       <div class="shadow-[0_0_10px_2px_rgba(0,0,0,0.2)]">
-        <NButton color="#2a2a2a6b">
+        <NButton :color="homepageTheme.controlBackground" :text-color="homepageTheme.controlTextColor" class="leon-control-btn">
           <template #icon>
-            <SvgIcon class="text-white font-xl" icon="icon-park-outline:to-top" />
+            <SvgIcon class="font-xl" icon="icon-park-outline:to-top" />
           </template>
         </NButton>
       </div>
@@ -884,18 +1106,20 @@ html {
 <style scoped>
 .mask {
   position: absolute;
-  top: 0;
-  left: 0;
+  inset: 0;
   width: 100%;
   height: 100%;
 }
 
 .sun-main {
+  position: relative;
+  overflow: hidden;
   user-select: none;
 }
 
 .cover {
   position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   overflow: hidden;

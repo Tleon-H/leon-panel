@@ -2,7 +2,6 @@
 import { NAlert, NButton, NButtonGroup, NCard, NEllipsis, NGrid, NGridItem, NImage, NImageGroup, NInput, NPagination, useMessage } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
 import { getPublicList } from '@/api/system/file'
-import { set as savePanelConfig } from '@/api/panel/userConfig'
 import { SvgIcon } from '@/components/common'
 import { copyToClipboard } from '@/utils/cmn'
 import { displayFileCategory, fileCategories, pageAfterListChange, publicFileQuery, type FileCategory } from '@/utils/file/category'
@@ -104,8 +103,18 @@ function useImage(src: string) {
 }
 
 function setWallpaper(src: string) {
-  panelStore.panelConfig.backgroundImageSrc = src
-  void savePanelConfig({ panel: panelStore.panelConfig })
+  if (!panelStore.setWallpaperSource(src))
+    return
+  void panelStore.savePanelConfigToCloud().then((result) => {
+    if (result.stale || result.blocked)
+      return
+    if (result.ok)
+      ms.success(t('apps.baseSettings.configSaved'))
+    else if (result.msg)
+      ms.error(t('apps.baseSettings.configFailed', { message: result.msg }))
+    else
+      ms.error(t('common.networkError'))
+  })
 }
 
 onMounted(() => {
@@ -165,7 +174,7 @@ onMounted(() => {
                         <SvgIcon icon="ion-copy" />
                       </template>
                     </NButton>
-                    <NButton v-if="!selectable" size="tiny" tertiary :title="$t('apps.uploadsFileManager.setWallpaper')" @click="setWallpaper(item.src)">
+                    <NButton v-if="!selectable" size="tiny" tertiary :disabled="!panelStore.isCloudConfigReady" :title="$t('apps.uploadsFileManager.setWallpaper')" @click="setWallpaper(item.src)">
                       <template #icon>
                         <SvgIcon icon="lucide:wallpaper" />
                       </template>
