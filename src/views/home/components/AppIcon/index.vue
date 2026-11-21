@@ -117,7 +117,7 @@ const iconBadgeClass = computed(() => {
     <!-- 极简(小)图标（APP） -->
     <div v-if="style === PanelPanelConfigStyleEnum.icon" class="app-icon-small">
       <div
-        class="app-icon-small-icon leon-themed-small-tile overflow-hidden rounded-2xl sunpanel w-[70px] h-[70px] mx-auto transition-all duration-200"
+        class="app-icon-small-icon leon-themed-small-tile overflow-hidden rounded-2xl w-[70px] h-[70px] mx-auto transition-all duration-200"
         :class="iconBadgeClass"
         :style="smallIconTileStyle"
         :title="itemInfo?.description"

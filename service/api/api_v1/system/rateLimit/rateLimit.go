@@ -2,7 +2,7 @@ package rateLimit
 
 import (
 	"errors"
-	"sun-panel/global"
+	"leon-panel/global"
 )
 
 const (

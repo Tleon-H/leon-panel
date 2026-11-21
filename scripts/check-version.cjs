@@ -1,14 +1,18 @@
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
+
 const root = path.resolve(__dirname, '..')
 const pkg = require(path.join(root, 'package.json'))
-const [code, version] = fs.readFileSync(path.join(root, 'service/assets/version'), 'utf8').trim().split('|')
+const [codeRaw, version] = fs.readFileSync(path.join(root, 'service/assets/version'), 'utf8').trim().split('|')
+const code = Number(codeRaw)
+
 assert.equal(pkg.name, 'leon-panel')
-assert.equal(code, '10', 'Backup format compatibility code must remain 10')
-assert.match(pkg.version, /^1\.3\.0\+leon\.[1-9]\d*$/)
+assert.equal(Number.isInteger(code) && code >= 1, true, 'Version code must be a positive integer')
+assert.match(pkg.version, /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/, 'Version must follow SemVer X.Y.Z')
 assert.equal(version, pkg.version, 'Frontend and backend versions must match')
-const imageTag = version.replace('+', '-')
+
+const imageTag = version
 if (process.argv.includes('--image-tag')) {
   console.log(imageTag)
 } else {

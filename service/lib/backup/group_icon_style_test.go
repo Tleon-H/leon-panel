@@ -20,7 +20,7 @@ func TestBackupRoundTripKeepsGroupIconStyle(t *testing.T) {
 	if _, err := db.Exec(`insert into item_icon_group(id, title, icon_style) values (1, 'HOME', 0), (2, '常用网站', 1), (3, '未设置', NULL)`); err != nil {
 		t.Fatal(err)
 	}
-	raw := buildPackage(t, base, db, "1.3.0+leon.11")
+	raw := buildPackage(t, base, db, "0.1.0")
 	if _, err := db.Exec(`update item_icon_group set title = 'changed', icon_style = 1`); err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +40,7 @@ func TestLegacyBackupWithoutGroupIconStyleStillRestores(t *testing.T) {
 	if _, err := db.Exec(`insert into item_icon_group(id, title) values (1, 'HOME')`); err != nil {
 		t.Fatal(err)
 	}
-	raw := buildPackage(t, base, db, "1.3.0+leon.10")
+	raw := buildPackage(t, base, db, "0.0.9")
 	if _, err := db.Exec(`alter table item_icon_group add column icon_style integer`); err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +56,7 @@ func TestLegacyBackupWithoutGroupIconStyleStillRestores(t *testing.T) {
 func TestRestoreRejectsWhenTheStyleColumnCannotBeAdded(t *testing.T) {
 	base, db := restoreFixture(t)
 	createWideGroupTable(t, db)
-	raw := buildPackage(t, base, db, "1.3.0+leon.10")
+	raw := buildPackage(t, base, db, "0.0.9")
 	if _, err := db.Exec(`update item_icon_group set title = 'LIVE-SENTINEL' where id = 1`); err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestRestoreFaultAfterGroupStyleMigrationLeavesLiveUntouched(t *testing.T) {
 	if _, err := db.Exec(`insert into item_icon_group(id, title) values (1, 'HOME')`); err != nil {
 		t.Fatal(err)
 	}
-	raw := buildPackage(t, base, db, "1.3.0+leon.10")
+	raw := buildPackage(t, base, db, "0.0.9")
 	if _, err := db.Exec(`alter table item_icon_group add column icon_style integer`); err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +110,7 @@ func TestRestoreCanceledContextLeavesLiveUntouched(t *testing.T) {
 	if _, err := db.Exec(`insert into item_icon_group(id, title) values (1, 'HOME')`); err != nil {
 		t.Fatal(err)
 	}
-	raw := buildPackage(t, base, db, "1.3.0+leon.10")
+	raw := buildPackage(t, base, db, "0.0.9")
 	if _, err := db.Exec(`update item_icon_group set title = 'LIVE-SENTINEL' where id = 1`); err != nil {
 		t.Fatal(err)
 	}

@@ -11,8 +11,8 @@ function source(path: string): string {
   return readFileSync(join(root, path), 'utf8')
 }
 
-test('the visible product name is Leon Panel and the version stays 1.3.0+leon.11', () => {
-  assert.equal(source('service/assets/version').trim(), '10|1.3.0+leon.11')
+test('the visible product branding is standalone Leon Panel 0.1.0', () => {
+  assert.equal(source('service/assets/version').trim(), '1|0.1.0')
 
   const html = source('index.html')
   assert.match(html, /<title>Leon Panel<\/title>/)
@@ -22,51 +22,45 @@ test('the visible product name is Leon Panel and the version stays 1.3.0+leon.11
   const manifest = source('vite.config.ts')
   assert.match(manifest, /name: 'Leon Panel'/)
   assert.match(manifest, /short_name: 'Leon Panel'/)
-  assert.doesNotMatch(manifest, /Sun-Panel/)
+  assert.doesNotMatch(manifest, /sun-panel/i)
 
   for (const path of ['src/locales/zh-CN.json', 'src/locales/en-US.json']) {
     const copy = source(path)
     assert.match(copy, /"appName": "Leon Panel"/)
-    assert.match(copy, /Sun-Panel v1\.3\.0/)
-    assert.doesNotMatch(copy, /QQ交流群|QQ Group|打赏|Donate/)
+    assert.doesNotMatch(copy, /sun-panel|1\.3\.0|1\.8\.1|QQ交流群|QQ Group|打赏|Donate/i)
   }
 
   const panel = source('src/store/modules/panel/helper.ts')
   assert.match(panel, /logoText: 'Leon Panel'/)
-  assert.match(panel, /Leon Panel · 基于开源/)
-  assert.match(panel, /github\.com\/hslr-s\/sun-panel/)
+  assert.match(panel, /github\.com\/Tleon-H\/leon-panel/)
+  assert.doesNotMatch(panel, /sun-panel|hslr-s/i)
 
   const login = source('src/views/login/index.vue')
   assert.match(login, /\$t\('common\.appName'\)/)
   assert.match(login, /setTitle\(t\('common\.appName'\)\)/)
-  assert.match(login, /Sun-Panel<\/a> v1\.3\.0/)
+  assert.match(login, /github\.com\/Tleon-H\/leon-panel/)
+  assert.doesNotMatch(login, /sun-panel|hslr-s/i)
 
   const about = source('src/components/apps/About/index.vue')
   assert.match(about, /\$t\('common\.appName'\)/)
   assert.match(about, /alt="Leon Panel"/)
-  assert.match(about, /github\.com\/hslr-s\/sun-panel/)
   assert.match(about, /github\.com\/Tleon-H\/leon-panel/)
-  assert.doesNotMatch(about, /donate|qq\.com|hub\.docker\.com|gitee\.com|bilibili|youtube/i)
+  assert.doesNotMatch(about, /sun-panel|hslr-s|红烧猎人|donate|qq\.com|hub\.docker\.com|gitee\.com|bilibili|youtube/i)
 
   const readme = source('README.md')
   assert.match(readme, /^# Leon Panel/m)
-  assert.match(readme, /1\.3\.0\+leon\.11/)
-  assert.match(readme, /内部数字版本：`10`/)
-  assert.match(readme, /整站覆盖恢复/)
-  assert.match(readme, /OpenAPI/)
-  assert.match(readme, /Docker 套接字控制/)
-  assert.match(readme, /批量删除/)
-  assert.match(readme, /\[LICENSE\]\(\.\/LICENSE\)/)
-  assert.match(readme, /https:\/\/github\.com\/hslr-s\/sun-panel/)
-  assert.doesNotMatch(readme, /star-history|hub\.docker\.com|doc\.sun-panel\.top|enianteam\.com|qq_group|donate/)
+  assert.match(readme, /0\.1\.0/)
+  assert.match(readme, /\[MIT\]\(\.\/LICENSE\)/)
+  assert.match(readme, /https:\/\/github\.com\/Tleon-H\/leon-panel/)
+  assert.doesNotMatch(readme, /sun-panel|hslr-s|红烧猎人|star-history|hub\.docker\.com|enianteam\.com|qq_group|donate/i)
 })
-
 
 test('release tags match the package version and validation never modifies env files', () => {
   const pkg = JSON.parse(source('package.json'))
+  assert.equal(pkg.version, '0.1.0')
   const before = source('.env')
   const script = join(root, 'scripts/check-version.cjs')
-  const tag = pkg.version.replace('+', '-')
+  const tag = pkg.version
   assert.equal(execFileSync(process.execPath, [script, '--image-tag'], { encoding: 'utf8' }).trim(), tag)
   const env = { ...process.env, GITHUB_REF_TYPE: 'tag', GITHUB_REF_NAME: `v${tag}` }
   execFileSync(process.execPath, [script], { env, stdio: 'pipe' })

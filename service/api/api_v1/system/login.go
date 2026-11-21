@@ -3,12 +3,12 @@ package system
 import (
 	"strconv"
 	"strings"
-	"sun-panel/api/api_v1/common/apiReturn"
-	"sun-panel/api/api_v1/common/base"
-	"sun-panel/global"
-	"sun-panel/lib/cmn"
-	"sun-panel/lib/cmn/systemSetting"
-	"sun-panel/models"
+	"leon-panel/api/api_v1/common/apiReturn"
+	"leon-panel/api/api_v1/common/base"
+	"leon-panel/global"
+	"leon-panel/lib/cmn"
+	"leon-panel/lib/cmn/systemSetting"
+	"leon-panel/models"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"

@@ -31,22 +31,15 @@ onMounted(() => {
         <span class="font-semibold">v{{ versionName }}</span>
       </div>
       <p class="mt-2 max-w-[520px] px-4 text-center text-sm leading-6">
-        {{ $t('apps.about.independentNote') }}
+        {{ $t('apps.about.description') }}
       </p>
       <div class="mt-2">
-        {{ $t('apps.about.upstreamProject') }}
-        <a href="https://github.com/hslr-s/sun-panel" target="_blank" class="link">Sun-Panel</a>
-      </div>
-      <div class="mt-1">
-        {{ $t('apps.about.author') }}<a href="https://github.com/hslr-s" target="_blank" class="link">红烧猎人</a>
-      </div>
-      <div class="mt-1">
         {{ $t('apps.about.repository') }}
         <a href="https://github.com/Tleon-H/leon-panel" target="_blank" class="link">Tleon-H/leon-panel</a>
       </div>
       <div class="mt-1">
         {{ $t('apps.about.license') }}
-        <a href="https://github.com/hslr-s/sun-panel/blob/master/LICENSE" target="_blank" class="link">MIT</a>
+        <a href="https://github.com/Tleon-H/leon-panel/blob/master/LICENSE" target="_blank" class="link">MIT</a>
       </div>
     </div>
 

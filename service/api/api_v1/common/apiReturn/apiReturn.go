@@ -1,7 +1,7 @@
 package apiReturn
 
 import (
-	"sun-panel/global"
+	"leon-panel/global"
 
 	"github.com/gin-gonic/gin"
 )

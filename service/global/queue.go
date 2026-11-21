@@ -1,10 +1,10 @@
 package global
 
 import (
-	"sun-panel/lib/queue"
-	"sun-panel/lib/queue/queueMemory"
-	"sun-panel/lib/queue/queueRedis"
-	"sun-panel/structs"
+	"leon-panel/lib/queue"
+	"leon-panel/lib/queue/queueMemory"
+	"leon-panel/lib/queue/queueRedis"
+	"leon-panel/structs"
 )
 
 // 缓存驱动

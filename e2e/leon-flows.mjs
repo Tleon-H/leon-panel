@@ -329,12 +329,11 @@ names = archive.namelist()
 if any(name.startswith("/") or ".." in name.split("/") for name in names):
     raise SystemExit("archive path escaped")
 manifest = json.loads(archive.read("manifest.json"))
-assert manifest["version"] == "1.3.0+leon.8", manifest.get("version")
+assert manifest["version"] == "0.1.0", manifest.get("version")
 assert manifest["database"]["method"] == "sqlite-vacuum-into"
 assert manifest["database"]["integrity"] == "ok"
 assert manifest["database"]["included"] is True
 assert manifest["restore"] == "overwrite"
-assert manifest["compatibleWithOfficial181"] is False
 assert any("密码哈希" in item for item in manifest["warnings"])
 for item in manifest["files"]:
     body = archive.read(item["path"])

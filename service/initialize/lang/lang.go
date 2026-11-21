@@ -2,9 +2,9 @@ package lang
 
 import (
 	"os"
-	"sun-panel/global"
-	"sun-panel/lib/cmn"
-	"sun-panel/lib/language"
+	"leon-panel/global"
+	"leon-panel/lib/cmn"
+	"leon-panel/lib/language"
 )
 
 func LangInit(lang string) {

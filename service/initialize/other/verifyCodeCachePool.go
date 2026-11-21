@@ -1,8 +1,8 @@
 package other
 
 import (
-	"sun-panel/global"
-	"sun-panel/lib/cache"
+	"leon-panel/global"
+	"leon-panel/lib/cache"
 	"time"
 )
 

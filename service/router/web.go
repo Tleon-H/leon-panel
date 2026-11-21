@@ -4,10 +4,10 @@ import (
 	"net/http"
 	"strings"
 
-	"sun-panel/global"
-	"sun-panel/router/openness"
-	"sun-panel/router/panel"
-	"sun-panel/router/system"
+	"leon-panel/global"
+	"leon-panel/router/openness"
+	"leon-panel/router/panel"
+	"leon-panel/router/system"
 
 	"github.com/gin-gonic/gin"
 )

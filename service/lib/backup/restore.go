@@ -42,7 +42,7 @@ var (
 	ErrMigrate = errors.New("backup schema migration failed")
 )
 
-var leonDisplay = regexp.MustCompile(`^1\.3\.0\+leon\.([1-9][0-9]*)$`)
+var semverPattern = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
 
 // RestoreOptions 描述一次覆盖恢复。FaultAfter 只给测试注入失败点。
 type RestoreOptions struct {
@@ -455,16 +455,16 @@ type hashedFile struct {
 }
 
 func validateManifest(manifest Manifest, files map[string]hashedFile) error {
-	if manifest.Format != 1 || manifest.Application != "Leon Panel" || manifest.CompatibleWithOfficial181 {
+	if manifest.Format != 1 || manifest.Application != "Leon Panel" {
 		return ErrIncompatible
 	}
 	if manifest.Restore != RestoreSupported && manifest.Restore != restoreHistorical {
 		return ErrIncompatible
 	}
-	if manifest.VersionCode != 10 {
+	if manifest.VersionCode < 1 {
 		return ErrIncompatible
 	}
-	if _, ok := leonRevision(manifest.Version); !ok {
+	if _, ok := parseSemVer(manifest.Version); !ok {
 		return ErrIncompatible
 	}
 	db := manifest.Database
@@ -505,15 +505,15 @@ func validateManifest(manifest Manifest, files map[string]hashedFile) error {
 
 // AcceptPackageVersion 判断清单里的显示版本能不能由当前程序恢复。
 func AcceptPackageVersion(current string, currentCode int, manifest Manifest) error {
-	if currentCode != 10 || manifest.VersionCode != 10 {
+	if currentCode < 1 || manifest.VersionCode != currentCode {
 		return ErrIncompatible
 	}
-	currentN, ok := leonRevision(current)
-	packageN, ok2 := leonRevision(manifest.Version)
-	if !ok || !ok2 || packageN > currentN {
+	currentVer, ok := parseSemVer(current)
+	packageVer, ok2 := parseSemVer(manifest.Version)
+	if !ok || !ok2 || compareSemVer(packageVer, currentVer) > 0 {
 		return ErrIncompatible
 	}
-	if manifest.Format != 1 || manifest.Application != "Leon Panel" || manifest.CompatibleWithOfficial181 {
+	if manifest.Format != 1 || manifest.Application != "Leon Panel" {
 		return ErrIncompatible
 	}
 	if manifest.Restore != RestoreSupported && manifest.Restore != restoreHistorical {
@@ -522,16 +522,34 @@ func AcceptPackageVersion(current string, currentCode int, manifest Manifest) er
 	return nil
 }
 
-func leonRevision(version string) (int, bool) {
-	match := leonDisplay.FindStringSubmatch(version)
+type semVer [3]int
+
+func parseSemVer(version string) (semVer, bool) {
+	match := semverPattern.FindStringSubmatch(version)
 	if match == nil {
-		return 0, false
+		return semVer{}, false
 	}
-	n, err := strconv.Atoi(match[1])
-	if err != nil || n < 1 {
-		return 0, false
+	var parsed semVer
+	for i := 0; i < 3; i++ {
+		n, err := strconv.Atoi(match[i+1])
+		if err != nil || n < 0 {
+			return semVer{}, false
+		}
+		parsed[i] = n
 	}
-	return n, true
+	return parsed, true
+}
+
+func compareSemVer(a, b semVer) int {
+	for i := 0; i < 3; i++ {
+		if a[i] < b[i] {
+			return -1
+		}
+		if a[i] > b[i] {
+			return 1
+		}
+	}
+	return 0
 }
 
 func validSHA(value string) bool {

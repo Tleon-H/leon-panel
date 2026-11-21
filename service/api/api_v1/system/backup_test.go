@@ -16,11 +16,11 @@ import (
 	"strings"
 	"testing"
 
-	panelapi "sun-panel/api/api_v1/panel"
-	"sun-panel/global"
-	"sun-panel/lib/backup"
-	"sun-panel/lib/iniConfig"
-	"sun-panel/models"
+	panelapi "leon-panel/api/api_v1/panel"
+	"leon-panel/global"
+	"leon-panel/lib/backup"
+	"leon-panel/lib/iniConfig"
+	"leon-panel/models"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/sqlite"
@@ -269,7 +269,7 @@ func callExportAt(t *testing.T, api *BackupApi, user *models.User, body, baseDir
 	if baseDir == "" {
 		api.Export(ctx)
 	} else {
-		api.writeExport(ctx, baseDir, "1.3.0+leon.4", 10)
+		api.writeExport(ctx, baseDir, "0.1.0", 1)
 	}
 	response := exportResponse{
 		status:      recorder.Code,
@@ -456,8 +456,8 @@ func servicePackage(t *testing.T, base string, db *sql.DB) []byte {
 		ConfFile:      "conf/conf.ini",
 		CustomDir:     "web/custom",
 		SQLitePath:    "database/database.db",
-		Version:       "1.3.0+leon.7",
-		VersionCode:   10,
+		Version:       "0.1.0",
+		VersionCode:   1,
 		DB:            db,
 		TempParent:    t.TempDir(),
 	})
@@ -506,7 +506,7 @@ func callRestore(t *testing.T, api *BackupApi, user *models.User, confirm string
 	if baseDir == "" {
 		api.Restore(ctx)
 	} else {
-		api.restoreAt(ctx, baseDir, "1.3.0+leon.11", 10)
+		api.restoreAt(ctx, baseDir, "0.1.0", 1)
 	}
 	response := exportResponse{status: recorder.Code, body: recorder.Body.String()}
 	if strings.HasPrefix(response.body, "{") {
@@ -567,7 +567,7 @@ func TestHTTPRestoreLeavesLiveDataWhenStyleMigrationFails(t *testing.T) {
 	restore := useConfig(t, conf)
 	t.Cleanup(restore)
 
-	archive := buildLiveBackup(t, gormDB, base, "1.3.0+leon.10")
+	archive := buildLiveBackup(t, gormDB, base, "0.0.9")
 	if _, err := sqlDB.Exec(`update item_icon_group set title = 'LIVE-SENTINEL' where id = 1`); err != nil {
 		t.Fatal(err)
 	}
@@ -665,8 +665,8 @@ func TestLegacyBackupGainsAnEmptyGroupIconStyle(t *testing.T) {
 		ConfFile:      filepath.Join("conf", "conf.ini"),
 		CustomDir:     filepath.Join("web", "custom"),
 		SQLitePath:    filepath.Join("database", "database.db"),
-		Version:       "1.3.0+leon.10",
-		VersionCode:   10,
+		Version:       "0.0.9",
+		VersionCode:   1,
 		DB:            sqlDB,
 		TempParent:    t.TempDir(),
 	})
@@ -697,7 +697,7 @@ func TestLegacyBackupGainsAnEmptyGroupIconStyle(t *testing.T) {
 }
 
 func TestLegacyBackupCanSaveStyleAndCurrentBackupKeepsIt(t *testing.T) {
-	for _, version := range []string{"1.3.0+leon.4", "1.3.0+leon.10"} {
+	for _, version := range []string{"0.0.1", "0.0.9"} {
 		t.Run(version, func(t *testing.T) {
 			db, groupID, base := restoreLegacyGroupBackup(t, version)
 			var saved models.ItemIconGroup
@@ -725,7 +725,7 @@ func TestLegacyBackupCanSaveStyleAndCurrentBackupKeepsIt(t *testing.T) {
 				t.Fatalf("saved style was not readable: %#v", refreshed)
 			}
 
-			archive := buildLiveBackup(t, db, base, "1.3.0+leon.11")
+			archive := buildLiveBackup(t, db, base, "0.1.0")
 			if err := db.Model(&models.ItemIconGroup{}).Where("id = ?", groupID).Updates(map[string]interface{}{"title": "changed", "icon_style": 1}).Error; err != nil {
 				t.Fatal(err)
 			}
@@ -826,7 +826,7 @@ func buildLiveBackup(t *testing.T, gormDB *gorm.DB, base, version string) []byte
 		CustomDir:     filepath.Join("web", "custom"),
 		SQLitePath:    filepath.Join("database", "database.db"),
 		Version:       version,
-		VersionCode:   10,
+		VersionCode:   1,
 		DB:            sqlDB,
 		TempParent:    t.TempDir(),
 	})

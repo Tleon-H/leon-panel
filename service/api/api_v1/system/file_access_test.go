@@ -15,9 +15,9 @@ import (
 	"testing"
 	"time"
 
-	"sun-panel/global"
-	"sun-panel/lib/iniConfig"
-	"sun-panel/models"
+	"leon-panel/global"
+	"leon-panel/lib/iniConfig"
+	"leon-panel/models"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/sqlite"

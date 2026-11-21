@@ -47,10 +47,10 @@ func TestSQLiteSnapshotIsConsistentAndLeavesTheServerOpen(t *testing.T) {
 	if result.Manifest.Database.Method != "sqlite-vacuum-into" || result.Manifest.Database.Integrity != "ok" || !result.Manifest.Database.Included {
 		t.Fatalf("database metadata %#v", result.Manifest.Database)
 	}
-	if result.Manifest.Restore != RestoreSupported || result.Manifest.CompatibleWithOfficial181 {
-		t.Fatalf("manifest claims restore or official compatibility: %#v", result.Manifest)
+	if result.Manifest.Restore != RestoreSupported {
+		t.Fatalf("manifest restore field unexpected: %#v", result.Manifest)
 	}
-	if result.Manifest.Version != "1.3.0+leon.4" || result.Manifest.VersionCode != 10 {
+	if result.Manifest.Version != "0.1.0" || result.Manifest.VersionCode != 1 {
 		t.Fatalf("version %#v", result.Manifest)
 	}
 	entries := unzip(t, result.ZipPath)
@@ -343,8 +343,8 @@ func optionsFor(base string, db *sql.DB, tempParent string) Options {
 		ConfFile:      filepath.Join("conf", "conf.ini"),
 		CustomDir:     filepath.Join("web", "custom"),
 		SQLitePath:    filepath.Join("database", "database.db"),
-		Version:       "1.3.0+leon.4",
-		VersionCode:   10,
+		Version:       "0.1.0",
+		VersionCode:   1,
 		DB:            db,
 		TempParent:    tempParent,
 		Now:           time.Date(2026, 11, 7, 17, 0, 0, 0, time.UTC),

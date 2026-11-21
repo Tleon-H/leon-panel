@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"sun-panel/global"
+	"leon-panel/global"
 )
 
 type fakeClock struct {

@@ -408,5 +408,5 @@ test('the homepage keeps one grouped request and the existing card behaviors', (
   assert.match(source('src/locales/en-US.json'), /"loading": "Loading groups and cards"/)
   assert.match(source('src/locales/en-US.json'), /"loadFailed": "Groups and cards failed to load"/)
   assert.match(source('src/locales/en-US.json'), /"retry": "Retry"/)
-  assert.equal(source('package.json').includes('"version": "1.3.0+leon.11"'), true)
+  assert.equal(source('package.json').includes('"version": "0.1.0"'), true)
 })

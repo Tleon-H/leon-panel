@@ -1,7 +1,7 @@
 package system
 
 import (
-	"sun-panel/api/api_v1"
+	"leon-panel/api/api_v1"
 
 	"github.com/gin-gonic/gin"
 )

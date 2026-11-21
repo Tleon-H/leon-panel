@@ -158,7 +158,7 @@ onMounted(() => {
         </div> -->
 
         <div class="flex justify-center text-slate-300">
-          {{ $t('common.appName') }} · {{ $t('login.basedOn') }} <a href="https://github.com/hslr-s/sun-panel" target="_blank" class="ml-[5px] text-slate-500">Sun-Panel</a> v1.3.0
+          <a href="https://github.com/Tleon-H/leon-panel" target="_blank" class="text-slate-500">{{ $t('common.appName') }}</a>
         </div>
       </NForm>
     </NCard>

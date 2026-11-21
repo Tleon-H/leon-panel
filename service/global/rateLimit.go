@@ -2,7 +2,7 @@ package global
 
 import (
 	"strconv"
-	"sun-panel/lib/cache"
+	"leon-panel/lib/cache"
 )
 
 type RateLimiter struct {

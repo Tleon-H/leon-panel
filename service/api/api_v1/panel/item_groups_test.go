@@ -8,8 +8,8 @@ import (
 	"gorm.io/gorm"
 	"net/http/httptest"
 	"path/filepath"
-	"sun-panel/global"
-	"sun-panel/models"
+	"leon-panel/global"
+	"leon-panel/models"
 	"testing"
 )
 

@@ -1,8 +1,8 @@
 package panelApiStructs
 
 import (
-	"sun-panel/api/api_v1/common/apiData/commonApiStructs"
-	"sun-panel/models"
+	"leon-panel/api/api_v1/common/apiData/commonApiStructs"
+	"leon-panel/models"
 )
 
 type ItemIconEditRequest struct {

@@ -11,7 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sun-panel/assets"
+	"leon-panel/assets"
 	"time"
 )
 

@@ -1,8 +1,8 @@
 package global
 
 import (
-	"sun-panel/lib/cache"
-	"sun-panel/structs"
+	"leon-panel/lib/cache"
+	"leon-panel/structs"
 	"time"
 )
 

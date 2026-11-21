@@ -1,10 +1,10 @@
 package system
 
 import (
-	"sun-panel/api/api_v1/common/apiData/systemApiStructs"
-	"sun-panel/api/api_v1/common/apiReturn"
-	"sun-panel/global"
-	"sun-panel/lib/monitor"
+	"leon-panel/api/api_v1/common/apiData/systemApiStructs"
+	"leon-panel/api/api_v1/common/apiReturn"
+	"leon-panel/global"
+	"leon-panel/lib/monitor"
 	"time"
 
 	"github.com/gin-gonic/gin"

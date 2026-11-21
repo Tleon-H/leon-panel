@@ -1,9 +1,9 @@
 package userToken
 
 import (
-	"sun-panel/global"
-	"sun-panel/lib/cache"
-	"sun-panel/models"
+	"leon-panel/global"
+	"leon-panel/lib/cache"
+	"leon-panel/models"
 
 	"time"
 )

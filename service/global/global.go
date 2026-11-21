@@ -1,12 +1,12 @@
 package global
 
 import (
-	"sun-panel/initialize/database"
-	"sun-panel/lib/cache"
-	"sun-panel/lib/cmn/systemSetting"
-	"sun-panel/lib/iniConfig"
-	"sun-panel/lib/language"
-	"sun-panel/models"
+	"leon-panel/initialize/database"
+	"leon-panel/lib/cache"
+	"leon-panel/lib/cmn/systemSetting"
+	"leon-panel/lib/iniConfig"
+	"leon-panel/lib/language"
+	"leon-panel/models"
 
 	redis "github.com/redis/go-redis/v9"
 	"go.uber.org/zap"

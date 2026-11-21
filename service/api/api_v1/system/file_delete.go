@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"sun-panel/models"
+	"leon-panel/models"
 
 	"gorm.io/gorm"
 )

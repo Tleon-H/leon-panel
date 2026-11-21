@@ -1,8 +1,8 @@
 package systemSettingCache
 
 import (
-	"sun-panel/global"
-	"sun-panel/lib/cmn/systemSetting"
+	"leon-panel/global"
+	"leon-panel/lib/cmn/systemSetting"
 	"time"
 )
 
