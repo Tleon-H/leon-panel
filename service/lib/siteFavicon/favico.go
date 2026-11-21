@@ -11,7 +11,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"sun-panel/lib/cmn"
+	"leon-panel/lib/cmn"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"

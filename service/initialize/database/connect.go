@@ -4,8 +4,8 @@ import (
 	"log"
 	"os"
 	"path"
-	"sun-panel/lib/cmn"
-	"sun-panel/models"
+	"leon-panel/lib/cmn"
+	"leon-panel/models"
 	"time"
 
 	"gorm.io/driver/mysql"
@@ -138,7 +138,7 @@ func NotFoundAndCreateUser(db *gorm.DB) error {
 		if err != gorm.ErrRecordNotFound {
 			return err
 		}
-		username := "admin@sun.cc"
+		username := "admin@leon.local"
 		fUser.Mail = username
 		fUser.Username = username
 		fUser.Name = username

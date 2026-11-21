@@ -2,9 +2,9 @@ package config
 
 import (
 	"os"
-	"sun-panel/global"
-	"sun-panel/lib/cmn"
-	"sun-panel/lib/iniConfig"
+	"leon-panel/global"
+	"leon-panel/lib/cmn"
+	"leon-panel/lib/iniConfig"
 )
 
 func getDefaultConfig() map[string]map[string]string {

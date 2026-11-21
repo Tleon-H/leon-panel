@@ -1,9 +1,9 @@
 package middleware
 
 import (
-	"sun-panel/api/api_v1/common/apiReturn"
-	"sun-panel/global"
-	"sun-panel/models"
+	"leon-panel/api/api_v1/common/apiReturn"
+	"leon-panel/global"
+	"leon-panel/models"
 
 	"github.com/gin-gonic/gin"
 )

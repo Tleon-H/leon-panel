@@ -1,7 +1,7 @@
 package global
 
 import (
-	"sun-panel/lib/monitor"
+	"leon-panel/lib/monitor"
 )
 
 const (

@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestVersionFileKeepsUpstreamNumericCode(t *testing.T) {
+func TestVersionFileFormat(t *testing.T) {
 	raw, err := os.ReadFile("version")
 	if err != nil {
 		t.Fatal(err)
@@ -20,13 +20,10 @@ func TestVersionFileKeepsUpstreamNumericCode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if code != 10 {
-		t.Fatalf("numeric version code must stay 10 so existing comparisons are unchanged, got %d", code)
+	if code != 1 {
+		t.Fatalf("numeric version code = %d, want 1", code)
 	}
-	if parts[1] != "1.3.0+leon.11" {
-		t.Fatalf("display version = %s", parts[1])
-	}
-	if strings.Contains(parts[1], "1.8.1") || strings.Contains(parts[1], "2.0") {
-		t.Fatalf("this tree must not identify itself as a later official release: %s", parts[1])
+	if parts[1] != "0.1.0" {
+		t.Fatalf("display version = %s, want 0.1.0", parts[1])
 	}
 }

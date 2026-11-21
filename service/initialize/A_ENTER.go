@@ -4,19 +4,19 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"sun-panel/global"
-	"sun-panel/initialize/cUserToken"
-	"sun-panel/initialize/config"
-	"sun-panel/initialize/database"
-	"sun-panel/initialize/lang"
-	"sun-panel/initialize/other"
-	"sun-panel/initialize/redis"
-	"sun-panel/initialize/runlog"
-	"sun-panel/initialize/systemSettingCache"
-	"sun-panel/initialize/userToken"
-	"sun-panel/lib/cmn"
-	"sun-panel/models"
-	"sun-panel/structs"
+	"leon-panel/global"
+	"leon-panel/initialize/cUserToken"
+	"leon-panel/initialize/config"
+	"leon-panel/initialize/database"
+	"leon-panel/initialize/lang"
+	"leon-panel/initialize/other"
+	"leon-panel/initialize/redis"
+	"leon-panel/initialize/runlog"
+	"leon-panel/initialize/systemSettingCache"
+	"leon-panel/initialize/userToken"
+	"leon-panel/lib/cmn"
+	"leon-panel/models"
+	"leon-panel/structs"
 	"time"
 
 	"log"
@@ -187,5 +187,5 @@ func Logo() {
 
 	versionInfo := cmn.GetSysVersionInfo()
 	fmt.Println("Version:", versionInfo.Version)
-	fmt.Println("Based on Sun-Panel v1.3.0 (MIT):", "https://github.com/hslr-s/sun-panel")
+	fmt.Println("Repository:", "https://github.com/Tleon-H/leon-panel")
 }

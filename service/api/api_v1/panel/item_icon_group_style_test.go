@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"sun-panel/global"
-	"sun-panel/models"
+	"leon-panel/global"
+	"leon-panel/models"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/sqlite"

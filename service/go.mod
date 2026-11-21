@@ -1,4 +1,4 @@
-module sun-panel
+module leon-panel
 
 go 1.20
 

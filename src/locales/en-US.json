@@ -39,10 +39,8 @@
   "apps": {
     "about": {
       "appName": "About",
-      "author": "Upstream author:",
-      "independentNote": "Leon Panel is based on the public MIT source of Sun-Panel v1.3.0. It is not official 1.8.1.",
-      "upstreamProject": "Upstream project:",
-      "repository": "This repository:",
+      "description": "Leon Panel is a lightweight navigation dashboard for servers, NAS devices, and browser start pages.",
+      "repository": "Repository:",
       "license": "License:",
       "frontVersionText": "Front-end version number"
     },
@@ -60,9 +58,9 @@
       "download": "Download backup",
       "downloading": "Preparing the backup",
       "started": "The backup download has started. Keep the file where only you can access it.",
-      "warning": "This download is for your own storage. The archive contains a SQLite database snapshot, uploaded images, configuration, and custom files. It can include password hashes, keys, and private navigation data. Do not send it to anyone or put it in a public directory. Downloading does not overwrite data or stop the program. This is not an official 1.8.1 backup. If the program uses MySQL, this page cannot export or restore the database; back up MySQL yourself.",
+      "warning": "This download is for your own storage. The archive contains a SQLite database snapshot, uploaded images, configuration, and custom files. It can include password hashes, keys, and private navigation data. Do not send it to anyone or put it in a public directory. Downloading does not overwrite data or stop the program. If the program uses MySQL, this page cannot export or restore the database; back up MySQL yourself.",
       "restoreTitle": "Restore from a backup made by this program",
-      "restoreRisk": "Restore overwrites the current database, uploaded images, conf/conf.ini, and web/custom. Changes made after the backup are lost, and accounts and passwords return to that point. This cannot be undone. Only a SQLite backup exported by this program is accepted. Official 1.8.1 and other incompatible archives are rejected. Paths must stay inside the application directory. MySQL cannot be restored here. The program keeps running; port and other configuration changes apply on the next start.",
+      "restoreRisk": "Restore overwrites the current database, uploaded images, conf/conf.ini, and web/custom. Changes made after the backup are lost, and accounts and passwords return to that point. This cannot be undone. Only a compatible SQLite backup exported by this program is accepted. Incompatible or newer-version archives are rejected. Paths must stay inside the application directory. MySQL cannot be restored here. The program keeps running; port and other configuration changes apply on the next start.",
       "choose": "Choose a backup",
       "restore": "Restore this backup",
       "restoreConfirmTitle": "Confirm overwriting current data",
@@ -166,7 +164,6 @@
       "selectImportData": "Select the configuration data to import",
       "softwareVersionLow": "The current software version may be too old and may not be compatible with this configuration file. It is recommended to update the software to the latest version before importing again.",
       "tip": "Importing icon configuration data will not clear existing icon data",
-      "transmuteStandard": "Transmute Standard",
       "warnConfigFileLow": "The configuration file version is too low but compatible"
     },
     "itemGroupManage": {
@@ -373,7 +370,6 @@
     "url": "URL"
   },
   "login": {
-    "basedOn": "based on open-source",
     "loginButton": "Login",
     "passwordPlaceholder": "Password",
     "usernamePlaceholder": "Username",

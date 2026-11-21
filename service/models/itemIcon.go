@@ -1,7 +1,7 @@
 package models
 
 import (
-	"sun-panel/models/datatype"
+	"leon-panel/models/datatype"
 
 	"gorm.io/gorm"
 )

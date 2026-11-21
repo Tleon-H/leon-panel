@@ -3,8 +3,8 @@ package language
 import (
 	"os"
 	"strings"
-	"sun-panel/lib/cmn"
-	"sun-panel/lib/iniConfig"
+	"leon-panel/lib/cmn"
+	"leon-panel/lib/iniConfig"
 )
 
 type LangStructObj struct {

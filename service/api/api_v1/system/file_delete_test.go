@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"sun-panel/global"
-	"sun-panel/models"
+	"leon-panel/global"
+	"leon-panel/models"
 
 	"gorm.io/gorm"
 )

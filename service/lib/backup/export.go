@@ -80,17 +80,16 @@ type DatabaseInfo struct {
 }
 
 type Manifest struct {
-	Format                    int          `json:"format"`
-	Application               string       `json:"application"`
-	Version                   string       `json:"version"`
-	VersionCode               int          `json:"versionCode"`
-	CreatedAt                 string       `json:"createdAt"`
-	Database                  DatabaseInfo `json:"database"`
-	Restore                   string       `json:"restore"`
-	CompatibleWithOfficial181 bool         `json:"compatibleWithOfficial181"`
-	Warnings                  []string     `json:"warnings"`
-	Files                     []FileEntry  `json:"files"`
-	Skipped                   []Skipped    `json:"skipped"`
+	Format      int          `json:"format"`
+	Application string       `json:"application"`
+	Version     string       `json:"version"`
+	VersionCode int          `json:"versionCode"`
+	CreatedAt   string       `json:"createdAt"`
+	Database    DatabaseInfo `json:"database"`
+	Restore     string       `json:"restore"`
+	Warnings    []string     `json:"warnings"`
+	Files       []FileEntry  `json:"files"`
+	Skipped     []Skipped    `json:"skipped"`
 }
 
 type Result struct {
@@ -274,18 +273,17 @@ func Build(ctx context.Context, opt Options) (*Result, error) {
 		when = time.Now()
 	}
 	manifest := Manifest{
-		Format:                    1,
-		Application:               "Leon Panel",
-		Version:                   opt.Version,
-		VersionCode:               opt.VersionCode,
-		CreatedAt:                 when.UTC().Format(time.RFC3339),
-		Database:                  info,
-		Restore:                   RestoreSupported,
-		CompatibleWithOfficial181: false,
+		Format:      1,
+		Application: "Leon Panel",
+		Version:     opt.Version,
+		VersionCode: opt.VersionCode,
+		CreatedAt:   when.UTC().Format(time.RFC3339),
+		Database:    info,
+		Restore:     RestoreSupported,
 		Warnings: []string{
 			"此压缩包可能包含密码哈希、密钥和私人导航，只供管理员自行保存，不要发送给他人或放到公开目录。",
 			"恢复会覆盖当前的数据库、上传文件、conf/conf.ini 和 web/custom，必须由管理员再次确认后才会执行。",
-			"这不是官方 1.8.1 的备份包，不能恢复官方备份，也不接受比当前程序更新的数据库结构。",
+			"仅支持由 Leon Panel 导出的同结构或更低版本的 SQLite 备份包，不接受比当前程序更新的数据库结构。",
 			"符号链接不会被跟随。超出应用目录的路径不会打包，也不会在恢复时写回。MySQL 不会被导出或恢复。",
 		},
 		Files:   files,

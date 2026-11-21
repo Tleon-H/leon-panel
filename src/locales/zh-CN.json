@@ -39,10 +39,8 @@
   "apps": {
     "about": {
       "appName": "关于",
-      "author": "上游作者：",
-      "independentNote": "Leon Panel 基于公开 MIT 源码 Sun-Panel v1.3.0，不是官方 v1.8.1。",
-      "upstreamProject": "上游项目：",
-      "repository": "本仓库：",
+      "description": "Leon Panel 是一款轻量、简洁的服务器与 NAS 导航面板及浏览器首页。",
+      "repository": "项目仓库：",
       "license": "许可证：",
       "frontVersionText": "前端版本号"
     },
@@ -60,9 +58,9 @@
       "download": "下载备份",
       "downloading": "正在准备备份，请稍候",
       "started": "备份已开始下载。请保存在只有你能访问的地方。",
-      "warning": "这个备份只给你自己保存。压缩包里有 SQLite 数据库快照、上传的图片、配置文件和自定义文件，可能包含密码哈希、密钥和私人导航。不要发给别人，也不要放到公开目录。下载不会覆盖当前数据，也不会关闭程序。它不是官方 1.8.1 的备份。如果程序使用的是 MySQL，这里不能导出或恢复数据库，请自行备份 MySQL。",
+      "warning": "这个备份只给你自己保存。压缩包里有 SQLite 数据库快照、上传的图片、配置文件和自定义文件，可能包含密码哈希、密钥和私人导航。不要发给别人，也不要放到公开目录。下载不会覆盖当前数据，也不会关闭程序。如果程序使用的是 MySQL，这里不能导出或恢复数据库，请自行备份 MySQL。",
       "restoreTitle": "从本程序的备份包恢复",
-      "restoreRisk": "恢复会覆盖现有数据，包括现在的数据库、上传的图片、conf/conf.ini 和 web/custom。备份之后新增或修改的内容会丢失，账号和密码也会回到备份当时。此操作不能撤销。只接受本程序自己导出的 SQLite 备份，不接受官方 1.8.1 或其他不兼容的包。路径必须留在应用目录内。MySQL 不能在这里恢复。程序不会因此关闭；配置里的端口等改动要等下次启动才生效。",
+      "restoreRisk": "恢复会覆盖现有数据，包括现在的数据库、上传的图片、conf/conf.ini 和 web/custom。备份之后新增或修改的内容会丢失，账号和密码也会回到备份当时。此操作不能撤销。只接受本程序导出的兼容 SQLite 备份包，不接受不兼容或更高版本的备份包。路径必须留在应用目录内。MySQL 不能在这里恢复。程序不会因此关闭；配置里的端口等改动要等下次启动才生效。",
       "choose": "选择备份包",
       "restore": "恢复此备份",
       "restoreConfirmTitle": "再次确认覆盖现有数据",
@@ -166,7 +164,6 @@
       "selectImportData": "请选择要导入的配置数据",
       "softwareVersionLow": "当前软件版本可能过旧，很有可能无法兼容该配置文件，请谨慎导入。推荐将软件更新到新版后再次导入",
       "tip": "导入图标配置数据不会清空现有图标数据",
-      "transmuteStandard": "浏览器书签转换工具",
       "warnConfigFileLow": "配置文件版本过低，但是兼容"
     },
     "itemGroupManage": {
@@ -373,7 +370,6 @@
     "url": "地址"
   },
   "login": {
-    "basedOn": "基于开源",
     "loginButton": "登录",
     "passwordPlaceholder": "密码",
     "usernamePlaceholder": "账号",

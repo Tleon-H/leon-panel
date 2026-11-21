@@ -16,7 +16,7 @@ import (
 
 func TestRestoreRoundTripMatchesTheSnapshotAndLeavesTheConnectionOpen(t *testing.T) {
 	base, db := restoreFixture(t)
-	result := buildPackage(t, base, db, "1.3.0+leon.7")
+	result := buildPackage(t, base, db, "0.1.0")
 	mutateLive(t, base, db)
 	if err := Restore(context.Background(), restoreOpt(base, db, ""), bytes.NewReader(result)); err != nil {
 		t.Fatal(err)
@@ -36,7 +36,7 @@ func TestRestoreRoundTripMatchesTheSnapshotAndLeavesTheConnectionOpen(t *testing
 
 func TestRestoreAcceptsHistoricalManifestAndRejectsIncompatiblePackages(t *testing.T) {
 	base, db := restoreFixture(t)
-	raw := buildPackage(t, base, db, "1.3.0+leon.4")
+	raw := buildPackage(t, base, db, "0.0.1")
 	historical := rewriteZip(t, raw, func(files map[string][]byte) {
 		var manifest Manifest
 		if err := json.Unmarshal(files["manifest.json"], &manifest); err != nil {
@@ -55,16 +55,16 @@ func TestRestoreAcceptsHistoricalManifestAndRejectsIncompatiblePackages(t *testi
 	}
 	assertLive(t, base, db, false)
 
-	previous := buildPackage(t, base, db, "1.3.0+leon.9")
+	previous := buildPackage(t, base, db, "0.0.9")
 	mutateLive(t, base, db)
 	if err := Restore(context.Background(), restoreOpt(base, db, ""), bytes.NewReader(previous)); err != nil {
 		t.Fatal(err)
 	}
 	assertLive(t, base, db, false)
 
-	leon10 := buildPackage(t, base, db, "1.3.0+leon.10")
+	current := buildPackage(t, base, db, "0.1.0")
 	mutateLive(t, base, db)
-	if err := Restore(context.Background(), restoreOpt(base, db, ""), bytes.NewReader(leon10)); err != nil {
+	if err := Restore(context.Background(), restoreOpt(base, db, ""), bytes.NewReader(current)); err != nil {
 		t.Fatal(err)
 	}
 	assertLive(t, base, db, false)
@@ -74,14 +74,15 @@ func TestRestoreAcceptsHistoricalManifestAndRejectsIncompatiblePackages(t *testi
 		name string
 		edit func(*Manifest)
 	}{
-		{"official", func(m *Manifest) {
-			m.Application = "Sun-Panel"
-			m.Version = "1.8.1"
-			m.VersionCode = 18
+		{"foreign app", func(m *Manifest) {
+			m.Application = "Other Panel"
+			m.Version = "0.1.0"
+			m.VersionCode = 1
 		}},
-		{"newer", func(m *Manifest) { m.Version = "1.3.0+leon.12" }},
-		{"schema", func(m *Manifest) { m.VersionCode = 11 }},
-		{"official flag", func(m *Manifest) { m.CompatibleWithOfficial181 = true }},
+		{"newer patch", func(m *Manifest) { m.Version = "0.1.1" }},
+		{"newer minor", func(m *Manifest) { m.Version = "0.2.0" }},
+		{"schema", func(m *Manifest) { m.VersionCode = 2 }},
+		{"invalid semver", func(m *Manifest) { m.Version = "v0.1.0" }},
 	}
 	for _, item := range cases {
 		t.Run(item.name, func(t *testing.T) {
@@ -108,7 +109,7 @@ func TestRestoreAcceptsHistoricalManifestAndRejectsIncompatiblePackages(t *testi
 
 func TestRestoreRejectsChecksumTraversalAndSymlink(t *testing.T) {
 	base, db := restoreFixture(t)
-	raw := buildPackage(t, base, db, "1.3.0+leon.8")
+	raw := buildPackage(t, base, db, "0.1.0")
 	mutateLive(t, base, db)
 
 	tampered := rewriteZip(t, raw, func(files map[string][]byte) {
@@ -154,7 +155,7 @@ func TestRestoreRollsBackAfterAFailedApply(t *testing.T) {
 	for _, stage := range []string{"uploads", "database"} {
 		t.Run(stage, func(t *testing.T) {
 			base, db := restoreFixture(t)
-			raw := buildPackage(t, base, db, "1.3.0+leon.8")
+			raw := buildPackage(t, base, db, "0.1.0")
 			mutateLive(t, base, db)
 			parent := t.TempDir()
 			opt := restoreOpt(base, db, parent)
@@ -180,7 +181,7 @@ func TestRestoreRollsBackAfterAFailedApply(t *testing.T) {
 
 func TestRestoreRejectsASymlinkConfigWithoutFollowingIt(t *testing.T) {
 	base, db := restoreFixture(t)
-	raw := buildPackage(t, base, db, "1.3.0+leon.8")
+	raw := buildPackage(t, base, db, "0.1.0")
 	outside := filepath.Join(t.TempDir(), "secret.txt")
 	if err := os.WriteFile(outside, []byte("OUTSIDE-MARKER-7d2b"), 0o600); err != nil {
 		t.Fatal(err)
@@ -242,8 +243,8 @@ func restoreOpt(base string, db *sql.DB, tempParent string) RestoreOptions {
 		ConfFile:      filepath.Join("conf", "conf.ini"),
 		CustomDir:     filepath.Join("web", "custom"),
 		SQLitePath:    filepath.Join("database", "database.db"),
-		Version:       "1.3.0+leon.11",
-		VersionCode:   10,
+		Version:       "0.1.0",
+		VersionCode:   1,
 		DB:            db,
 		TempParent:    tempParent,
 	}

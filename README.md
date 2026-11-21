@@ -4,24 +4,21 @@
 
 # Leon Panel
 
-基于公开 MIT 源码 Sun-Panel v1.3.0 的独立导航面板。
+轻量、简洁的服务器 / NAS 导航面板与浏览器首页。
 
-An independent navigation panel based on the public MIT source of Sun-Panel v1.3.0.
+A lightweight navigation panel for servers, NAS devices, and browser start pages.
 
 </div>
 
-Leon Panel 是 [Sun-Panel v1.3.0](https://github.com/hslr-s/sun-panel) 公开源码上的独立版本，不是官方仓库，也不是官方 v1.8.1。
+- 当前版本：`0.1.0`
+- 代码仓库：[Tleon-H/leon-panel](https://github.com/Tleon-H/leon-panel)
+- 开源协议：[MIT](./LICENSE)
 
-- 显示版本：`1.3.0+leon.11`
-- 内部数字版本：`10`（原来用来比较版本的数字，这一版保持不变）
-
-版权和 MIT 许可证保留在 [LICENSE](./LICENSE)。上游仓库是 [hslr-s/sun-panel](https://github.com/hslr-s/sun-panel)。本仓库没有改许可证，也没有加入或绕过任何授权检查。实现和差异的详细说明见 [doc/LEON-PANEL.md](./doc/LEON-PANEL.md)。
+更详细的架构说明、备份恢复机制与自动化检查见 [doc/LEON-PANEL.md](./doc/LEON-PANEL.md)。
 
 ## 界面预览
 
-下面的图是本仓库自带的 Leon Panel 界面，基于 Sun-Panel v1.3.0，不是官方后续版本的界面。
-
-![Leon Panel 首页，基于 Sun-Panel v1.3.0](./doc/images/main-dark.png)
+![Leon Panel 首页](./doc/images/main-dark.png)
 
 **图标样式**
 
@@ -36,57 +33,35 @@ Leon Panel 是 [Sun-Panel v1.3.0](https://github.com/hslr-s/sun-panel) 公开源
 ![SSH 小窗口](./doc/images/window-ssh.png)
 ![下载工具小窗口](./doc/images/window-xunlei.png)
 
-## 已实现的独立能力
+## 核心特性
 
-对照 [doc/LEON-PANEL.md](./doc/LEON-PANEL.md)，这一版在 v1.3.0 之上已经有这些能力：
+- **外观预设与实时预览**：内置首页外观预设（海蓝玻璃、雾白纸感、深夜石墨），支持按项预览与应用，深色模式下优化描边和对比度。
+- **分组与卡片管理**：支持分组拖拽排序、每个分组独立设置卡片样式（详情大卡片 / 小图标 / 跟随全局）；卡片支持默认地址与内网地址一键切换，右键菜单可直接按任意地址以当前页、新标签或页内小窗打开。
+- **高性能首页加载**：一次请求加载分组、样式与排序后的卡片；支持顶部加载条、加载失败保留卡片并重试、按已确认身份隔离的本地卡片缓存与 `/clear` 缓存清理页。
+- **搜索栏与自定义引擎**：支持 `/` 快捷键快速聚焦（不抢占输入框与中文输入法）、本地项目筛选，以及登录用户自定义搜索引擎增删改与排序。
+- **自有图库与公共图库**：上传文件管理支持按图标 / 壁纸 / 未分类筛选、按文件名搜索、分页、批量上传与批量删除；管理员可将自己的图片设为公共图库供其他已登录账号选用。
+- **多账号切换与公开模式**：支持多账号隔离与访客公开模式；可在同一浏览器记住多个已登录会话并快速切换（不保存密码）。
+- **整站备份与覆盖恢复**：管理员支持导出 SQLite 一致性快照（含数据库、上传文件、`conf/conf.ini`、`web/custom` 及 SHA-256 清单），并支持带二次确认和失败回滚的整站覆盖恢复。
+- **系统状态监控**：支持查看主机 CPU、内存与磁盘使用率。
 
-- 界面改进：深色模式下卡片和搜索框有浅色描边，设置页里偏灰的字更亮，手机上的分组按钮不再只靠悬停才出现。已经保存的壁纸、颜色和布局不会被清空。
-- 自定义搜索引擎与排序：登录后可以增加、修改、删除自己的搜索引擎，并用上移、下移调整顺序。
-- 图片分类、按文件名搜索和分页。升级前已有的文件仍是未分类。
-- 批量上传：上传文件管理可以一次选择多张图片。
-- 自有图库与公共图库：项目图标和壁纸可以从当前账号自己的图片里选用；管理员可以把自己的图片标成公共，其他已登录账号可以浏览并选用。
-- 管理员 SQLite 备份导出：可以下载本程序自己的备份包。
-- 整站覆盖恢复：管理员可以从本程序自己的 SQLite 备份包覆盖恢复。恢复会换掉现有数据，页面先说明风险，管理员勾选确认后才会执行。不接受官方备份。MySQL 不能在这里恢复。
-- 多账号切换：在这台浏览器记住多个已登录账号，并在系统应用和登录页切换。不保存密码。
-- 批量删除：上传文件管理可以多选并删除当前账号自己的图片。只能选择当前页，删除前要再次确认。公共图库不能删除别人的图片。
-- 分组卡片样式：每个分组可以单独使用详情大卡片或小图标，也可以跟随风格设置里的全局样式。没有单独设置过的分组仍跟随全局。
+## 快速部署（Docker）
 
-## 尚未实现
-
-- OpenAPI
-- Docker 套接字控制
-
-## 版本与构建约定
-
-仓库为 [Tleon-H/leon-panel](https://github.com/Tleon-H/leon-panel)。当前版本 `1.3.0+leon.11`，其中 `1.3.0` 表示上游基线，`leon.11` 表示独立修订号。备份兼容仍按 Leon 修订号比较，内部数字版本 `10` 用于现有格式兼容。
-
-- `package.json` 与 `service/assets/version` 必须同步，`pnpm run version:check` 和 CI 会验证。
-- 前端直接读取包版本，构建不再改写 `.env`，「关于」页显示相同版本。
-- Git 发布标签使用 `v1.3.0-leon.11`，Docker 标签使用 `1.3.0-leon.11`。镜像标签通过脚本生成，避免 `+` 字符导致发布失败。
-- 使用 Node.js 22.6+ 和 pnpm 8.15.9，以 `pnpm-lock.yaml` 为依赖锁文件。
-
-本次首页加载将当前账号的分组、分组样式和排序后的卡片合并为一次请求，仍支持按组刷新。没有单独设置样式的分组跟随全局。搜索栏支持按 `/` 聚焦，输入框、弹窗和中文输入过程中不会抢占按键。
-
-## 从源码部署
-
-`docker compose up -d --build` 构建当前 Leon Panel 源码。默认配置使用 `./conf`、`./uploads` 和 `./database`。升级已有实例前先确认数据目录和端口，保存备份。新版本可恢复此前的 Leon Panel 备份；旧版本会拒绝恢复较新修订号生成的备份。
-
-## 构建
+默认使用内置 SQLite 数据库，无需额外部署数据库服务：
 
 ```sh
-pnpm install
-pnpm run test:unit
-pnpm run type-check
-pnpm run build
-cd service
-go test ./assets ./lib/backup ./lib/pollguard ./initialize/systemMonitor ./api/api_v1/system
+docker compose up -d --build
 ```
 
-前端构建结果在 `dist`。服务端需要先按原项目的方式生成嵌入资源，再编译 `service`。
+启动后访问 `http://<你的IP>:3002`。默认持久化挂载目录为 `./conf`、`./uploads` 和 `./database`。
 
-## 独立测试容器
+首次初始化将自动生成默认管理员账号，**部署后请务必立即修改密码**：
 
-在本仓库目录执行。它使用新的 `./leon-test-data` 和主机端口 `13002`，不挂载正式数据，也不挂载 Docker 套接字。
+- 默认账号：`admin@leon.local`
+- 默认密码：`12345678`
+
+### 独立测试容器
+
+如需在独立目录与端口上试运行（使用 `./leon-test-data` 与主机端口 `13002`）：
 
 ```sh
 docker compose -f docker-compose.leon-test.yml up --build
@@ -94,8 +69,30 @@ docker compose -f docker-compose.leon-test.yml up --build
 
 浏览器打开 `http://127.0.0.1:13002`。
 
-## 许可证与上游署名
+## 本地开发与构建
 
-本仓库使用 MIT 许可证，全文见 [LICENSE](./LICENSE)。
+环境要求：Node.js 22.6+、pnpm 8.15.9、Go 1.21+。
 
-上游项目为 [Sun-Panel](https://github.com/hslr-s/sun-panel)，Copyright (c) 2023 红烧猎人。Leon Panel 基于其公开的 v1.3.0 源码修改，不是官方后续版本。
+```sh
+pnpm install
+pnpm run version:check
+pnpm run test:unit
+pnpm run type-check
+pnpm run build
+
+cd service
+go install github.com/go-bindata/go-bindata/go-bindata@v3.1.2+incompatible
+go install github.com/elazarl/go-bindata-assetfs/go-bindata-assetfs@v1.0.1
+go-bindata-assetfs -o=assets/bindata.go -pkg=assets assets/...
+go test ./...
+go build -o leon-panel main.go
+```
+
+### 版本约定
+
+- `package.json` 与 `service/assets/version` 必须保持一致（SemVer 格式 `X.Y.Z`），由 `pnpm run version:check` 和 CI 校验。
+- Git 发布标签使用 `v<version>`（例如 `v0.1.0`），Docker 镜像标签使用 `<version>`（例如 `0.1.0`）。
+
+## 许可证
+
+本项目采用 [MIT License](./LICENSE) 开源。

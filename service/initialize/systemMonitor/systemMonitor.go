@@ -4,10 +4,10 @@ import (
 	"sync"
 	"time"
 
-	"sun-panel/global"
-	"sun-panel/lib/cache"
-	"sun-panel/lib/monitor"
-	"sun-panel/lib/pollguard"
+	"leon-panel/global"
+	"leon-panel/lib/cache"
+	"leon-panel/lib/monitor"
+	"leon-panel/lib/pollguard"
 )
 
 type collector func() global.ModelSystemMonitor

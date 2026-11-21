@@ -1,11 +1,11 @@
 package middleware
 
 import (
-	"sun-panel/api/api_v1/common/apiReturn"
-	"sun-panel/api/api_v1/common/base"
-	"sun-panel/global"
-	"sun-panel/lib/cmn/systemSetting"
-	"sun-panel/models"
+	"leon-panel/api/api_v1/common/apiReturn"
+	"leon-panel/api/api_v1/common/base"
+	"leon-panel/global"
+	"leon-panel/lib/cmn/systemSetting"
+	"leon-panel/models"
 
 	"github.com/gin-gonic/gin"
 )

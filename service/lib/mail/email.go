@@ -1,8 +1,8 @@
 package mail
 
 import (
-	"sun-panel/global"
-	"sun-panel/models"
+	"leon-panel/global"
+	"leon-panel/models"
 
 	"gopkg.in/gomail.v2"
 )
