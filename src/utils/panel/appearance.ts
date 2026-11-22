@@ -112,6 +112,7 @@ export interface HomepageThemeResolution {
   canvasFallback: string
   cardSurface: CardSurfacePresetId
   iconBadgeStyle: IconBadgeStyleId
+  iconBadgeBackground: string
   card: CardSurfaceTokens
   searchBackground: string
   searchTextColor: string
@@ -877,7 +878,10 @@ export function resolveIconForegroundColor(
   const candidate = pickReadableTextColor(effectiveBg, canvasFallback, '#1e293b', '#f8fafc')
   if (contrastRatio(candidate, effectiveBg, canvasFallback) >= 4.5)
     return candidate
-  return pickReadableTextColor(effectiveBg, canvasFallback, '#0f172a', '#ffffff')
+  const strongCandidate = pickReadableTextColor(effectiveBg, canvasFallback, '#0f172a', '#ffffff')
+  if (contrastRatio(strongCandidate, effectiveBg, canvasFallback) >= 4.5)
+    return strongCandidate
+  return pickReadableTextColor(effectiveBg, canvasFallback, '#000000', '#ffffff')
 }
 
 export function resolveHomepageThemeVars(rawConfig: AppearancePanelConfig): HomepageThemeResolution {
@@ -984,7 +988,7 @@ export function resolveHomepageThemeVars(rawConfig: AppearancePanelConfig): Home
             : surface === 'midnight-graphite'
               ? 'rgba(17, 21, 28, 0.88)'
               : LEGACY_DEFAULT_CARD_BG
-  const controlTextColor = (surface === 'bauhaus-grid' || surface === 'swiss-paper' || surface === 'nordic-stone' || isLightCanvas) ? '#09090b' : '#ffffff'
+  const controlTextColor = isLightColor(controlBackground, canvasFallback) ? '#09090b' : '#ffffff'
   const controlBorderColor = surface === 'bauhaus-grid'
     ? '#18181b'
     : surface === 'swiss-paper'
@@ -1004,6 +1008,16 @@ export function resolveHomepageThemeVars(rawConfig: AppearancePanelConfig): Home
                   : 'rgba(255, 255, 255, 0.16)'
 
   const iconBadgeStyle = config.iconBadgeStyle ?? 'default'
+  const iconBadgeBackground = isLightCard
+    ? surface === 'swiss-paper'
+      ? '#f4f4f5'
+      : surface === 'nordic-stone'
+        ? '#eef0f2'
+        : '#f4f1ea'
+    : surface === 'mono-ink'
+      ? '#27272a'
+      : '#1e293b'
+  const searchBadgeBackground = searchIsLight ? '#f4f4f5' : '#1e293b'
 
   const cssVars: Record<string, string> = {
     '--leon-canvas-fallback': canvasFallback,
@@ -1022,10 +1036,12 @@ export function resolveHomepageThemeVars(rawConfig: AppearancePanelConfig): Home
     '--leon-card-text': card.defaultTextColor,
     '--leon-card-text-secondary': card.secondaryTextColor,
     '--leon-accent-color': card.accentColor,
+    '--leon-icon-badge-bg': iconBadgeBackground,
     '--leon-search-bg': searchBackground,
     '--leon-search-text': searchTextColor,
     '--leon-search-border': searchBorderColor,
     '--leon-search-placeholder': searchPlaceholderColor,
+    '--leon-search-badge-bg': searchBadgeBackground,
     '--leon-control-bg': controlBackground,
     '--leon-control-text': controlTextColor,
     '--leon-control-border': controlBorderColor,
@@ -1037,12 +1053,48 @@ export function resolveHomepageThemeVars(rawConfig: AppearancePanelConfig): Home
     canvasFallback,
     cardSurface: surface,
     iconBadgeStyle,
+    iconBadgeBackground,
     card,
     searchBackground,
     searchTextColor,
     controlBackground,
     controlTextColor,
     cssVars,
+  }
+}
+
+function formatRgb(color: ParsedRgba): string {
+  return `rgb(${Math.round(color.r)}, ${Math.round(color.g)}, ${Math.round(color.b)})`
+}
+
+function compositeColorOver(topColor: string, bottomColor: string): string {
+  const bottom = parseCssColor(bottomColor)
+  const top = parseCssColor(topColor)
+  if (!top)
+    return bottomColor
+  if (!bottom)
+    return topColor
+  if (top.a >= 1)
+    return topColor
+  return formatRgb(compositeOver(top, bottom))
+}
+
+function resolveBadgeOverlayBackground(
+  badgeStyle: IconBadgeStyleId,
+  bauhausBackground: string,
+  baseBackground: string,
+): string {
+  switch (badgeStyle) {
+    case 'bauhaus':
+      return bauhausBackground
+    case 'glass':
+      return compositeColorOver('rgba(255, 255, 255, 0.14)', baseBackground)
+    case 'soft':
+      return compositeColorOver('rgba(15, 23, 42, 0.055)', baseBackground)
+    case 'outline':
+      return compositeColorOver('rgba(30, 41, 59, 0.72)', baseBackground)
+    default:
+      return baseBackground
   }
 }
 
@@ -1095,6 +1147,34 @@ export function resolveCardAppearance(
     isLightSurface,
     useTextShadow: !textIsDark && !isLightSurface,
   }
+}
+
+export function resolveIconBadgeBackgroundColor(
+  rawConfig: AppearancePanelConfig,
+  itemIcon?: { backgroundColor?: string } | null,
+): string {
+  const theme = resolveHomepageThemeVars(rawConfig)
+  const card = resolveCardAppearance(rawConfig, itemIcon)
+  const effectiveCardBg = compositeColorOver(card.backgroundColor, theme.canvasFallback)
+  if (card.hasCustomBackground)
+    return effectiveCardBg
+  return resolveBadgeOverlayBackground(theme.iconBadgeStyle, theme.iconBadgeBackground, effectiveCardBg)
+}
+
+export function resolveSmallIconBackgroundColor(
+  rawConfig: AppearancePanelConfig,
+  itemIcon?: { backgroundColor?: string } | null,
+  forceBackground?: string | null,
+): string {
+  const theme = resolveHomepageThemeVars(rawConfig)
+  const card = resolveCardAppearance(rawConfig, itemIcon)
+  const tileBase = card.hasCustomBackground
+    ? theme.canvasFallback
+    : resolveBadgeOverlayBackground(theme.iconBadgeStyle, theme.iconBadgeBackground, theme.canvasFallback)
+  const itemLayer = (forceBackground && forceBackground.trim() !== '')
+    ? forceBackground
+    : (card.hasCustomBackground ? (itemIcon?.backgroundColor || LEGACY_DEFAULT_CARD_BG) : card.backgroundColor)
+  return compositeColorOver(itemLayer, tileBase)
 }
 
 export function resolveSmallTitleColor(rawConfig: AppearancePanelConfig): string {

@@ -132,4 +132,17 @@ test('cpu, memory, and disk cards mount and unmount through the shared poll hook
     assert.match(card, /onUnmounted/)
     assert.doesNotMatch(card, /setInterval\(/)
   }
+  const progress = source('src/components/deskModule/SystemMonitor/components/GenericProgress/index.vue')
+  assert.match(progress, /flex-col/)
+  assert.match(progress, /whitespace-nowrap/)
+  assert.doesNotMatch(progress, /float-right/)
+  assert.doesNotMatch(progress, /max-width:\s*135px/)
+})
+
+test('search box includes builtin icon fallback, chevron affordance, and hides kbd hint on mobile', () => {
+  const box = source('src/components/deskModule/SearchBox/index.vue')
+  assert.match(box, /resolveBuiltinEngineIconKey\(/)
+  assert.match(box, /resolveEngineLetter\(/)
+  assert.match(box, /lucide:chevron-down/)
+  assert.match(box, /@media \(max-width: 640px\), \(hover: none\)/)
 })

@@ -4,7 +4,7 @@ import { NEllipsis } from 'naive-ui'
 import { ItemIcon } from '@/components/common'
 import { PanelPanelConfigStyleEnum } from '@/enums'
 import { usePanelState } from '@/store'
-import { resolveCardAppearance, resolveHomepageThemeVars, resolveIconForegroundColor, resolveSmallTitleColor } from '@/utils/panel/appearance'
+import { resolveCardAppearance, resolveHomepageThemeVars, resolveIconBadgeBackgroundColor, resolveIconForegroundColor, resolveSmallIconBackgroundColor, resolveSmallTitleColor } from '@/utils/panel/appearance'
 
 interface Prop {
   itemInfo?: Panel.ItemInfo
@@ -29,7 +29,10 @@ const effectiveConfig = computed(() => ({
 
 const homepageTheme = computed(() => resolveHomepageThemeVars(effectiveConfig.value))
 const cardAppearance = computed(() => resolveCardAppearance(effectiveConfig.value, props.itemInfo?.icon))
-const iconForegroundColor = computed(() => resolveIconForegroundColor(cardAppearance.value.backgroundColor, homepageTheme.value.canvasFallback))
+const infoIconBackground = computed(() => resolveIconBadgeBackgroundColor(effectiveConfig.value, props.itemInfo?.icon))
+const iconForegroundColor = computed(() => resolveIconForegroundColor(infoIconBackground.value, homepageTheme.value.canvasFallback))
+const smallIconBackground = computed(() => resolveSmallIconBackgroundColor(effectiveConfig.value, props.itemInfo?.icon, props.forceBackground))
+const smallIconForegroundColor = computed(() => resolveIconForegroundColor(smallIconBackground.value, homepageTheme.value.canvasFallback))
 
 const infoCardStyle = computed(() => ({
   background: cardAppearance.value.backgroundColor,
@@ -119,24 +122,25 @@ const isBauhausBadge = computed(() => !cardAppearance.value.hasCustomBackground 
     </div>
 
     <!-- 极简(小)图标（APP） -->
-    <div v-if="style === PanelPanelConfigStyleEnum.icon" class="app-icon-small">
+    <div v-if="style === PanelPanelConfigStyleEnum.icon" class="app-icon-small min-w-0 w-full">
       <div
-        class="app-icon-small-icon leon-themed-small-tile overflow-hidden rounded-2xl w-[70px] h-[70px] mx-auto transition-all duration-200"
+        class="app-icon-small-icon leon-themed-small-tile flex items-center justify-center overflow-hidden rounded-2xl w-[70px] h-[70px] mx-auto transition-all duration-200"
         :class="iconBadgeClass"
         :style="smallIconTileStyle"
-        :title="itemInfo?.description"
+        :title="itemInfo?.description || itemInfo?.title"
       >
         <ItemIcon
           :item-icon="itemInfo?.icon"
           :fallback-text="itemInfo?.title"
           :force-background="smallItemForceBackground"
-          :foreground-color="iconForegroundColor"
+          :foreground-color="smallIconForegroundColor"
         />
       </div>
       <div
         v-if="!iconTextIconHideTitle"
-        class="app-icon-small-title text-center app-icon-text-shadow cursor-pointer mt-[4px] break-words"
+        class="app-icon-small-title text-center app-icon-text-shadow cursor-pointer mt-[4px]"
         :style="{ color: smallTitleColor }"
+        :title="itemInfo?.title"
       >
         <span>{{ itemInfo?.title }}</span>
       </div>

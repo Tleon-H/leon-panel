@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { NCheckbox } from 'naive-ui'
 import { decideSearchConfirm, decideSearchKey } from '@/utils/search/filterIcons'
-import { buildSearchUrl, addCustomEngine, currentSearchEngine, moveEngine, normalizeSearchConfig, removeCustomEngine, selectEngine, toPersistedSearchConfig, updateCustomEngine, type SearchConfig, type SearchConfigError, type SearchEngineRecord } from '@/utils/search/engines'
+import { addCustomEngine, buildSearchUrl, currentSearchEngine, moveEngine, normalizeSearchConfig, removeCustomEngine, resolveBuiltinEngineIconKey, resolveEngineLetter, selectEngine, toPersistedSearchConfig, updateCustomEngine, type SearchConfig, type SearchConfigError, type SearchEngineRecord } from '@/utils/search/engines'
 import { SvgIcon } from '@/components/common'
 import { useModuleConfig } from '@/store/modules'
 import { useAuthStore } from '@/store'
@@ -71,11 +71,12 @@ const onBlur = (): void => {
 }
 
 function engineIcon(engine: SearchEngineRecord): string {
-  return engine.builtin ? builtinIcons[engine.id] || '' : ''
+  const key = resolveBuiltinEngineIconKey(engine)
+  return key ? (builtinIcons[key] || '') : ''
 }
 
 function engineLetter(engine: SearchEngineRecord): string {
-  return Array.from(engine.title.trim() || '?')[0]
+  return resolveEngineLetter(engine.title)
 }
 
 function handleEngineClick() {
@@ -220,10 +221,24 @@ onMounted(() => {
 <template>
   <div class="search-box w-full">
     <div class="search-container flex rounded-2xl items-center justify-center w-full" :style="{ background, color: textColor }" :class="{ focused: isFocused }">
-      <div class="search-box-btn-engine w-[40px] flex justify-center cursor-pointer" @click="handleEngineClick">
+      <button
+        type="button"
+        class="search-box-btn-engine flex items-center justify-center gap-1"
+        :class="canEdit ? 'cursor-pointer' : 'cursor-default'"
+        :title="current.title"
+        :aria-label="current.title"
+        :aria-expanded="canEdit ? searchSelectListShow : undefined"
+        @click="handleEngineClick"
+      >
         <img v-if="engineIcon(current)" class="engine-mark" :src="engineIcon(current)" alt="">
         <span v-else class="engine-letter">{{ engineLetter(current) }}</span>
-      </div>
+        <SvgIcon
+          v-if="canEdit"
+          class="engine-chevron"
+          :class="{ 'is-open': searchSelectListShow }"
+          icon="lucide:chevron-down"
+        />
+      </button>
 
       <input ref="searchInput" v-model="searchTerm" :placeholder="$t('deskModule.searchBox.inputPlaceholder')" :aria-keyshortcuts="localSearchEnabled ? 'ArrowUp ArrowDown Enter Escape' : 'Enter Escape'" @focus="onFocus" @blur="onBlur" @input="handleItemSearch" @keydown="handleKeydown">
 
@@ -309,6 +324,35 @@ onMounted(() => {
   box-shadow: var(--leon-card-hover-shadow, 0px 0px 0px 2px rgba(56, 189, 248, 0.2));
 }
 
+.search-box-btn-engine {
+  min-width: 44px;
+  height: 32px;
+  padding: 0 6px 0 2px;
+  margin-right: 4px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  flex-shrink: 0;
+  transition: opacity 0.15s ease;
+}
+
+.engine-chevron {
+  width: 13px;
+  height: 13px;
+  opacity: 0.65;
+  flex-shrink: 0;
+  transition: transform 0.18s ease, opacity 0.15s ease;
+}
+
+.search-box-btn-engine:hover .engine-chevron {
+  opacity: 1;
+}
+
+.engine-chevron.is-open {
+  transform: rotate(180deg);
+  opacity: 1;
+}
+
 .leon-search-kbd {
   display: inline-flex;
   align-items: center;
@@ -324,6 +368,12 @@ onMounted(() => {
   border-radius: var(--leon-card-radius, 4px);
   opacity: 0.65;
   pointer-events: none;
+}
+
+@media (max-width: 640px), (hover: none) {
+  .leon-search-kbd {
+    display: none;
+  }
 }
 
 .leon-search-popover {
@@ -383,19 +433,22 @@ input::placeholder {
 
 .engine-mark,
 .engine-letter {
-  width: 20px;
-  height: 20px;
-  flex: 0 0 20px;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
 }
 
 .engine-letter {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.9);
-  color: #0f172a;
+  border-radius: var(--leon-card-radius, 6px);
+  background: var(--leon-search-badge-bg, #f4f4f5);
+  border: 1px solid var(--leon-search-border, rgba(148, 163, 184, 0.55));
+  color: var(--leon-search-text, #0f172a);
   font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .engine-action {

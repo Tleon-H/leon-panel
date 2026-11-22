@@ -7,6 +7,8 @@ import {
   moveEngine,
   normalizeSearchConfig,
   removeCustomEngine,
+  resolveBuiltinEngineIconKey,
+  resolveEngineLetter,
   toPersistedSearchConfig,
   updateCustomEngine,
 } from './engines.ts'
@@ -87,4 +89,19 @@ test('the query is URL-encoded and dangerous protocols are rejected', () => {
     'https://example.com/search? q=%s',
   ])
     assert.equal(buildSearchUrl(template, '词'), null)
+})
+
+test('migrated search engines match builtin icons by id, title, or host and uppercase custom initials', () => {
+  assert.equal(resolveBuiltinEngineIconKey({ id: 'baidu', title: 'Anything', url: example }), 'baidu')
+  assert.equal(resolveBuiltinEngineIconKey({ id: 'custom-restored-1', title: 'baidu', url: 'https://example.com/?q=%s' }), 'baidu')
+  assert.equal(resolveBuiltinEngineIconKey({ id: 'custom-restored-2', title: '百度搜索', url: example }), 'baidu')
+  assert.equal(resolveBuiltinEngineIconKey({ id: 'custom-restored-3', title: 'My Search', url: 'https://www.baidu.com/s?ie=utf-8&wd=%s' }), 'baidu')
+  assert.equal(resolveBuiltinEngineIconKey({ id: 'custom-restored-4', title: 'Google HK', url: 'https://www.google.com.hk/search?q=%s' }), 'google')
+  assert.equal(resolveBuiltinEngineIconKey({ id: 'custom-restored-5', title: 'CN Engine', url: 'https://cn.bing.com/search?q=%s' }), 'bing')
+  assert.equal(resolveBuiltinEngineIconKey({ id: 'custom-restored-6', title: 'duckduckgo', url: 'https://duckduckgo.com/?q=%s' }), null)
+
+  assert.equal(resolveEngineLetter('duckduckgo'), 'D')
+  assert.equal(resolveEngineLetter('  github '), 'G')
+  assert.equal(resolveEngineLetter('知乎'), '知')
+  assert.equal(resolveEngineLetter('   '), '?')
 })

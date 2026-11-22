@@ -21,7 +21,9 @@ import {
   parseThemePackJson,
   resolveCardAppearance,
   resolveHomepageThemeVars,
+  resolveIconBadgeBackgroundColor,
   resolveIconForegroundColor,
+  resolveSmallIconBackgroundColor,
   resolveSmallTitleColor,
   serializePanelConfig,
   shouldAutoSavePanelConfig,
@@ -848,5 +850,107 @@ test('theme pack JSON export/import preserves non-appearance settings, supports 
   if (unsafeImport.ok) {
     assert.equal(unsafeImport.pack.appearance.backgroundImageSrc, undefined)
     assert.equal(unsafeImport.pack.appearance.cardSurface, 'blueprint-slate')
+  }
+})
+
+test('icon badge background follows card surface tone and preserves WCAG contrast across all combinations', () => {
+  // Specific regression: dark wallpaper + light bauhaus-grid card must use a light icon badge with dark foreground
+  const darkWallLightBauhaus = normalizePanelAppearance({
+    ...applyAppearancePreset(legacyConfig(), 'bauhaus-grid', {
+      wallpaper: false,
+      cardStyle: true,
+      iconStyle: true,
+    }),
+    wallpaperTone: 'dark',
+  })
+  const theme = resolveHomepageThemeVars(darkWallLightBauhaus)
+  assert.equal(theme.isLightCanvas, false)
+  assert.equal(theme.isLightCard, true)
+  assert.equal(theme.cssVars['--leon-icon-badge-bg'], '#f4f1ea')
+  const badgeBg = resolveIconBadgeBackgroundColor(darkWallLightBauhaus, { backgroundColor: LEGACY_DEFAULT_CARD_BG })
+  assert.equal(badgeBg, '#f4f1ea')
+  const fg = resolveIconForegroundColor(badgeBg, theme.canvasFallback)
+  assert.ok(contrastRatio(fg, badgeBg, theme.canvasFallback) >= 7, `expected high contrast on bauhaus badge, got ${contrastRatio(fg, badgeBg, theme.canvasFallback)}`)
+
+  // Reverse regression: light wallpaper + dark mono-ink card must use a dark icon badge with light foreground
+  const lightWallDarkMono = normalizePanelAppearance({
+    ...applyAppearancePreset(legacyConfig(), 'mono-ink', {
+      wallpaper: false,
+      cardStyle: true,
+      iconStyle: true,
+    }),
+    wallpaperTone: 'light',
+  })
+  const darkCardTheme = resolveHomepageThemeVars(lightWallDarkMono)
+  assert.equal(darkCardTheme.isLightCanvas, true)
+  assert.equal(darkCardTheme.isLightCard, false)
+  assert.equal(darkCardTheme.cssVars['--leon-icon-badge-bg'], '#27272a')
+  const darkBadgeBg = resolveIconBadgeBackgroundColor(lightWallDarkMono, { backgroundColor: LEGACY_DEFAULT_CARD_BG })
+  const lightFg = resolveIconForegroundColor(darkBadgeBg, darkCardTheme.canvasFallback)
+  assert.ok(contrastRatio(lightFg, darkBadgeBg, darkCardTheme.canvasFallback) >= 7)
+
+  // Exhaustive matrix: every (wallpaper x cardStyle x iconStyle) keeps WCAG AA (>= 4.5) on both detail badge and small tile
+  const choices: Array<'default' | (typeof APPEARANCE_PRESET_IDS)[number]> = [
+    'default',
+    ...APPEARANCE_PRESET_IDS,
+  ]
+  for (const w of choices) {
+    for (const c of choices) {
+      for (const i of choices) {
+        let cfg = normalizePanelAppearance(legacyConfig())
+        if (w !== 'default')
+          cfg = applyAppearancePreset(cfg, w, { wallpaper: true, cardStyle: false, iconStyle: false })
+        if (c !== 'default')
+          cfg = applyAppearancePreset(cfg, c, { wallpaper: false, cardStyle: true, iconStyle: false })
+        if (i !== 'default')
+          cfg = applyAppearancePreset(cfg, i, { wallpaper: false, cardStyle: false, iconStyle: true })
+
+        const resolvedTheme = resolveHomepageThemeVars(cfg)
+        const infoBg = resolveIconBadgeBackgroundColor(cfg, { backgroundColor: LEGACY_DEFAULT_CARD_BG })
+        const infoFg = resolveIconForegroundColor(infoBg, resolvedTheme.canvasFallback)
+        const smallBg = resolveSmallIconBackgroundColor(cfg, { backgroundColor: LEGACY_DEFAULT_CARD_BG })
+        const smallFg = resolveIconForegroundColor(smallBg, resolvedTheme.canvasFallback)
+        const label = `w=${w},c=${c},i=${i}`
+
+        assert.ok(
+          contrastRatio(infoFg, infoBg, resolvedTheme.canvasFallback) >= 4.5,
+          `${label} detail icon contrast too low on ${infoBg} with ${infoFg}`,
+        )
+        assert.ok(
+          contrastRatio(smallFg, smallBg, resolvedTheme.canvasFallback) >= 4.5,
+          `${label} small icon contrast too low on ${smallBg} with ${smallFg}`,
+        )
+        assert.ok(
+          contrastRatio(resolvedTheme.controlTextColor, resolvedTheme.controlBackground, resolvedTheme.canvasFallback) >= 4.5,
+          `${label} floating control contrast too low on ${resolvedTheme.controlBackground} with ${resolvedTheme.controlTextColor}`,
+        )
+      }
+    }
+  }
+})
+
+test('bauhaus badge sizing, small icon title ellipsis, mobile dock padding, and AppStarter sprite icons stay intact', () => {
+  const less = source('src/styles/leon-panel.less')
+  assert.match(less, /\.leon-icon-badge-bauhaus\s*\{[^}]*background:\s*var\(--leon-icon-badge-bg/)
+  assert.doesNotMatch(less, /\.leon-icon-badge-bauhaus\s*\{[^}]*--leon-canvas-fallback/)
+  assert.match(less, /\.leon-icon-badge\.leon-icon-badge-bauhaus\s*\{[^}]*width:\s*50px;[^}]*height:\s*50px;/)
+  assert.match(less, /\.app-icon-small-icon\.leon-icon-badge-bauhaus\s*\{[^}]*width:\s*70px;[^}]*height:\s*70px;/)
+  assert.match(less, /\.app-icon-small-title[\s\S]*?text-overflow:\s*ellipsis;/)
+  assert.match(less, /\.leon-home-content\s*\{[^}]*padding-bottom:\s*calc\(96px/)
+
+  const appIcon = source('src/views/home/components/AppIcon/index.vue')
+  assert.match(appIcon, /resolveIconBadgeBackgroundColor\(/)
+  assert.match(appIcon, /resolveSmallIconBackgroundColor\(/)
+  assert.match(appIcon, /:title="itemInfo\?\.title"/)
+
+  const appStarter = source('src/views/home/components/AppStarter/index.vue')
+  const iconMatches = [...appStarter.matchAll(/icon:\s*'([^']+)'/g)]
+  assert.ok(iconMatches.length >= 11, `expected at least 11 AppStarter menu icons, found ${iconMatches.length}`)
+  for (const [, rawIcon] of iconMatches) {
+    const filename = `${rawIcon.replace(/:/g, '-')}.svg`
+    assert.ok(
+      existsSync(join(root, 'src/assets/svg-icons', filename)),
+      `missing local SVG sprite file for AppStarter icon "${rawIcon}": src/assets/svg-icons/${filename}`,
+    )
   }
 })

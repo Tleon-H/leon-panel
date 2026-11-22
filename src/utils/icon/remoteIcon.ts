@@ -13,10 +13,17 @@ export function reduceRemoteIconPhase(phase: RemoteIconPhase, event: 'success' |
   return 'ready'
 }
 
+function isUrlLikeText(value: string): boolean {
+  return /^(?:https?:\/\/|data:)/i.test(value)
+}
+
 export function fallbackLabel(itemType: number | undefined, customText?: string | null, title?: string | null): string {
   const text = (customText ?? '').trim()
   const name = (title ?? '').trim()
-  const source = itemType === 3 ? (name || text) : (text || name)
+  const safeCustomText = isUrlLikeText(text) ? '' : text
+  const source = (itemType === 2 || itemType === 3)
+    ? (name || safeCustomText)
+    : (text || name)
   if (!source)
     return '?'
   return Array.from(source)[0]

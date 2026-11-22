@@ -42,7 +42,7 @@ const surfaceStyle = computed(() => {
     <!-- 极简图标（APP） -->
     <div
       v-if="cardTypeStyle === PanelPanelConfigStyleEnum.icon"
-      class="item-card-small"
+      class="item-card-small min-w-0 w-full"
     >
       <div
         class="item-card-small-icon leon-themed-small-tile overflow-hidden w-[70px] h-[70px] mx-auto transition-all duration-200"
@@ -56,6 +56,7 @@ const surfaceStyle = computed(() => {
         v-if="!iconTextIconHideTitle"
         class="item-card-small-title text-center app-icon-text-shadow cursor-pointer mt-[4px]"
         :style="{ color: iconTextColor }"
+        :title="iconText"
       >
         {{ iconText }}
       </div>

@@ -230,11 +230,19 @@
 }
 
 .leon-icon-badge-bauhaus {
-  width: 50px;
-  height: 50px;
   border-radius: var(--leon-card-radius, 0px);
   border: 1.5px solid var(--leon-card-border, #18181b);
-  background: var(--leon-canvas-fallback, #f4f1ea);
+  background: var(--leon-icon-badge-bg, #f4f1ea);
+}
+
+.leon-icon-badge.leon-icon-badge-bauhaus {
+  width: 50px;
+  height: 50px;
+}
+
+.app-icon-small-icon.leon-icon-badge-bauhaus {
+  width: 70px;
+  height: 70px;
 }
 
 .leon-icon-badge-glass {
@@ -284,6 +292,19 @@
   backdrop-filter: none;
   border-width: 1.5px;
   box-shadow: 5px 5px 0 0 var(--leon-accent-color, #ff4f00);
+}
+
+.app-icon-small-title,
+.item-card-small-title {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 1.4;
+  height: 1.4em;
 }
 
 .app-icon-info-text-box-title,
@@ -549,7 +570,23 @@
   color: var(--leon-search-placeholder, rgba(255, 255, 255, 0.78));
 }
 
+.leon-home-content {
+  padding-bottom: 64px;
+}
+
+.leon-home-content.leon-home-content-dock-pad {
+  padding-bottom: 140px;
+}
+
 @media (max-width: 640px) {
+  .leon-home-content {
+    padding-bottom: calc(96px + env(safe-area-inset-bottom));
+  }
+
+  .leon-home-content.leon-home-content-dock-pad {
+    padding-bottom: calc(152px + env(safe-area-inset-bottom));
+  }
+
   .leon-home-header {
     width: 100% !important;
   }

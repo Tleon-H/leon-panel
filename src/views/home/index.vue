@@ -751,9 +751,9 @@ function handleAddItem(itemIconGroupId?: number) {
     <div class="mask" :style="{ backgroundColor: `rgba(0,0,0,${activePanelConfig.backgroundMaskNumber})` }" />
     <div ref="scrollContainerRef" class="absolute w-full h-full overflow-auto">
       <div
-        class="p-2.5 mx-auto"
+        class="p-2.5 mx-auto leon-home-content"
         :class="{
-          'pb-[140px]': panelState.isPreviewingAppearance || activePanelConfig.layoutMode === 'dock',
+          'leon-home-content-dock-pad pb-[140px]': panelState.isPreviewingAppearance || activePanelConfig.layoutMode === 'dock',
         }"
         :style="{
           marginTop: `${activePanelConfig.marginTop}%`,

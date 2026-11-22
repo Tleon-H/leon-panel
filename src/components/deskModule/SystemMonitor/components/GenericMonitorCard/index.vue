@@ -38,18 +38,15 @@ const propClass = ref(props.class)
     >
       <template #info>
         <!-- 图标 -->
-        <div class="w-[60px] h-[70px]">
-          <div class="w-[60px] h-full flex items-center justify-center text-white">
+        <div class="w-[42px] sm:w-[60px] h-[70px] shrink-0">
+          <div class="w-full h-full flex items-center justify-center text-white">
             <slot name="icon">
-              <SvgIcon :icon="icon ?? ''" style="width: 35px;height: 35px;" :style="{ color: textColor }" />
+              <SvgIcon :icon="icon ?? ''" class="text-[24px] sm:text-[30px]" :style="{ color: textColor }" />
             </slot>
           </div>
         </div>
 
-        <div
-          class=" w-full text-white flex items-center"
-          :style=" { maxWidth: 'calc(100% - 80px)' }"
-        >
+        <div class="flex-1 min-w-0 pr-2.5 sm:pr-3 text-white flex items-center">
           <slot name="info" />
         </div>
       </template>

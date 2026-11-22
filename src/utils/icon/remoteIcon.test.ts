@@ -36,9 +36,16 @@ test('changing the image address leaves fallback and a stale error cannot mark t
   assert.equal(acceptIconEvent('loading', 'success', 1, 2), 'loading')
 })
 
-test('fallback keeps a custom text icon and otherwise uses the item title', () => {
-  assert.equal(fallbackLabel(2, '图', '示例文档'), '图')
+test('fallback prefers item title for image and online icons and ignores URL-like custom text', () => {
+  assert.equal(fallbackLabel(2, 'https://example.com/icon.png', 'GitHub'), 'G')
+  assert.equal(fallbackLabel(2, 'http://nas.local/logo.svg', ''), '?')
+  assert.equal(fallbackLabel(2, 'data:image/png;base64,AAA', ''), '?')
+  assert.equal(fallbackLabel(2, '图', '示例文档'), '示')
+  assert.equal(fallbackLabel(2, '图', ''), '图')
   assert.equal(fallbackLabel(2, '', '示例文档'), '示')
   assert.equal(fallbackLabel(3, 'mdi:not-real', '手册'), '手')
+  assert.equal(fallbackLabel(3, 'https://example.com/icon.svg', ''), '?')
+  assert.equal(fallbackLabel(3, 'mdi:not-real', ''), 'm')
   assert.equal(fallbackLabel(3, '', ''), '?')
+  assert.equal(fallbackLabel(1, '图', '示例文档'), '图')
 })
