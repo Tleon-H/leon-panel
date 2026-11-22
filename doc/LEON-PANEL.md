@@ -4,7 +4,14 @@
 
 ## 功能实现细节
 
-- **首页外观预设与实时预览**：风格设置内置多套外观预设，支持按项预览（壁纸、卡片表面、图标徽章、文字颜色等）并局部或整套应用，不会意外清空已保存的其他自定义项。
+- **首页外观预设、几何壁纸与 Naive UI 主题联动**：风格设置内置 8 套外观预设（含 5 套极简扁平几何主题与 5 张纯平几何 SVG 壁纸），支持按项预览并局部或整套应用；`src/hooks/useTheme.ts` 与 `src/utils/panel/naiveTheme.ts` 动态同步 Naive UI `themeOverrides` 与 `--leon-ui-*` CSS 变量，保证弹窗、表单与首页风格一致。
+- **站点图标包豪斯统一策略**：保留网站原有 Favicon，默认套用统一包豪斯几何徽章容器（`iconBadgeStyle: 'bauhaus'`），支持可选单色滤镜（`iconMonochrome`，悬停恢复原色），并在图标编辑器内置包豪斯色板与 HomeLab 单色图标快选。
+- **Leon Studio 内置美化与扩展引擎**：
+  - 主题包 JSON 导出 / 校验导入，以及 `standard` / `compact` / `dock` 布局模式；
+  - 视觉特效与桌面小组件（增强时钟、云便签、沙箱 Iframe Widget）通过既有 `ModuleConfig`（`module_configs` 表）按账号持久化，零表结构变更；
+  - 管理员自定义 CSS/JS 代码片段存储于 `module-leonStudioCustomCode`，后端 `service/api/api_v1/system/ModuleConfig.go` 强制校验管理员角色（非管理员返回 `1005`），并与 `/custom/index.css`、`index.js` 保持兼容；
+  - 访问 `/?safe=1`（或 `#/?safe=1`）进入安全模式，跳过自定义 CSS/JS 注入并展示顶部恢复条。
+- **品牌静态资源白名单**：`service/router/web.go` 放行 `/favicon.svg`、`/favicon-black.svg`、`/favicon.ico`、`/apple-touch-icon.png`、`/pwa-192x192.png`、`/pwa-512x512.png`，继续保持 `/logo.png` 返回 `404` 的安全路由边界。
 - **分组独立卡片样式**：每个分组可单独设置为“跟随全局”“详情图标（大卡片）”或“小图标”。分组表 `item_icon_group` 使用可空字段 `icon_style`（`NULL` 跟随全局，`0` 详情大卡片，`1` 小图标）。
 - **首页聚合加载与本地缓存**：首页通过 `includeItems` 一次获取当前账号的分组、每组样式及排序后的卡片；请求期间展示顶部加载条，失败时保留已有卡片并支持重试；按已确认身份隔离缓存首页快照，访问 `/clear` 可清除本地快照。
 - **卡片右键双地址打开**：大卡片和小图标均在右键菜单中提供已填写的默认地址与内网地址，支持当前页、新标签页（`noopener`）及页内小窗打开，拒绝不安全协议。

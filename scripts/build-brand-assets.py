@@ -83,7 +83,7 @@ def build_favicon_ico(svg_path: Path, out_path: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build Leon Panel brand icon assets.")
-    parser.add_argument("--logo", choices=("a", "b", "c"), default="a", help="Logo concept to build (default: a)")
+    parser.add_argument("--logo", choices=("a", "b", "c"), default="b", help="Logo concept to build (default: b)")
     args = parser.parse_args()
 
     spec = LOGOS[args.logo]
@@ -96,6 +96,7 @@ def main() -> None:
     shutil.copyfile(mono_svg, ROOT / "public/favicon-black.svg")
 
     render_svg_to_png(color_svg, ROOT / "public/logo.png", 512)
+    shutil.copyfile(ROOT / "public/logo.png", ROOT / "doc/images/logo.png")
     render_svg_to_png(color_svg, ROOT / "public/pwa-192x192.png", 192)
     render_svg_to_png(color_svg, ROOT / "public/pwa-512x512.png", 512)
     build_apple_touch_icon(color_svg, ROOT / "public/apple-touch-icon.png", apple_bg)
