@@ -18,25 +18,33 @@ defineProps<Prop>()
 
 <template>
   <template v-if="cardTypeStyle === PanelPanelConfigStyleEnum.info">
-    <div class="w-full">
-      <div class="mb-1 text-xs" :style="{ color: textColor }">
-        <span>
+    <div class="leon-monitor-progress w-full min-w-0 flex flex-col gap-1.5">
+      <div
+        class="leon-monitor-progress-header flex items-baseline justify-between gap-1 min-w-0 text-xs leading-tight"
+        :style="{ color: textColor }"
+      >
+        <span class="leon-monitor-progress-label font-semibold truncate min-w-0" :title="infoCardLeftText">
           {{ infoCardLeftText }}
         </span>
-        <span class="float-right">
+        <span
+          class="leon-monitor-progress-value shrink-0 whitespace-nowrap tabular-nums text-[10px] sm:text-[11px]"
+          :title="infoCardRightText"
+        >
           {{ infoCardRightText }}
         </span>
       </div>
-      <NProgress
-        type="line"
-        :color="progressColor"
-        :rail-color="progressRailColor"
-        :height="progressHeight"
-        :percentage="percentage"
-        :show-indicator="false"
-        :stroke-width="15"
-        style="max-width: 135px;"
-      />
+      <div class="leon-monitor-progress-bar w-full">
+        <NProgress
+          type="line"
+          :color="progressColor"
+          :rail-color="progressRailColor"
+          :height="progressHeight"
+          :percentage="percentage"
+          :show-indicator="false"
+          :stroke-width="15"
+          class="w-full"
+        />
+      </div>
     </div>
   </template>
   <template v-else>

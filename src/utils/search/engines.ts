@@ -245,6 +245,49 @@ export function removeCustomEngine(config: SearchConfig, id: string): SearchConf
   return { ok: true, config: withCurrent(next) }
 }
 
+export type BuiltinSearchEngineIconKey = 'google' | 'baidu' | 'bing'
+
+export function resolveBuiltinEngineIconKey(
+  engine: Pick<SearchEngineRecord, 'id' | 'title' | 'url'>,
+): BuiltinSearchEngineIconKey | null {
+  const id = (engine.id ?? '').trim().toLowerCase()
+  if (id === 'google' || id === 'baidu' || id === 'bing')
+    return id
+
+  const title = (engine.title ?? '').trim().toLowerCase()
+  if (title === 'google' || title === '谷歌' || title.includes('google'))
+    return 'google'
+  if (title === 'baidu' || title === '百度' || title.includes('baidu') || title.includes('百度'))
+    return 'baidu'
+  if (title === 'bing' || title === '必应' || title.includes('bing') || title.includes('必应'))
+    return 'bing'
+
+  const rawUrl = (engine.url ?? '').trim()
+  if (rawUrl) {
+    try {
+      const host = new URL(rawUrl.split('%s').join('keyword')).hostname.toLowerCase()
+      if (host === 'google.com' || host.endsWith('.google.com') || /^(?:www\.)?google\.[a-z.]+$/.test(host))
+        return 'google'
+      if (host === 'baidu.com' || host.endsWith('.baidu.com'))
+        return 'baidu'
+      if (host === 'bing.com' || host.endsWith('.bing.com'))
+        return 'bing'
+    }
+    catch {
+      // ignore invalid URL
+    }
+  }
+
+  return null
+}
+
+export function resolveEngineLetter(title?: string | null): string {
+  const trimmed = (title ?? '').trim()
+  if (!trimmed)
+    return '?'
+  return Array.from(trimmed)[0].toLocaleUpperCase()
+}
+
 export function moveEngine(config: SearchConfig, index: number, delta: number): SearchConfig {
   const nextIndex = index + delta
   if (index < 0 || index >= config.engines.length || nextIndex < 0 || nextIndex >= config.engines.length)

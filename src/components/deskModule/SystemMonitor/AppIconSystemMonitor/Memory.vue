@@ -44,5 +44,6 @@ function formatMemorySize(v: number): string {
     :info-card-right-text="`${formatMemorySize(memoryState?.used || 0)}/${formatMemorySize((memoryState?.total || 0) - (memoryState?.used || 0) || 0)}`"
     info-card-left-text="RAM"
     :text-color="textColor"
+    style="width: 100%;"
   />
 </template>

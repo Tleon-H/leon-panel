@@ -49,5 +49,6 @@ function formatdiskToByte(v: number): number {
     :info-card-right-text="`${formatdiskSize(formatdiskToByte(diskState?.used || 0))}/${formatdiskSize(formatdiskToByte(diskState?.free || 0))}`"
     :info-card-left-text="diskState?.mountpoint"
     :text-color="textColor"
+    style="width: 100%;"
   />
 </template>

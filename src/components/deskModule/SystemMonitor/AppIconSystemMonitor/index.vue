@@ -72,16 +72,14 @@ const refreshInterval = 5000
     >
       <template #icon>
         <!-- 图标 -->
-        <div class="w-[60px] h-[70px]">
-          <div class="app-icon w-[60px] h-full flex items-center justify-center">
-            <SvgIcon v-if="monitorType === MonitorType.cpu" icon="solar-cpu-bold" :style="{ color: effectiveTextColor }" style="width:32px;height:32px" />
-            <SvgIcon v-if="monitorType === MonitorType.memory" icon="material-symbols-memory-alt-rounded" :style="{ color: effectiveTextColor }" style="width:32px;height:32px" />
-            <SvgIcon v-if="monitorType === MonitorType.disk" icon="clarity-hard-disk-solid" :style="{ color: effectiveTextColor }" style="width:32px;height:32px" />
-          </div>
+        <div class="app-icon w-full h-full flex items-center justify-center">
+          <SvgIcon v-if="monitorType === MonitorType.cpu" icon="solar-cpu-bold" class="text-[24px] sm:text-[30px]" :style="{ color: effectiveTextColor }" />
+          <SvgIcon v-if="monitorType === MonitorType.memory" icon="material-symbols-memory-alt-rounded" class="text-[24px] sm:text-[30px]" :style="{ color: effectiveTextColor }" />
+          <SvgIcon v-if="monitorType === MonitorType.disk" icon="clarity-hard-disk-solid" class="text-[24px] sm:text-[30px]" :style="{ color: effectiveTextColor }" />
         </div>
       </template>
       <template #info>
-        <div class="w-full flex items-center" :style="{ color: effectiveTextColor }">
+        <div class="w-full min-w-0 flex items-center" :style="{ color: effectiveTextColor }">
           <CardCPU
             v-if="monitorType === MonitorType.cpu"
             :card-type-style="PanelPanelConfigStyleEnum.info"
