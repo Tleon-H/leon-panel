@@ -118,9 +118,12 @@
       "cardAccentColor": "Accent and focus color",
       "iconBadgeStyle": "Icon badge style",
       "iconBadgeDefault": "Classic default",
+      "iconBadgeBauhaus": "Bauhaus geometric frame",
       "iconBadgeGlass": "Ocean glass frame",
       "iconBadgeSoft": "Soft paper frame",
       "iconBadgeOutline": "Graphite cyan rim",
+      "iconMonochrome": "Monochrome flat site icons",
+      "iconMonochromeTip": "Render site favicons in high-contrast flat monochrome and restore color on hover",
       "presets": {
         "title": "Homepage Appearance Presets",
         "hint": "Preview any preset live on the homepage, then apply only the checked scopes. Group overrides, custom card icons, and links stay untouched, and every item can still be adjusted individually afterward.",
@@ -137,6 +140,26 @@
         "previewBannerTip": "Exiting preview restores your previous appearance without saving.",
         "selectAtLeastOne": "Select at least one item to apply",
         "applied": "Applied \"{name}\" ({scopes})",
+        "bauhausGrid": {
+          "name": "Bauhaus Grid",
+          "desc": "Warm paper grid canvas, sharp ink frames, and signal-orange geometry"
+        },
+        "swissPaper": {
+          "name": "Swiss Paper",
+          "desc": "Minimal chalk-white orthogonal grid with electric cobalt accents"
+        },
+        "monoInk": {
+          "name": "Mono Ink",
+          "desc": "Flat matte ink backdrop, hairline graphite borders, and signal-orange focus"
+        },
+        "blueprintSlate": {
+          "name": "Blueprint Slate",
+          "desc": "Dark drafting slate grid with 2px chamfered frames and cyan-teal accents"
+        },
+        "nordicStone": {
+          "name": "Nordic Stone",
+          "desc": "Cool stone grid canvas, crisp white blocks, and deep forest-teal accents"
+        },
         "oceanGlass": {
           "name": "Ocean Glass",
           "desc": "Deep ocean blue backdrop with translucent frosted glass cards"
@@ -150,6 +173,53 @@
           "desc": "Nocturnal backdrop with near-black cards, light text, and cyan-blue accents"
         }
       }
+    },
+    "leonStudio": {
+      "appName": "Leon Studio",
+      "tabThemes": "Themes & Layout",
+      "tabEffects": "Visual Effects",
+      "tabWidgets": "Desktop Widgets",
+      "tabCustomCode": "Custom CSS/JS",
+      "layoutModeTitle": "Homepage Layout & Dock Mode",
+      "layoutModeDesc": "Switch between standard grid, high-density compact grid, or bottom geometric Dock bar",
+      "layoutStandard": "Standard grid (default)",
+      "layoutCompact": "Compact high-density grid",
+      "layoutDock": "Bottom floating Dock mode",
+      "exportThemeJson": "Export Theme JSON",
+      "importThemeJson": "Import Theme JSON",
+      "importThemeJsonPlaceholder": "Paste a leon-panel-theme JSON payload...",
+      "copyJson": "Copy JSON",
+      "downloadJson": "Download",
+      "copiedSuccess": "Copied to clipboard",
+      "copyFailed": "Copy failed, please copy manually",
+      "invalidThemeJson": "Invalid theme pack JSON or unsupported schema",
+      "themeImported": "Imported and applied \"{name}\"",
+      "fxGridOverlay": "Orthogonal Grid Overlay",
+      "fxGridOverlayDesc": "Overlay subtle geometric drafting grid lines on any wallpaper",
+      "fxHardShadow": "Bauhaus Hard-Shadow Hover",
+      "fxHardShadowDesc": "Show flat offset hard shadow on card hover in geometric themes",
+      "fxReduceMotion": "Zero-Motion Mode",
+      "fxReduceMotionDesc": "Disable hover shifts and transitions for snappy minimal feedback",
+      "fxEnhancedClock": "Enhanced Header Status Line",
+      "fxEnhancedClockDesc": "Display a custom monospace status line under the homepage header",
+      "fxClockGreeting": "Status Line Text",
+      "fxClockGreetingPlaceholder": "e.g. HOMELAB // ALL SYSTEMS NOMINAL",
+      "widgetsHint": "Persisted via database ModuleConfig without touching Docker mounts",
+      "widgetsEmpty": "No desktop widgets yet. Add an Enhanced Clock, Cloud Memo, or Iframe Widget above.",
+      "addClockWidget": "Clock Widget",
+      "addMemoWidget": "Cloud Memo",
+      "addIframeWidget": "Iframe Widget",
+      "widgetMemoPlaceholder": "Write notes here (auto-synced to cloud database)...",
+      "widgetIframeInvalidUrl": "Only http://, https://, or relative / paths are allowed",
+      "customCodeNotice": "Administrators only. Persisted in database alongside full /custom/index.css & /custom/index.js compatibility. Visit /?safe=1 anytime to bypass all injected snippets.",
+      "addSnippetTitle": "Add Code Snippet",
+      "snippetNamePlaceholder": "Snippet name (e.g. Compact tweaks / Shortcuts)",
+      "snippetFieldsRequired": "Please enter both a snippet name and code",
+      "saveAndApplySnippets": "Save & Apply Snippets",
+      "safeModeActiveNotice": "Safe Mode (?safe=1) is active. All database custom CSS/JS snippets are bypassed so you can disable or remove faulty code.",
+      "safeModeBanner": "Safe Mode Active (/?safe=1): Custom CSS/JS snippets are temporarily bypassed",
+      "openStudio": "Open Leon Studio",
+      "exitSafeMode": "Exit Safe Mode"
     },
     "exportImport": {
       "appName": "Export/Import",

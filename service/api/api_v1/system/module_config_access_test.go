@@ -112,3 +112,34 @@ func TestModuleConfigSaveAndReadStayOnTheSignedInAccount(t *testing.T) {
 		t.Fatalf("rows after rejected save = %d", count)
 	}
 }
+
+func TestCustomCodeModuleConfigRequiresAdminRole(t *testing.T) {
+	openModuleConfigDB(t)
+	api := ModuleConfigApi{}
+	payload := `{"name":"module-leonStudioCustomCode","value":{"snippets":[{"id":"s1","name":"Custom","type":"css","enabled":true,"code":"body{}"}]}}`
+
+	performWithRole := func(userID uint, role int) map[string]interface{} {
+		gin.SetMode(gin.TestMode)
+		recorder := httptest.NewRecorder()
+		ctx, _ := gin.CreateTestContext(recorder)
+		ctx.Request = httptest.NewRequest(http.MethodPost, "/", bytes.NewBufferString(payload))
+		ctx.Request.Header.Set("Content-Type", "application/json")
+		ctx.Set("userInfo", models.User{BaseModel: models.BaseModel{ID: userID}, Role: role})
+		api.Save(ctx)
+		var resp map[string]interface{}
+		if err := json.Unmarshal(recorder.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("response %s: %v", recorder.Body.String(), err)
+		}
+		return resp
+	}
+
+	nonAdmin := performWithRole(12, 2)
+	if nonAdmin["code"] != float64(1005) {
+		t.Fatalf("non-admin save = %#v, want code 1005", nonAdmin)
+	}
+
+	admin := performWithRole(1, 1)
+	if admin["code"] != float64(0) {
+		t.Fatalf("admin save = %#v, want code 0", admin)
+	}
+}

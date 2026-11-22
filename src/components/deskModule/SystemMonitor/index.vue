@@ -10,7 +10,7 @@ import { usePanelState } from '@/store'
 import { PanelPanelConfigStyleEnum } from '@/enums'
 import { SvgIcon } from '@/components/common'
 import { t } from '@/locales'
-import { resolveSmallTitleColor } from '@/utils/panel/appearance'
+import { resolveHomepageThemeVars, resolveSmallTitleColor } from '@/utils/panel/appearance'
 
 interface MonitorGroup extends Panel.ItemIconGroup {
   sortStatus?: boolean
@@ -23,6 +23,7 @@ const props = defineProps<{
   showTitle?: boolean
 }>()
 const panelState = usePanelState()
+const homepageTheme = computed(() => resolveHomepageThemeVars(panelState.activePanelConfig))
 const monitorSmallTitleColor = computed(() => resolveSmallTitleColor(panelState.activePanelConfig))
 
 const dialog = useDialog()
@@ -254,9 +255,14 @@ function handleRightMenuSelect(key: string | number) {
       <!-- 编辑栏 -->
       <template v-if="monitorGroup.sortStatus && allowEdit">
         <div class="system-monitor-edit-bar flex mt-[10px]">
-          <NButton color="#2a2a2a6b" @click="handleSaveSort()">
+          <NButton
+            :color="homepageTheme.controlBackground"
+            :text-color="homepageTheme.controlTextColor"
+            class="leon-control-btn"
+            @click="handleSaveSort()"
+          >
             <template #icon>
-              <SvgIcon class="text-white font-xl" icon="material-symbols:save" />
+              <SvgIcon class="font-xl" icon="material-symbols:save" />
             </template>
             <div>
               {{ $t('common.saveSort') }}

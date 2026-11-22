@@ -1,10 +1,12 @@
 import type { GlobalThemeOverrides } from 'naive-ui'
 import { computed, watch } from 'vue'
 import { darkTheme, useOsTheme } from 'naive-ui'
-import { useAppStore } from '@/store'
+import { useAppStore, usePanelState } from '@/store'
+import { buildNaiveThemeBundle } from '@/utils/panel/naiveTheme'
 
 export function useTheme() {
   const appStore = useAppStore()
+  const panelState = usePanelState()
 
   const OsTheme = useOsTheme()
 
@@ -19,14 +21,9 @@ export function useTheme() {
     return isDark.value ? darkTheme : undefined
   })
 
-  const themeOverrides = computed<GlobalThemeOverrides>(() => {
-    if (isDark.value) {
-      return {
-        common: {},
-      }
-    }
-    return {}
-  })
+  const themeBundle = computed(() => buildNaiveThemeBundle(panelState.activePanelConfig, isDark.value))
+
+  const themeOverrides = computed<GlobalThemeOverrides>(() => themeBundle.value.overrides)
 
   watch(
     () => isDark.value,
@@ -39,5 +36,15 @@ export function useTheme() {
     { immediate: true },
   )
 
-  return { theme, themeOverrides }
+  watch(
+    () => themeBundle.value.cssVars,
+    (vars) => {
+      const root = document.documentElement
+      for (const [key, value] of Object.entries(vars))
+        root.style.setProperty(key, value)
+    },
+    { immediate: true, deep: true },
+  )
+
+  return { theme, themeOverrides, isDark }
 }

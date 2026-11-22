@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none" role="img" aria-label="Leon Panel Logo - Swiss Grid L Monochrome">
+  <rect x="32" y="32" width="448" height="448" rx="44" stroke="#09090B" stroke-width="24"/>
+  <path d="M116 116H196V316H396V396H116V116Z" fill="#09090B"/>
+  <rect x="268" y="116" width="128" height="128" stroke="#09090B" stroke-width="24"/>
+</svg>

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none" role="img" aria-label="Leon Panel Logo - Swiss Grid L">
+  <!-- Pure flat geometric container -->
+  <rect x="24" y="24" width="464" height="464" rx="48" fill="#09090B"/>
+  <!-- Hairline architectural inner grid -->
+  <rect x="76" y="76" width="360" height="360" stroke="#FFFFFF" stroke-opacity="0.12" stroke-width="2"/>
+  <line x1="256" y1="76" x2="256" y2="436" stroke="#FFFFFF" stroke-opacity="0.08" stroke-width="2"/>
+  <line x1="76" y1="256" x2="436" y2="256" stroke="#FFFFFF" stroke-opacity="0.08" stroke-width="2"/>
+  <!-- Pure geometric L monolith -->
+  <path d="M116 116H196V316H396V396H116V116Z" fill="#FFFFFF"/>
+  <!-- Flat Swiss Cobalt geometric node -->
+  <rect x="268" y="116" width="128" height="128" fill="#2563EB"/>
+</svg>

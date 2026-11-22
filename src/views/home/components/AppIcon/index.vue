@@ -60,20 +60,24 @@ const iconBadgeClass = computed(() => {
   const badge = effectiveConfig.value.iconBadgeStyle || 'default'
   return `leon-icon-badge-${badge}`
 })
+
+const isMonochromeIcons = computed(() => !!effectiveConfig.value.iconMonochrome)
+const isBauhausBadge = computed(() => !cardAppearance.value.hasCustomBackground && effectiveConfig.value.iconBadgeStyle === 'bauhaus')
 </script>
 
 <template>
-  <div class="app-icon w-full">
+  <div class="app-icon w-full" :class="{ 'leon-icon-monochrome': isMonochromeIcons }">
     <!-- 详情图标 -->
     <div
       v-if="style === PanelPanelConfigStyleEnum.info"
-      class="app-icon-info leon-themed-card w-full rounded-2xl transition-all duration-200 flex"
+      class="app-icon-info leon-themed-card relative w-full rounded-2xl transition-all duration-200 flex"
       :class="{
         'leon-card-light': cardAppearance.isLightSurface,
         'leon-card-no-shadow': !cardAppearance.useTextShadow,
       }"
       :style="infoCardStyle"
     >
+      <span class="leon-card-corner" aria-hidden="true" />
       <!-- 图标 -->
       <div class="app-icon-info-icon w-[70px] h-[70px] shrink-0">
         <div class="w-[70px] h-full flex items-center justify-center">
@@ -83,8 +87,8 @@ const iconBadgeClass = computed(() => {
               :fallback-text="itemInfo?.title"
               force-background="transparent"
               :foreground-color="iconForegroundColor"
-              :size="48"
-              class="overflow-hidden rounded-xl"
+              :size="46"
+              :class="isBauhausBadge ? 'overflow-hidden rounded-none' : 'overflow-hidden rounded-xl'"
             />
           </div>
         </div>

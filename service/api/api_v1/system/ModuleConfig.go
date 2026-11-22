@@ -39,6 +39,8 @@ func (a *ModuleConfigApi) GetByName(c *gin.Context) {
 
 }
 
+const customCodeModuleConfigName = "module-leonStudioCustomCode"
+
 func (a *ModuleConfigApi) Save(c *gin.Context) {
 	req := models.ModuleConfig{}
 	if err := c.ShouldBindWith(&req, binding.JSON); err != nil {
@@ -48,6 +50,10 @@ func (a *ModuleConfigApi) Save(c *gin.Context) {
 	userInfo, ok := base.GetCurrentUserInfo(c)
 	if !ok || userInfo.ID == 0 {
 		apiReturn.ErrorByCode(c, 1000)
+		return
+	}
+	if req.Name == customCodeModuleConfigName && userInfo.Role != 1 {
+		apiReturn.ErrorByCode(c, 1005)
 		return
 	}
 	mCfg := models.ModuleConfig{}

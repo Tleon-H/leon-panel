@@ -30,7 +30,7 @@ const showModal = computed({
 </script>
 
 <template>
-  <NModal v-model:show="showModal" preset="card" :size="size" v-bind="bindAttrs" style="border-radius: 1rem;" :style="$parent" :title="title">
+  <NModal v-model:show="showModal" preset="card" :size="size" v-bind="bindAttrs" style="border-radius: var(--leon-ui-modal-radius, 8px);" :style="$parent" :title="title">
     <template #cover>
       <slot name="cover" />
     </template>
