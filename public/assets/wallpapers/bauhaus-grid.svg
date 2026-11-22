@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice" fill="none">
+  <defs>
+    <pattern id="bauhaus-grid-pat" width="48" height="48" patternUnits="userSpaceOnUse">
+      <path d="M 48 0 L 0 0 0 48" stroke="#09090B" stroke-opacity="0.065" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="1920" height="1080" fill="#F4F1EA"/>
+  <rect width="1920" height="1080" fill="url(#bauhaus-grid-pat)"/>
+  <!-- Architectural Bauhaus geometric frame markers (pure flat, zero gradients) -->
+  <rect x="0" y="0" width="16" height="1080" fill="#09090B"/>
+  <rect x="16" y="0" width="10" height="260" fill="#2563EB"/>
+  <rect x="16" y="260" width="10" height="140" fill="#FF4F00"/>
+  <rect x="16" y="400" width="10" height="90" fill="#EAB308"/>
+  <!-- Top-right minimal Bauhaus circle/line composition -->
+  <circle cx="1776" cy="144" r="96" fill="#FF4F00" fill-opacity="0.14"/>
+  <circle cx="1776" cy="144" r="44" fill="#FF4F00" fill-opacity="0.22"/>
+  <line x1="1632" y1="144" x2="1920" y2="144" stroke="#09090B" stroke-opacity="0.14" stroke-width="2"/>
+  <line x1="1776" y1="0" x2="1776" y2="288" stroke="#09090B" stroke-opacity="0.14" stroke-width="2"/>
+  <!-- Bottom-left geometric square accent -->
+  <rect x="96" y="912" width="72" height="72" fill="#2563EB" fill-opacity="0.14"/>
+  <rect x="168" y="912" width="72" height="72" stroke="#09090B" stroke-opacity="0.16" stroke-width="2"/>
+  <polygon points="96,984 168,984 168,912" fill="#EAB308" fill-opacity="0.22"/>
+</svg>

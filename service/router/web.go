@@ -32,6 +32,10 @@ func NewEngine(webPath, sourcePath string) *gin.Engine {
 	engine.Static("/custom", webPath+"/custom")
 	engine.StaticFile("/favicon.ico", webPath+"/favicon.ico")
 	engine.StaticFile("/favicon.svg", webPath+"/favicon.svg")
+	engine.StaticFile("/favicon-black.svg", webPath+"/favicon-black.svg")
+	engine.StaticFile("/apple-touch-icon.png", webPath+"/apple-touch-icon.png")
+	engine.StaticFile("/pwa-192x192.png", webPath+"/pwa-192x192.png")
+	engine.StaticFile("/pwa-512x512.png", webPath+"/pwa-512x512.png")
 	engine.Static(sourcePath[1:], sourcePath)
 
 	for _, route := range hashFrontendRoutes {

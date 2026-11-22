@@ -2,7 +2,7 @@
 import { NButton, NColorPicker, NInput, NModal, NRadio, NUpload } from 'naive-ui'
 import type { UploadFileInfo } from 'naive-ui'
 import { computed, defineProps, ref } from 'vue'
-import { ItemIcon } from '@/components/common'
+import { ItemIcon, SvgIcon } from '@/components/common'
 import OwnGallery from '@/components/apps/OwnGallery/index.vue'
 import PublicGallery from '@/components/apps/PublicGallery/index.vue'
 import { useAuthStore } from '@/store'
@@ -18,16 +18,32 @@ const authStore = useAuthStore()
 const showPublicIcons = ref(false)
 const showOwnIcons = ref(false)
 
-// 默认图标背景色
+// 默认图标背景色（内置包豪斯纯平几何色板）
 const defautSwatchesBackground = [
   '#00000000',
-  '#000000',
-  '#ffffff',
-  '#18A058',
-  '#2080F0',
-  '#F0A020',
-  'rgba(208, 48, 80, 1)',
-  '#C418D1FF',
+  '#09090B',
+  '#F4F1EA',
+  '#FFFFFF',
+  '#FF4F00',
+  '#2563EB',
+  '#EAB308',
+  '#00C2A8',
+]
+
+// 常用自托管与几何单色扁平图标快捷预设
+const bauhausIconPresets = [
+  { label: 'Docker', icon: 'simple-icons:docker', bg: '#2563EB' },
+  { label: 'Proxmox', icon: 'simple-icons:proxmox', bg: '#FF4F00' },
+  { label: 'Jellyfin', icon: 'simple-icons:jellyfin', bg: '#09090B' },
+  { label: 'Synology', icon: 'simple-icons:synology', bg: '#2563EB' },
+  { label: 'Immich', icon: 'simple-icons:immich', bg: '#FF4F00' },
+  { label: 'AdGuard', icon: 'simple-icons:adguard', bg: '#00C2A8' },
+  { label: 'Nginx', icon: 'simple-icons:nginx', bg: '#09090B' },
+  { label: 'Gitea', icon: 'simple-icons:gitea', bg: '#00C2A8' },
+  { label: 'Home', icon: 'simple-icons:homeassistant', bg: '#2563EB' },
+  { label: 'Server', icon: 'lucide:server', bg: '#09090B' },
+  { label: 'Disk', icon: 'lucide:hard-drive', bg: '#EAB308' },
+  { label: 'Terminal', icon: 'lucide:terminal', bg: '#09090B' },
 ]
 
 const initData: Panel.ItemIcon = {
@@ -57,6 +73,13 @@ function handleIconTypeRadioChange(type: number) {
 
 function handleChange() {
   emit('update:itemIcon', itemIconInfo.value || null)
+}
+
+function applyBauhausPreset(preset: { icon: string; bg: string }) {
+  itemIconInfo.value.itemType = 3
+  itemIconInfo.value.text = preset.icon
+  itemIconInfo.value.backgroundColor = preset.bg
+  handleChange()
 }
 
 function handleResetBackgroundColor() {
@@ -132,12 +155,12 @@ function useOwnIcon(src: string) {
     <div class="min-h-[100px]">
       <div class="flex">
         <div>
-          <div class="border rounded-2xl bg-slate-200 overflow-hidden rounded-2xl transparent-grid">
+          <div class="border bg-slate-200 overflow-hidden transparent-grid" style="border-radius: var(--leon-ui-radius, 4px);">
             <ItemIcon :item-icon="itemIconInfo" />
           </div>
         </div>
         <!-- 文字 -->
-        <div class="ml-[20px]">
+        <div class="ml-[20px] flex-1 min-w-0">
           <!-- <NImage :src="model.icon" preview-disabled /> -->
           <div v-if="itemIconInfo.itemType === 1">
             <NInput v-model:value="itemIconInfo.text" class="mb-[5px]" size="small" type="text" @input="handleChange" />
@@ -147,7 +170,23 @@ function useOwnIcon(src: string) {
             <div>
               <NInput v-model:value="itemIconInfo.text" class="mb-[5px]" size="small" type="text" :placeholder="$t('iconItem.inputIconName')" @input="handleChange" />
 
-              <NButton quaternary type="info">
+              <div class="flex flex-wrap gap-1.5 my-2">
+                <button
+                  v-for="preset in bauhausIconPresets"
+                  :key="preset.icon"
+                  type="button"
+                  class="inline-flex items-center gap-1 px-2 py-1 text-xs border cursor-pointer transition-colors"
+                  style="border-color: var(--leon-ui-border, #d4d4d8); border-radius: var(--leon-ui-radius, 2px);"
+                  :title="preset.icon"
+                  @click="applyBauhausPreset(preset)"
+                >
+                  <span class="w-2.5 h-2.5 inline-block shrink-0" :style="{ backgroundColor: preset.bg }" />
+                  <SvgIcon :icon="preset.icon" class="text-sm" />
+                  <span>{{ preset.label }}</span>
+                </button>
+              </div>
+
+              <NButton quaternary type="info" size="small">
                 <a target="_blank" href="https://icon-sets.iconify.design/">{{ $t('iconItem.onlineIconLibrary') }}</a>
               </NButton>
             </div>

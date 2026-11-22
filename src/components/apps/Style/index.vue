@@ -60,6 +60,10 @@ const iconBadgeStyleOptions = [
     value: 'default',
   },
   {
+    label: t('apps.baseSettings.iconBadgeBauhaus'),
+    value: 'bauhaus',
+  },
+  {
     label: t('apps.baseSettings.iconBadgeGlass'),
     value: 'glass',
   },
@@ -77,6 +81,26 @@ const cardSurfaceOptions = [
   {
     label: t('apps.baseSettings.cardSurfaceDefault'),
     value: 'default',
+  },
+  {
+    label: t('apps.baseSettings.presets.bauhausGrid.name'),
+    value: 'bauhaus-grid',
+  },
+  {
+    label: t('apps.baseSettings.presets.swissPaper.name'),
+    value: 'swiss-paper',
+  },
+  {
+    label: t('apps.baseSettings.presets.monoInk.name'),
+    value: 'mono-ink',
+  },
+  {
+    label: t('apps.baseSettings.presets.blueprintSlate.name'),
+    value: 'blueprint-slate',
+  },
+  {
+    label: t('apps.baseSettings.presets.nordicStone.name'),
+    value: 'nordic-stone',
   },
   {
     label: t('apps.baseSettings.presets.oceanGlass.name'),
@@ -519,7 +543,7 @@ function resetPanelConfig() {
 
       <div class="flex items-center mt-[10px]">
         <span class="mr-[10px]">{{ $t('apps.baseSettings.cardRadius') }}</span>
-        <NSlider v-model:value="panelState.panelConfig.cardBorderRadius" class="max-w-[200px]" :step="2" :min="8" :max="24" />
+        <NSlider v-model:value="panelState.panelConfig.cardBorderRadius" class="max-w-[200px]" :step="2" :min="0" :max="24" />
       </div>
 
       <div class="mt-[8px]">
@@ -533,19 +557,21 @@ function resetPanelConfig() {
             size="small"
             :modes="['hex']"
             :swatches="[
-              '#7dd3fc',
+              '#ff4f00',
+              '#2563eb',
+              '#eab308',
+              '#00c2a8',
+              '#09090b',
               '#38bdf8',
               '#0284c7',
               '#22d3ee',
-              '#18A058',
-              '#F0A020',
             ]"
           />
         </div>
       </div>
     </NCard>
 
-    <NCard style="border-radius:10px" class="mt-[10px]" size="small">
+    <NCard style="border-radius:var(--leon-ui-radius, 6px)" class="mt-[10px]" size="small">
       <div class="text-slate-500 mb-[5px] font-bold">
         {{ $t('common.icon') }}
       </div>
@@ -564,6 +590,16 @@ function resetPanelConfig() {
         </div>
         <div class="flex items-center mt-[5px]">
           <NSelect v-model:value="panelState.panelConfig.iconBadgeStyle" :options="iconBadgeStyleOptions" data-testid="icon-badge-select" />
+        </div>
+      </div>
+
+      <div class="mt-[8px]">
+        <div>
+          {{ $t('apps.baseSettings.iconMonochrome') }}
+        </div>
+        <div class="flex items-center gap-2 mt-[5px]">
+          <NSwitch v-model:value="panelState.panelConfig.iconMonochrome" data-testid="icon-monochrome-switch" />
+          <span class="text-xs opacity-70">{{ $t('apps.baseSettings.iconMonochromeTip') }}</span>
         </div>
       </div>
 

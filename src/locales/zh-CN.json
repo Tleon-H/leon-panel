@@ -118,9 +118,12 @@
       "cardAccentColor": "强调与焦点色",
       "iconBadgeStyle": "图标容器样式",
       "iconBadgeDefault": "经典默认",
+      "iconBadgeBauhaus": "包豪斯几何框",
       "iconBadgeGlass": "海蓝玻璃框",
       "iconBadgeSoft": "纸感柔底框",
       "iconBadgeOutline": "石墨青蓝描边",
+      "iconMonochrome": "网站图标极简单色模式",
+      "iconMonochromeTip": "将网站自有图标统一为高对比黑白扁平风格，悬停时恢复原色",
       "presets": {
         "title": "首页外观预设",
         "hint": "可先全屏预览首页效果，再仅按勾选的项目修改全局外观；不会改动分组单独样式、单卡自定义图标和链接，应用后仍可逐项微调。",
@@ -137,6 +140,26 @@
         "previewBannerTip": "退出预览将恢复原样，不会保存修改。",
         "selectAtLeastOne": "请至少勾选一项要应用的设置",
         "applied": "已应用「{name}」所选外观（{scopes}）",
+        "bauhausGrid": {
+          "name": "包豪斯网格",
+          "desc": "暖米网格画布、绝对直角黑框与信号橙几何强调"
+        },
+        "swissPaper": {
+          "name": "瑞士素白",
+          "desc": "极简素白纸底、细线正交网格与瑞士钴蓝焦点"
+        },
+        "monoInk": {
+          "name": "极简墨黑",
+          "desc": "纯平深黑画布、暗灰精密框线与高对比信号橙"
+        },
+        "blueprintSlate": {
+          "name": "建筑蓝图",
+          "desc": "深石板工程网格、2px 工业倒角与制图青绿点缀"
+        },
+        "nordicStone": {
+          "name": "北欧冷灰",
+          "desc": "浅灰石材网格底、纯白模块与森林墨绿强调"
+        },
         "oceanGlass": {
           "name": "海蓝玻璃",
           "desc": "深蓝背景、半透明毛玻璃卡片与柔和浅字"
@@ -150,6 +173,53 @@
           "desc": "夜色背景、近黑卡片、浅色文字与青蓝点缀"
         }
       }
+    },
+    "leonStudio": {
+      "appName": "Leon Studio 美化",
+      "tabThemes": "主题包与布局",
+      "tabEffects": "视觉特效",
+      "tabWidgets": "桌面小组件",
+      "tabCustomCode": "自定义 CSS/JS",
+      "layoutModeTitle": "首页布局与 Dock 模式",
+      "layoutModeDesc": "支持标准卡片网格、高密紧凑视图，或底部常驻极简 Dock 栏",
+      "layoutStandard": "标准布局（默认）",
+      "layoutCompact": "紧凑高密网格",
+      "layoutDock": "底部悬浮 Dock 模式",
+      "exportThemeJson": "导出主题包 JSON",
+      "importThemeJson": "导入主题包 JSON",
+      "importThemeJsonPlaceholder": "粘贴 leon-panel-theme JSON 配置...",
+      "copyJson": "复制 JSON",
+      "downloadJson": "下载文件",
+      "copiedSuccess": "已复制到剪贴板",
+      "copyFailed": "复制失败，请手动选中复制",
+      "invalidThemeJson": "主题包 JSON 格式无效或版本不兼容",
+      "themeImported": "已导入并应用主题包「{name}」",
+      "fxGridOverlay": "叠加正交参考网格",
+      "fxGridOverlayDesc": "在任意壁纸之上叠加极细几何制图辅助线",
+      "fxHardShadow": "包豪斯硬阴影位移交互",
+      "fxHardShadowDesc": "扁平几何主题下悬停卡片呈现偏移实色硬阴影",
+      "fxReduceMotion": "极简零动效模式",
+      "fxReduceMotionDesc": "关闭所有卡片位移与过渡动画，响应更干脆",
+      "fxEnhancedClock": "头部增强时钟标语",
+      "fxEnhancedClockDesc": "在顶部时钟旁展示自定义 HomeLab 状态标语",
+      "fxClockGreeting": "自定义状态标语",
+      "fxClockGreetingPlaceholder": "例如：HOMELAB // ALL SYSTEMS NOMINAL",
+      "widgetsHint": "基于数据库 ModuleConfig 持久化，无需修改 Docker 挂载",
+      "widgetsEmpty": "暂未添加桌面小组件，点击上方按钮添加增强时钟、云端便签或自由 Iframe 卡片",
+      "addClockWidget": "增强时钟",
+      "addMemoWidget": "云端便签",
+      "addIframeWidget": "Iframe 卡片",
+      "widgetMemoPlaceholder": "输入备忘内容，将自动同步至云端数据库...",
+      "widgetIframeInvalidUrl": "仅支持 http://、https:// 或站内 / 相对路径地址",
+      "customCodeNotice": "仅管理员可保存自定义 CSS / JS（持久化至数据库，并 100% 兼容原有 /custom/index.css 与 /custom/index.js）。如脚本异常，访问 /?safe=1 即可进入安全模式跳过全部注入。",
+      "addSnippetTitle": "新增代码片段",
+      "snippetNamePlaceholder": "片段名称（如：紧凑圆角微调 / 快捷键增强）",
+      "snippetFieldsRequired": "请填写片段名称和代码内容",
+      "saveAndApplySnippets": "保存并应用全部片段",
+      "safeModeActiveNotice": "当前处于安全模式（?safe=1），所有数据库自定义 CSS / JS 片段已被临时跳过，可在此禁用或删除异常片段。",
+      "safeModeBanner": "安全模式已激活（/?safe=1）：已跳过全部内置自定义 CSS / JS 片段",
+      "openStudio": "打开 Leon Studio",
+      "exitSafeMode": "退出安全模式"
     },
     "exportImport": {
       "appName": "导出导入",

@@ -147,7 +147,7 @@
 }
 
 .leon-themed-card {
-  border: 1px solid var(--leon-card-border, transparent);
+  border: var(--leon-card-border-width, 1px) solid var(--leon-card-border, transparent);
   box-shadow: var(--leon-card-shadow, none);
 }
 
@@ -158,13 +158,64 @@
 }
 
 .leon-themed-small-tile {
-  border: 1px solid var(--leon-card-border, transparent);
+  border: var(--leon-card-border-width, 1px) solid var(--leon-card-border, transparent);
   box-shadow: var(--leon-card-shadow, none);
 }
 
 .leon-themed-small-tile:hover {
   border-color: var(--leon-card-hover-border, var(--leon-card-border, transparent));
   box-shadow: var(--leon-card-hover-shadow, 0 0 20px 10px rgba(0, 0, 0, 0.2));
+}
+
+.leon-card-corner {
+  display: none;
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 10px;
+  height: 10px;
+  background: var(--leon-accent-color, #ff4f00);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.14s ease;
+}
+
+.leon-flat-geometric .leon-card-corner {
+  display: block;
+}
+
+.leon-flat-geometric .leon-themed-card:hover .leon-card-corner {
+  opacity: 1;
+}
+
+.leon-flat-geometric .leon-themed-card:hover,
+.leon-flat-geometric .leon-themed-small-tile:hover {
+  transform: translate(-2px, -2px);
+}
+
+.leon-flat-geometric .leon-header-emblem {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+}
+
+.leon-flat-geometric .leon-group-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 7px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.3;
+  letter-spacing: 0.04em;
+  background: var(--leon-accent-color, #ff4f00);
+  color: #ffffff;
+}
+
+.leon-flat-geometric .leon-header-divider {
+  color: var(--leon-accent-color, #ff4f00);
+  font-weight: 800;
 }
 
 .leon-icon-badge {
@@ -175,7 +226,15 @@
   justify-content: center;
   border-radius: 14px;
   border: 1px solid transparent;
-  transition: background-color 0.2s ease, border-color 0.2s ease;
+  transition: background-color 0.16s ease, border-color 0.16s ease;
+}
+
+.leon-icon-badge-bauhaus {
+  width: 50px;
+  height: 50px;
+  border-radius: var(--leon-card-radius, 0px);
+  border: 1.5px solid var(--leon-card-border, #18181b);
+  background: var(--leon-canvas-fallback, #f4f1ea);
 }
 
 .leon-icon-badge-glass {
@@ -193,9 +252,38 @@
   border-color: rgba(34, 211, 238, 0.36);
 }
 
+.leon-icon-monochrome .item-icon img {
+  filter: grayscale(100%) contrast(1.18);
+  transition: filter 0.18s ease;
+}
+
+.leon-icon-monochrome:hover .item-icon img {
+  filter: none;
+}
+
+.leon-floating-dock {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+}
+
+.leon-flat-geometric .leon-floating-dock {
+  box-shadow: 3px 3px 0 0 var(--leon-control-border, #18181b);
+}
+
 .leon-control-btn {
-  border: 1px solid var(--leon-control-border, rgba(255, 255, 255, 0.16)) !important;
-  backdrop-filter: blur(8px);
+  border: var(--leon-card-border-width, 1px) solid var(--leon-control-border, rgba(255, 255, 255, 0.16)) !important;
+  backdrop-filter: blur(var(--leon-card-blur, 8px));
+}
+
+.leon-flat-geometric .leon-control-btn {
+  backdrop-filter: none;
+  border-radius: var(--leon-card-radius, 0px) !important;
+}
+
+.leon-flat-geometric .leon-preview-bar {
+  border-radius: var(--leon-card-radius, 0px);
+  backdrop-filter: none;
+  border-width: 1.5px;
+  box-shadow: 5px 5px 0 0 var(--leon-accent-color, #ff4f00);
 }
 
 .app-icon-info-text-box-title,
@@ -516,4 +604,147 @@
   .leon-hover-actions {
     opacity: 1;
   }
+}
+
+/* ===== Phase 3: Leon Studio Effects, Compact / Dock Layout & Safe Mode ===== */
+.leon-safe-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 80;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 8px 16px;
+  background: #09090b;
+  color: #fafafa;
+  border-bottom: 2px solid #ff4f00;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+
+.leon-safe-btn {
+  padding: 4px 10px;
+  border: 1px solid rgba(250, 250, 250, 0.35);
+  background: transparent;
+  color: #fafafa;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.leon-safe-btn.is-primary {
+  background: #ff4f00;
+  border-color: #ff4f00;
+  color: #ffffff;
+}
+
+.leon-fx-grid-overlay::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  background-image:
+    linear-gradient(to right, rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.leon-tone-light.leon-fx-grid-overlay::after {
+  background-image:
+    linear-gradient(to right, rgba(9, 9, 11, 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(9, 9, 11, 0.06) 1px, transparent 1px);
+}
+
+.leon-fx-no-hard-shadow .leon-themed-card:hover,
+.leon-fx-no-hard-shadow .leon-themed-small-tile:hover {
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.leon-fx-reduce-motion *,
+.leon-fx-reduce-motion *::before,
+.leon-fx-reduce-motion *::after {
+  transition-duration: 0.01ms !important;
+  animation-duration: 0.01ms !important;
+  transform: none !important;
+}
+
+.leon-layout-compact .leon-section {
+  margin-top: 24px;
+}
+
+.leon-layout-compact .icon-info-box {
+  grid-template-columns: repeat(auto-fill, minmax(175px, 1fr)) !important;
+  gap: 10px !important;
+}
+
+.leon-layout-compact .icon-small-box {
+  gap: 10px !important;
+}
+
+.leon-header-greeting {
+  margin-top: 10px;
+  text-align: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--leon-chrome-muted, rgba(241, 245, 249, 0.85));
+  text-transform: uppercase;
+}
+
+.leon-dock-bar {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(14px + env(safe-area-inset-bottom));
+  z-index: 45;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100vw - 24px);
+  overflow-x: auto;
+  padding: 8px 12px;
+  background: var(--leon-control-bg, #ffffff);
+  color: var(--leon-control-text, #09090b);
+  border: var(--leon-card-border-width, 1.5px) solid var(--leon-control-border, #18181b);
+  border-radius: var(--leon-card-radius, 0px);
+  box-shadow: 4px 4px 0 0 var(--leon-control-border, #18181b);
+  backdrop-filter: blur(var(--leon-card-blur, 0px));
+}
+
+.leon-dock-label {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  padding: 2px 6px;
+  background: var(--leon-accent-color, #ff4f00);
+  color: #ffffff;
+  flex-shrink: 0;
+}
+
+.leon-dock-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: 1px solid var(--leon-card-border, transparent);
+  border-radius: var(--leon-card-radius, 4px);
+  background: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: transform 0.14s ease, border-color 0.14s ease;
+}
+
+.leon-dock-item:hover {
+  transform: translateY(-3px);
+  border-color: var(--leon-accent-color, #ff4f00);
 }

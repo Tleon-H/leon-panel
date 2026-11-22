@@ -3,14 +3,14 @@ import { VueDraggable } from 'vue-draggable-plus'
 import { NBackTop, NButton, NButtonGroup, NCheckbox, NDropdown, NModal, NSkeleton, NSpin, useDialog, useMessage } from 'naive-ui'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { AppIcon, AppStarter, EditItem } from './components'
-import { Clock, SearchBox, SystemMonitor } from '@/components/deskModule'
-import { SvgIcon } from '@/components/common'
+import { Clock, DesktopWidgets, SearchBox, SystemMonitor } from '@/components/deskModule'
+import { ItemIcon, SvgIcon } from '@/components/common'
 import { deletes, getListByGroupId, saveSort } from '@/api/panel/itemIcon'
 import { getList as getGroupList } from '@/api/panel/itemIconGroup'
 import { acceptLoadedIcons, filterIconGroups, moveMatchIndex } from '@/utils/search/filterIcons'
 
 import { setTitle, updateLocalUserInfo } from '@/utils/cmn'
-import { useAuthStore, usePanelState } from '@/store'
+import { useAuthStore, usePanelState, useStudioStore } from '@/store'
 import { PanelPanelConfigStyleEnum, PanelStateNetworkModeEnum } from '@/enums'
 import { VisitMode } from '@/enums/auth'
 import { router } from '@/router'
@@ -28,6 +28,8 @@ import type { HomeCacheStep, HomeViewCache } from '@/utils/panel/homeCache'
 import { browserHomeStorage, dropHomeSnapshot, readHomeSnapshot, readHomeSnapshotEpoch, writeHomeSnapshot } from '@/utils/panel/homeSnapshot'
 import type { HomeSnapshotIdentity } from '@/utils/panel/homeSnapshot'
 import { requestFailureDetails } from '@/utils/request/failure'
+import { buildSafeModeExitUrl } from '@/utils/studio/customCode'
+import brandLogoSvg from '@/assets/logo.svg'
 
 interface ItemCard extends Panel.ItemInfo {
   userId?: number
@@ -44,6 +46,7 @@ const ms = useMessage()
 const dialog = useDialog()
 const panelState = usePanelState()
 const authStore = useAuthStore()
+const studioStore = useStudioStore()
 
 const scrollContainerRef = ref<HTMLElement | undefined>(undefined)
 
@@ -63,6 +66,7 @@ const currentRightSelectItem = ref<Panel.ItemInfo | null>(null)
 const currentAddItenIconGroupId = ref<number | undefined>()
 
 const settingModalShow = ref(false)
+const settingInitialApp = ref<string | undefined>(undefined)
 
 const items = ref<ItemGroup[]>([])
 let listState: HomeListState<ItemGroup> = createHomeListState(homeListIdentity(authStore.token))
@@ -81,8 +85,33 @@ const appStarterVisible = computed({
   get: () => settingModalShow.value && !panelState.isPreviewingAppearance,
   set: (visible: boolean) => {
     settingModalShow.value = visible
+    if (!visible)
+      settingInitialApp.value = undefined
   },
 })
+
+const dockItems = computed<Array<{ groupIndex: number; item: ItemCard }>>(() => {
+  if (activePanelConfig.value.layoutMode !== 'dock')
+    return []
+  const list: Array<{ groupIndex: number; item: ItemCard }> = []
+  for (let gIdx = 0; gIdx < items.value.length; gIdx++) {
+    for (const card of items.value[gIdx].items || []) {
+      list.push({ groupIndex: gIdx, item: card })
+      if (list.length >= 8)
+        return list
+    }
+  }
+  return list
+})
+
+function openStudioInSettings() {
+  settingInitialApp.value = 'LeonStudio'
+  settingModalShow.value = true
+}
+
+function exitSafeMode() {
+  window.location.href = buildSafeModeExitUrl(window.location)
+}
 
 function groupIconStyle(group: ItemGroup) {
   if (panelState.isPreviewingAppearance)
@@ -563,6 +592,7 @@ watch(() => homeListIdentity(authStore.token), (identity, previous) => {
     return
   panelState.cancelAppearancePreview()
   panelState.resetPanelConfig()
+  studioStore.resetRuntimeState()
   const noted = noteHomeListIdentity(listState, identity)
   if (!noted.changed)
     return
@@ -574,6 +604,7 @@ watch(() => homeListIdentity(authStore.token), (identity, previous) => {
     return
   confirmHomeAuth()
   panelState.updatePanelConfigByCloud()
+  studioStore.loadFromCloud()
   if (identity)
     getList()
 })
@@ -583,8 +614,9 @@ onMounted(() => {
   confirmHomeAuth()
   getList()
 
-  // 更新同步云端配置
+  // 更新同步云端配置与 Leon Studio 扩展
   panelState.updatePanelConfigByCloud()
+  studioStore.loadFromCloud()
 
   // 设置标题
   if (panelState.panelConfig.logoText)
@@ -665,13 +697,39 @@ function handleAddItem(itemIconGroupId?: number) {
     :class="[
       homepageTheme.isLightCanvas ? 'leon-tone-light' : 'leon-tone-dark',
       `leon-card-surface-${homepageTheme.cardSurface}`,
-      { 'leon-preview-active': panelState.isPreviewingAppearance },
+      `leon-layout-${activePanelConfig.layoutMode || 'standard'}`,
+      {
+        'leon-flat-geometric': homepageTheme.card.isFlatGeometric,
+        'leon-fx-grid-overlay': studioStore.config.effects.gridOverlay,
+        'leon-fx-no-hard-shadow': !studioStore.config.effects.hardShadowHover,
+        'leon-fx-reduce-motion': studioStore.config.effects.reduceMotion,
+        'leon-preview-active': panelState.isPreviewingAppearance,
+      },
     ]"
     :style="homepageTheme.cssVars"
     :data-card-surface="homepageTheme.cardSurface"
     :data-wallpaper-tone="homepageTheme.isLightCanvas ? 'light' : 'dark'"
+    :data-layout-mode="activePanelConfig.layoutMode || 'standard'"
     :data-preview-preset="panelState.previewPresetId || ''"
   >
+    <!-- /?safe=1 防锁死安全模式提示条 -->
+    <div v-if="studioStore.safeMode" class="leon-safe-banner" role="status" data-testid="home-safe-mode-banner">
+      <span>{{ $t('apps.leonStudio.safeModeBanner') }}</span>
+      <div class="flex items-center gap-2">
+        <button
+          v-if="authStore.visitMode === VisitMode.VISIT_MODE_LOGIN"
+          type="button"
+          class="leon-safe-btn"
+          @click="openStudioInSettings"
+        >
+          {{ $t('apps.leonStudio.openStudio') }}
+        </button>
+        <button type="button" class="leon-safe-btn is-primary" @click="exitSafeMode">
+          {{ $t('apps.leonStudio.exitSafeMode') }}
+        </button>
+      </div>
+    </div>
+
     <div
       v-if="homeLoading"
       class="leon-home-loading"
@@ -694,7 +752,9 @@ function handleAddItem(itemIconGroupId?: number) {
     <div ref="scrollContainerRef" class="absolute w-full h-full overflow-auto">
       <div
         class="p-2.5 mx-auto"
-        :class="{ 'pb-[140px]': panelState.isPreviewingAppearance }"
+        :class="{
+          'pb-[140px]': panelState.isPreviewingAppearance || activePanelConfig.layoutMode === 'dock',
+        }"
         :style="{
           marginTop: `${activePanelConfig.marginTop}%`,
           marginBottom: `${activePanelConfig.marginBottom}%`,
@@ -703,18 +763,30 @@ function handleAddItem(itemIconGroupId?: number) {
       >
         <!-- 头 -->
         <div class="mx-[auto] w-[80%] leon-home-header">
-          <div class="flex mx-[auto] items-center justify-center leon-chrome-text">
-            <div class="logo">
-              <span class="text-2xl md:text-6xl font-bold text-shadow">
+          <div class="flex mx-[auto] items-center justify-center gap-3 leon-chrome-text">
+            <div class="logo flex items-center gap-3">
+              <img
+                v-if="homepageTheme.card.isFlatGeometric"
+                :src="brandLogoSvg"
+                alt="Leon Panel"
+                class="leon-header-emblem"
+              >
+              <span class="text-2xl md:text-5xl font-extrabold tracking-tight text-shadow">
                 {{ activePanelConfig.logoText }}
               </span>
             </div>
-            <div class="divider leon-header-divider text-base lg:text-2xl mx-[10px]">
+            <div class="divider leon-header-divider text-base lg:text-2xl mx-[6px]" aria-hidden="true">
               |
             </div>
             <div class="text-shadow">
               <Clock :hide-second="!activePanelConfig.clockShowSecond" />
             </div>
+          </div>
+          <div
+            v-if="studioStore.config.effects.enhancedClock && studioStore.config.effects.clockGreeting"
+            class="leon-header-greeting"
+          >
+            {{ studioStore.config.effects.clockGreeting }}
           </div>
           <div v-if="activePanelConfig.searchBoxShow" class="flex flex-col mt-[20px] mx-auto sm:w-full lg:w-[80%]">
             <SearchBox
@@ -734,6 +806,9 @@ function handleAddItem(itemIconGroupId?: number) {
 
         <!-- 应用盒子 -->
         <div :style="{ marginLeft: `${activePanelConfig.marginX}px`, marginRight: `${activePanelConfig.marginX}px` }">
+          <!-- Leon Studio 桌面小组件 -->
+          <DesktopWidgets />
+
           <!-- 系统监控状态 -->
           <div
             v-if="activePanelConfig.systemMonitorShow
@@ -773,7 +848,10 @@ function handleAddItem(itemIconGroupId?: number) {
               @mouseleave="handleSetHoverStatus(itemGroupIndex, false)"
             >
               <!-- 分组标题 -->
-              <div class="leon-chrome-text text-xl font-extrabold mb-[20px] ml-[10px] flex items-center">
+              <div class="leon-chrome-text text-xl font-extrabold mb-[20px] ml-[4px] flex items-center gap-2">
+                <span v-if="homepageTheme.card.isFlatGeometric" class="leon-group-index" aria-hidden="true">
+                  {{ String(itemGroupIndex + 1).padStart(2, '0') }}
+                </span>
                 <span class="group-title text-shadow">
                   {{ itemGroup.title }}
                 </span>
@@ -986,8 +1064,32 @@ function handleAddItem(itemIconGroupId?: number) {
       </div>
     </div>
 
+    <!-- 底部悬浮 Dock 栏（Dock 布局模式） -->
+    <nav
+      v-if="activePanelConfig.layoutMode === 'dock' && dockItems.length > 0 && !panelState.isPreviewingAppearance"
+      class="leon-dock-bar"
+      aria-label="Quick Dock"
+      data-testid="home-dock-bar"
+    >
+      <span class="leon-dock-label">DOCK</span>
+      <button
+        v-for="entry in dockItems"
+        :key="entry.item.id || entry.item.title"
+        type="button"
+        class="leon-dock-item"
+        :title="entry.item.title"
+        @click="handleItemClick(entry.groupIndex, entry.item)"
+      >
+        <ItemIcon
+          :item-icon="entry.item.icon"
+          :fallback-text="entry.item.title"
+          :size="36"
+        />
+      </button>
+    </nav>
+
     <!-- 悬浮按钮 -->
-    <div v-show="!panelState.isPreviewingAppearance" class="fixed-element shadow-[0_0_10px_2px_rgba(0,0,0,0.2)]">
+    <div v-show="!panelState.isPreviewingAppearance" class="fixed-element leon-floating-dock">
       <NButtonGroup vertical>
         <!-- 网络模式切换按钮组 -->
         <NButton
@@ -1021,6 +1123,7 @@ function handleAddItem(itemIconGroupId?: number) {
           :color="homepageTheme.controlBackground"
           :text-color="homepageTheme.controlTextColor"
           class="leon-control-btn"
+          :title="$t('appLauncher.title')"
           data-testid="home-open-settings"
           @click="settingModalShow = !settingModalShow"
         >
@@ -1043,7 +1146,7 @@ function handleAddItem(itemIconGroupId?: number) {
         </NButton>
       </NButtonGroup>
 
-      <AppStarter v-model:visible="appStarterVisible" />
+      <AppStarter v-model:visible="appStarterVisible" :initial-app="settingInitialApp" />
       <!-- <Setting v-model:visible="settingModalShow" /> -->
     </div>
 
@@ -1054,7 +1157,7 @@ function handleAddItem(itemIconGroupId?: number) {
       :bottom="10"
       style="background-color:transparent;border: none;box-shadow: none;"
     >
-      <div class="shadow-[0_0_10px_2px_rgba(0,0,0,0.2)]">
+      <div class="leon-floating-dock">
         <NButton :color="homepageTheme.controlBackground" :text-color="homepageTheme.controlTextColor" class="leon-control-btn">
           <template #icon>
             <SvgIcon class="font-xl" icon="icon-park-outline:to-top" />

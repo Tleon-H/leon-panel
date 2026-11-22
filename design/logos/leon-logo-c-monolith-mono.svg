@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none" role="img" aria-label="Leon Panel Logo - Geometric Frame LP Monochrome">
+  <rect x="32" y="32" width="448" height="448" rx="20" stroke="#09090B" stroke-width="24"/>
+  <path d="M100 100H236V156H156V356H356V276H412V412H100V100Z" fill="#09090B"/>
+  <polygon points="276,100 412,100 412,236 356,236 356,156 276,156" fill="#09090B"/>
+  <rect x="216" y="216" width="80" height="80" fill="#09090B"/>
+</svg>

@@ -83,9 +83,21 @@ func TestStaticUploadsAndUnknownPathsAreNotReplacedByThePage(t *testing.T) {
 	if custom.Code != http.StatusOK || custom.Body.String() != "theme-css" {
 		t.Fatalf("custom = %d %q", custom.Code, custom.Body.String())
 	}
-	icon := get(engine, "/favicon.ico")
-	if icon.Code != http.StatusOK || icon.Body.String() != "icon" {
-		t.Fatalf("favicon = %d %q", icon.Code, icon.Body.String())
+	for _, item := range []struct {
+		path string
+		want string
+	}{
+		{"/favicon.ico", "icon"},
+		{"/favicon.svg", "svg"},
+		{"/favicon-black.svg", "svg-black"},
+		{"/apple-touch-icon.png", "apple-touch-png"},
+		{"/pwa-192x192.png", "pwa-192-png"},
+		{"/pwa-512x512.png", "pwa-512-png"},
+	} {
+		resp := get(engine, item.path)
+		if resp.Code != http.StatusOK || resp.Body.String() != item.want {
+			t.Fatalf("%s = %d %q", item.path, resp.Code, resp.Body.String())
+		}
 	}
 	upload := get(engine, "/uploads/pic.png")
 	if upload.Code != http.StatusOK || upload.Body.String() != "png-bytes" {
@@ -181,6 +193,10 @@ func siteFixture(t *testing.T) (string, string) {
 	writeFile(t, filepath.Join(webPath, "custom", "theme.css"), "theme-css")
 	writeFile(t, filepath.Join(webPath, "favicon.ico"), "icon")
 	writeFile(t, filepath.Join(webPath, "favicon.svg"), "svg")
+	writeFile(t, filepath.Join(webPath, "favicon-black.svg"), "svg-black")
+	writeFile(t, filepath.Join(webPath, "apple-touch-icon.png"), "apple-touch-png")
+	writeFile(t, filepath.Join(webPath, "pwa-192x192.png"), "pwa-192-png")
+	writeFile(t, filepath.Join(webPath, "pwa-512x512.png"), "pwa-512-png")
 	writeFile(t, filepath.Join(webPath, "logo.png"), "logo-bytes")
 	writeFile(t, filepath.Join(uploadPath, "pic.png"), "png-bytes")
 	writeFile(t, filepath.Join(root, "outside.txt"), "outside-secret")

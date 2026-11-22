@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none" role="img" aria-label="Leon Panel Logo - Bauhaus Circle Square">
+  <!-- Flat warm off-white Bauhaus tile with crisp ink frame -->
+  <rect x="24" y="24" width="464" height="464" rx="28" fill="#F4F1EA" stroke="#09090B" stroke-width="16"/>
+  <!-- Geometric L block -->
+  <path d="M104 104H188V324H408V408H104V104Z" fill="#09090B"/>
+  <!-- Pure flat Signal Orange circle (Bauhaus primary primitive) -->
+  <circle cx="328" cy="184" r="80" fill="#FF4F00"/>
+  <!-- Small geometric alignment triangle cutout / accent -->
+  <rect x="104" y="324" width="84" height="84" fill="#2563EB"/>
+</svg>

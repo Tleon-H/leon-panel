@@ -68,13 +68,14 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="clock w-full text-center">
-    <span class="clock-time text-2xl sm:text-2xl md:text-3xl font-[600]">
+    <span class="clock-time text-2xl sm:text-2xl md:text-3xl font-bold font-mono tabular-nums tracking-tight leading-none">
       {{ currentDate.time }}
     </span>
-    <div class="hidden sm:hidden md:block">
-      <span class="clock-date mr-1">
+    <div class="clock-meta hidden sm:hidden md:flex items-center justify-center gap-1.5 mt-1 text-xs font-mono opacity-80">
+      <span class="clock-date">
         {{ currentDate.date }}
       </span>
+      <span aria-hidden="true">·</span>
       <span class="clock-week">
         {{ currentDate.week }}
       </span>

@@ -9,13 +9,16 @@ import {
   LEGACY_DEFAULT_CARD_BG,
   applyAppearancePreset,
   applyCardSurfaceDefaults,
+  applyThemePackJson,
   applyWallpaperSource,
   contrastRatio,
   createPanelCloudController,
+  exportThemePackJson,
   inferWallpaperToneFromSrc,
   isLegacyDefaultCardBackground,
   isPanelStateOwnedByAccount,
   normalizePanelAppearance,
+  parseThemePackJson,
   resolveCardAppearance,
   resolveHomepageThemeVars,
   resolveIconForegroundColor,
@@ -218,8 +221,8 @@ test('all three presets meet WCAG readability contrast on canvas and card surfac
     `dark canvas with mist iconStyle small title contrast too low: ${contrastRatio(protectedDarkTitle, darkTheme.canvasFallback)}`,
   )
 
-  // Exhaustive matrix: every combination of (wallpaper x cardStyle x iconStyle) across default + 3 presets
-  const choices: Array<'default' | 'ocean-glass' | 'mist-paper' | 'midnight-graphite'> = [
+  // Exhaustive matrix: every combination of (wallpaper x cardStyle x iconStyle) across default + all presets
+  const choices: Array<'default' | (typeof APPEARANCE_PRESET_IDS)[number]> = [
     'default',
     ...APPEARANCE_PRESET_IDS,
   ]
@@ -262,6 +265,16 @@ test('all three presets meet WCAG readability contrast on canvas and card surfac
       }
     }
   }
+
+  // Bauhaus Grid flat geometric invariants: 0px sharp corners, 0px blur, 1.5px border, bauhaus badge, optional monochrome icons
+  const bauhaus = applyAppearancePreset(legacyConfig(), 'bauhaus-grid')
+  assert.equal(bauhaus.cardBorderRadius, 0)
+  assert.equal(bauhaus.cardBlur, 0)
+  assert.equal(bauhaus.iconBadgeStyle, 'bauhaus')
+  const bauhausTheme = resolveHomepageThemeVars({ ...bauhaus, iconMonochrome: true })
+  assert.equal(bauhausTheme.card.isFlatGeometric, true)
+  assert.equal(bauhausTheme.cssVars['--leon-card-radius'], '0px')
+  assert.equal(bauhausTheme.cssVars['--leon-card-border-width'], '1.5px')
 })
 
 test('dirty-tracking suppresses duplicate auto-saves after apply, reset, or passive cloud sync', () => {
@@ -785,4 +798,55 @@ test('rapid consecutive saves serialize in order, skip superseded writes, and ac
   assert.equal(staleLoadResult.stale, true)
   assert.equal(controllerSwitch.state.cloudConfigState, 'idle')
   assert.equal(controllerSwitch.state.panelConfig.logoText, 'Leon Panel')
+})
+
+test('theme pack JSON export/import preserves non-appearance settings, supports layoutMode, and rejects unsafe inputs', () => {
+  const bauhaus = applyAppearancePreset(legacyConfig(), 'bauhaus-grid')
+  const withDock = normalizePanelAppearance({ ...bauhaus, layoutMode: 'dock', iconMonochrome: true })
+  const exported = exportThemePackJson(withDock, 'My Bauhaus Pack')
+
+  const parsed = parseThemePackJson(exported)
+  assert.equal(parsed.ok, true)
+  if (parsed.ok) {
+    assert.equal(parsed.pack.name, 'My Bauhaus Pack')
+    assert.equal(parsed.pack.appearance.cardSurface, 'bauhaus-grid')
+    assert.equal(parsed.pack.appearance.layoutMode, 'dock')
+    assert.equal(parsed.pack.appearance.iconMonochrome, true)
+  }
+
+  // Import onto a different user's config preserves their logoText and custom footerHtml
+  const targetUser = normalizePanelAppearance({
+    ...legacyConfig(),
+    logoText: 'Keep My Title',
+    footerHtml: '<div>Keep Footer</div>',
+  })
+  const applied = applyThemePackJson(targetUser, exported)
+  assert.equal(applied.ok, true)
+  if (applied.ok) {
+    assert.equal(applied.config.logoText, 'Keep My Title')
+    assert.equal(applied.config.footerHtml, '<div>Keep Footer</div>')
+    assert.equal(applied.config.cardSurface, 'bauhaus-grid')
+    assert.equal(applied.config.layoutMode, 'dock')
+    assert.equal(applied.config.iconMonochrome, true)
+  }
+
+  // Reject malformed JSON and wrong schema
+  assert.deepEqual(parseThemePackJson('{bad json'), { ok: false, error: 'json' })
+  assert.deepEqual(parseThemePackJson(JSON.stringify({ schema: 'other', version: 1 })), { ok: false, error: 'schema' })
+
+  // Unsafe javascript: wallpaper URL inside a valid schema is silently ignored
+  const unsafeImport = parseThemePackJson(JSON.stringify({
+    schema: 'leon-panel-theme',
+    version: 1,
+    name: 'Test',
+    appearance: {
+      backgroundImageSrc: 'javascript:alert(1)',
+      cardSurface: 'blueprint-slate',
+    },
+  }))
+  assert.equal(unsafeImport.ok, true)
+  if (unsafeImport.ok) {
+    assert.equal(unsafeImport.pack.appearance.backgroundImageSrc, undefined)
+    assert.equal(unsafeImport.pack.appearance.cardSurface, 'blueprint-slate')
+  }
 })

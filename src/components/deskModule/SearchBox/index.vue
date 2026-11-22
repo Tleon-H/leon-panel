@@ -230,12 +230,13 @@ onMounted(() => {
       <div v-if="searchTerm !== ''" class="search-box-btn-clear w-[25px] mr-[10px] flex justify-center cursor-pointer" @click="handleClearSearchTerm">
         <SvgIcon style="width: 20px;height: 20px;" icon="line-md:close-small" />
       </div>
+      <kbd v-else-if="!isFocused" class="leon-search-kbd" aria-hidden="true">/</kbd>
       <div class="search-box-btn-search w-[25px] flex justify-center cursor-pointer" @click="handleSearchClick">
         <SvgIcon style="width: 20px;height: 20px;" icon="iconamoon:search-fill" />
       </div>
     </div>
 
-    <div v-if="searchSelectListShow" class="w-full mt-[10px] rounded-xl p-[10px]" :style="{ background, color: textColor }">
+    <div v-if="searchSelectListShow" class="leon-search-popover w-full mt-[10px] p-[10px]" :style="{ background, color: textColor }">
       <div
         v-for="(item, index) in config.engines"
         :key="item.id"
@@ -295,17 +296,40 @@ onMounted(() => {
 
 <style scoped>
 .search-container {
-  border: 1px solid var(--leon-search-border, #ccc);
-  transition: box-shadow 0.3s, backdrop-filter 0.3s, border-color 0.2s;
-  padding: 2px 10px;
-  backdrop-filter: blur(8px);
+  border: var(--leon-card-border-width, 1px) solid var(--leon-search-border, #ccc);
+  border-radius: var(--leon-card-radius, 16px);
+  transition: box-shadow 0.2s, backdrop-filter 0.2s, border-color 0.2s, transform 0.15s;
+  padding: 2px 12px;
+  backdrop-filter: blur(var(--leon-card-blur, 8px));
   flex-wrap: nowrap;
 }
 
 .focused, .search-container:hover {
-  border-color: var(--leon-accent-color, #7dd3fc);
-  box-shadow: 0px 0px 0px 2px rgba(56, 189, 248, 0.2), 0px 8px 24px -6px rgba(15, 23, 42, 0.28);
-  backdrop-filter: blur(12px);
+  border-color: var(--leon-accent-color, #ff4f00);
+  box-shadow: var(--leon-card-hover-shadow, 0px 0px 0px 2px rgba(56, 189, 248, 0.2));
+}
+
+.leon-search-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  margin-right: 8px;
+  padding: 0 5px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid var(--leon-search-border, rgba(148, 163, 184, 0.5));
+  border-radius: var(--leon-card-radius, 4px);
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+.leon-search-popover {
+  border: var(--leon-card-border-width, 1px) solid var(--leon-search-border, #ccc);
+  border-radius: var(--leon-card-radius, 12px);
+  backdrop-filter: blur(var(--leon-card-blur, 8px));
 }
 
 input {

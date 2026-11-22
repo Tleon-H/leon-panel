@@ -31,9 +31,18 @@ declare namespace Panel {
         backgroundColor ?: string
     }
 
-    type AppearancePresetId = 'ocean-glass' | 'mist-paper' | 'midnight-graphite'
+    type AppearancePresetId =
+        | 'bauhaus-grid'
+        | 'swiss-paper'
+        | 'mono-ink'
+        | 'blueprint-slate'
+        | 'nordic-stone'
+        | 'ocean-glass'
+        | 'mist-paper'
+        | 'midnight-graphite'
     type CardSurfacePresetId = 'default' | AppearancePresetId
-    type IconBadgeStyleId = 'default' | 'glass' | 'soft' | 'outline'
+    type IconBadgeStyleId = 'default' | 'bauhaus' | 'glass' | 'soft' | 'outline'
+    type PanelLayoutMode = 'standard' | 'compact' | 'dock'
     type WallpaperTone = 'dark' | 'light'
     type CloudConfigLoadState = 'idle' | 'loading' | 'ready' | 'error'
 
@@ -67,8 +76,10 @@ declare namespace Panel {
         cardBlur?: number
         cardBorderRadius?: number
         cardAccentColor?: string
+        layoutMode?: PanelLayoutMode
         iconStyle?:PanelPanelConfigStyleEnum
         iconBadgeStyle?: IconBadgeStyleId
+        iconMonochrome?: boolean
         iconTextColor?:string
         iconTextInfoHideDescription?:boolean
         iconTextIconHideTitle?:boolean

@@ -14,9 +14,12 @@ function setupPlugins(env: ImportMetaEnv): PluginOption[] {
       manifest: {
         name: 'Leon Panel',
         short_name: 'Leon Panel',
+        theme_color: '#09090B',
+        background_color: '#F4F1EA',
+        display: 'standalone',
         icons: [
           { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
-          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
         ],
       },
     }),

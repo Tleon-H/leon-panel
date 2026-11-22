@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none" role="img" aria-label="Leon Panel Logo - Bauhaus Monochrome">
+  <rect x="32" y="32" width="448" height="448" rx="24" stroke="#09090B" stroke-width="24"/>
+  <path d="M104 104H188V324H408V408H104V104Z" fill="#09090B"/>
+  <circle cx="328" cy="184" r="76" stroke="#09090B" stroke-width="24"/>
+</svg>

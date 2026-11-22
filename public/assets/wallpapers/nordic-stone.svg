@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice" fill="none">
+  <defs>
+    <pattern id="nordic-grid-pat" width="44" height="44" patternUnits="userSpaceOnUse">
+      <path d="M 44 0 L 0 0 0 44" stroke="#0F172A" stroke-opacity="0.05" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="1920" height="1080" fill="#ECEEF0"/>
+  <rect width="1920" height="1080" fill="url(#nordic-grid-pat)"/>
+  <!-- Calm Nordic flat geometric composition -->
+  <rect x="0" y="0" width="1920" height="10" fill="#0F766E"/>
+  <rect x="88" y="88" width="56" height="56" fill="#0F766E" fill-opacity="0.14"/>
+  <circle cx="1804" cy="948" r="68" fill="#0F766E" fill-opacity="0.10"/>
+  <rect x="1736" y="948" width="136" height="4" fill="#0F172A" fill-opacity="0.16"/>
+</svg>

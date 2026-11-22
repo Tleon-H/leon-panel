@@ -3,9 +3,11 @@
 <head>
 	<meta charset="UTF-8">
 	<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+	<link rel="alternate icon" href="/favicon.ico">
 	<meta content="yes" name="apple-mobile-web-app-capable"/>
-	<link rel="apple-touch-icon" href="/favicon.ico">
-	<link rel="stylesheet"  href="/custom/index.css">
+	<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+	<meta name="theme-color" content="#09090B">
+	<link rel="stylesheet" href="/custom/index.css">
 	<meta name="viewport"
 		content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, viewport-fit=cover" />
 	<meta name="application-name" content="Leon Panel">
@@ -16,67 +18,132 @@
 <body class="dark:bg-black">
 	<div id="app">
 		<style>
-			.loading-wrap {
+			.leon-boot-wrap {
 				display: flex;
+				flex-direction: column;
 				justify-content: center;
 				align-items: center;
+				gap: 20px;
 				height: 100vh;
+				background-color: #f4f1ea;
+				background-image:
+					linear-gradient(to right, rgba(9, 9, 11, 0.06) 1px, transparent 1px),
+					linear-gradient(to bottom, rgba(9, 9, 11, 0.06) 1px, transparent 1px);
+				background-size: 32px 32px;
+				color: #09090b;
+				font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 			}
 
-			.balls {
-				width: 4em;
+			.leon-boot-box {
+				padding: 10px;
+				border: 2px solid #09090b;
+				background: #ffffff;
+				box-shadow: 4px 4px 0 0 #09090b;
+			}
+
+			.leon-boot-mark {
+				display: block;
+				width: 56px;
+				height: 56px;
+			}
+
+			.leon-boot-meta {
 				display: flex;
-				flex-flow: row nowrap;
 				align-items: center;
-				justify-content: space-between;
+				gap: 8px;
+				font-size: 12px;
+				font-weight: 700;
+				letter-spacing: 0.16em;
 			}
 
-			.balls div {
-				width: 0.8em;
-				height: 0.8em;
+			.leon-boot-dot {
+				width: 9px;
+				height: 9px;
 				border-radius: 50%;
-				background-color: #4b9e5f;
+				background: #ff4f00;
+				animation: leon-boot-blink 1.1s steps(2, end) infinite;
 			}
 
-			.balls div:nth-of-type(1) {
-				transform: translateX(-100%);
-				animation: left-swing 0.5s ease-in alternate infinite;
+			.leon-boot-track {
+				width: 132px;
+				height: 6px;
+				border: 1.5px solid #09090b;
+				background: #ffffff;
+				overflow: hidden;
 			}
 
-			.balls div:nth-of-type(3) {
-				transform: translateX(-95%);
-				animation: right-swing 0.5s ease-out alternate infinite;
+			.leon-boot-bar {
+				width: 44px;
+				height: 100%;
+				background: #ff4f00;
+				animation: leon-boot-slide 1s linear infinite;
 			}
 
-			@keyframes left-swing {
-
-				50%,
-				100% {
-					transform: translateX(95%);
+			@keyframes leon-boot-blink {
+				0%, 100% {
+					opacity: 1;
 				}
-			}
-
-			@keyframes right-swing {
 				50% {
-					transform: translateX(-95%);
+					opacity: 0.25;
 				}
+			}
 
+			@keyframes leon-boot-slide {
+				0% {
+					transform: translateX(-48px);
+				}
 				100% {
-					transform: translateX(100%);
+					transform: translateX(136px);
 				}
 			}
 
 			@media (prefers-color-scheme: dark) {
 				body {
-					background: #121212;
+					background: #09090b;
+				}
+
+				.leon-boot-wrap {
+					background-color: #09090b;
+					background-image:
+						linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+						linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+					color: #fafafa;
+				}
+
+				.leon-boot-box {
+					border-color: #27272a;
+					background: #121215;
+					box-shadow: 4px 4px 0 0 #ff4f00;
+				}
+
+				.leon-boot-track {
+					border-color: #27272a;
+					background: #121215;
+				}
+			}
+
+			@media (prefers-reduced-motion: reduce) {
+				.leon-boot-dot,
+				.leon-boot-bar {
+					animation: none;
 				}
 			}
 		</style>
-		<div class="loading-wrap">
-			<div class="balls">
-				<div></div>
-				<div></div>
-				<div></div>
+		<div class="leon-boot-wrap" aria-label="Loading Leon Panel">
+			<div class="leon-boot-box">
+				<svg class="leon-boot-mark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none" aria-hidden="true">
+					<rect x="24" y="24" width="464" height="464" rx="28" fill="#F4F1EA" stroke="#09090B" stroke-width="16"/>
+					<path d="M104 104H188V324H408V408H104V104Z" fill="#09090B"/>
+					<circle cx="328" cy="184" r="80" fill="#FF4F00"/>
+					<rect x="104" y="324" width="84" height="84" fill="#2563EB"/>
+				</svg>
+			</div>
+			<div class="leon-boot-meta">
+				<span class="leon-boot-dot"></span>
+				<span>LEON PANEL</span>
+			</div>
+			<div class="leon-boot-track">
+				<div class="leon-boot-bar"></div>
 			</div>
 		</div>
 	</div>
