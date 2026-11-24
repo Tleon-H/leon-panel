@@ -2,9 +2,11 @@
 import { Icon, loadIcon } from '@iconify/vue'
 import { NAvatar } from 'naive-ui'
 import { computed, ref, watch, withDefaults } from 'vue'
+import SvgIcon from '../SvgIcon/index.vue'
 import { t } from '@/locales'
 import { createRemoteIconController, fallbackLabel, isRemoteIconType, rejectAfter, type RemoteIconPhase } from '@/utils/icon/remoteIcon'
-import { resolveIconForegroundColor } from '@/utils/panel/appearance'
+import { computeDynamicImagePadding, computeDynamicVectorSize, computeMonogramBackground, isBundledLocalIcon, normalizeLocalIconKey } from '@/utils/icon/localIcons'
+import { isLegacyDefaultCardBackground, resolveIconForegroundColor } from '@/utils/panel/appearance'
 
 interface Prop {
   itemIcon?: Panel.ItemIcon | null
@@ -28,14 +30,41 @@ const defaultStyle = computed(() => ({
   height: `${props.size}px`,
 }))
 const iconExt = computed(() => {
-  return props.itemIcon?.src?.split('.').pop()
+  const cleanSrc = props.itemIcon?.src?.split('?')[0]?.split('#')[0] || ''
+  return cleanSrc.split('.').pop()?.toLowerCase()
 })
-const backgroundColor = computed(() => (props.forceBackground ?? props.itemIcon?.backgroundColor) || defaultBackground)
-const avatarStyle = computed(() => ({
-  backgroundColor: backgroundColor.value,
-  color: props.foregroundColor || resolveIconForegroundColor(backgroundColor.value),
-}))
+const vectorSizePx = computed(() => `${computeDynamicVectorSize(props.size)}px`)
+const imagePaddingPx = computed(() => `${computeDynamicImagePadding(props.size)}px`)
+const rawBackgroundColor = computed(() => (props.forceBackground ?? props.itemIcon?.backgroundColor) || defaultBackground)
+const isBundledLocal = computed(() => props.itemIcon?.itemType === 3 && isBundledLocalIcon(props.itemIcon?.text))
+const normalizedLocalIcon = computed(() => normalizeLocalIconKey(props.itemIcon?.text))
 const letter = computed(() => fallbackLabel(props.itemIcon?.itemType, props.itemIcon?.text, props.fallbackText))
+const monogramFontSizePx = computed(() => `${Math.max(13, Math.round(props.size * 0.42))}px`)
+const fallbackAvatarBackground = computed(() => {
+  if (props.forceBackground && props.forceBackground !== 'transparent')
+    return props.forceBackground
+  if (!isLegacyDefaultCardBackground(props.itemIcon?.backgroundColor))
+    return props.itemIcon?.backgroundColor as string
+  if (props.forceBackground === 'transparent')
+    return 'transparent'
+  return computeMonogramBackground(props.fallbackText || letter.value)
+})
+const avatarStyle = computed(() => ({
+  backgroundColor: rawBackgroundColor.value,
+  color: props.foregroundColor || resolveIconForegroundColor(rawBackgroundColor.value),
+  fontSize: monogramFontSizePx.value,
+  fontWeight: 600,
+  letterSpacing: '-0.02em',
+}))
+const fallbackAvatarStyle = computed(() => ({
+  backgroundColor: fallbackAvatarBackground.value,
+  color: fallbackAvatarBackground.value === 'transparent'
+    ? (props.foregroundColor || '#f8fafc')
+    : resolveIconForegroundColor(fallbackAvatarBackground.value),
+  fontSize: monogramFontSizePx.value,
+  fontWeight: 600,
+  letterSpacing: '-0.02em',
+}))
 const remoteKey = computed(() => {
   if (!isRemoteIconType(props.itemIcon?.itemType))
     return ''
@@ -44,7 +73,8 @@ const remoteKey = computed(() => {
   return `icon:${props.itemIcon?.text || ''}`
 })
 const showImage = computed(() => props.itemIcon?.itemType === 2 && phase.value !== 'fallback' && !!props.itemIcon.src)
-const showOnlineIcon = computed(() => props.itemIcon?.itemType === 3 && phase.value === 'ready' && !!props.itemIcon.text)
+const showLocalIcon = computed(() => isBundledLocal.value && !!normalizedLocalIcon.value)
+const showOnlineIcon = computed(() => props.itemIcon?.itemType === 3 && !isBundledLocal.value && phase.value === 'ready' && !!props.itemIcon.text)
 
 watch(remoteKey, () => {
   const next = iconController.sync()
@@ -52,6 +82,10 @@ watch(remoteKey, () => {
   requestSerial.value = next.requestId
   if (!next.shouldLoadIcon)
     return
+  if (isBundledLocal.value) {
+    phase.value = iconController.onIconLoad('success', next.requestId)
+    return
+  }
   const name = props.itemIcon?.text?.trim()
   if (name)
     void loadOnlineIcon(name, next.requestId)
@@ -96,27 +130,37 @@ function onImgError(event: Event) {
         </template>
 
         <template v-else-if="showImage">
-          <div :style="{ backgroundColor, ...defaultStyle }" class="flex justify-center items-center overflow-hidden">
+          <div
+            :style="{ backgroundColor: rawBackgroundColor, ...defaultStyle, padding: iconExt === 'svg' ? '0px' : imagePaddingPx }"
+            class="flex justify-center items-center overflow-hidden box-border"
+          >
             <img
               :key="requestSerial"
               :data-request="requestSerial"
               :src="itemIcon.src"
               :alt="fallbackText || letter"
-              :class="iconExt === 'svg' ? 'w-[35px] h-[35px]' : 'w-full h-full object-cover'"
+              :style="iconExt === 'svg' ? { width: vectorSizePx, height: vectorSizePx } : undefined"
+              :class="iconExt === 'svg' ? 'object-contain' : 'w-full h-full object-contain'"
               @load="onImgLoad"
               @error="onImgError"
             >
           </div>
         </template>
 
+        <template v-else-if="showLocalIcon">
+          <NAvatar :size="props.size" :style="avatarStyle">
+            <SvgIcon :icon="normalizedLocalIcon" :style="{ width: vectorSizePx, height: vectorSizePx }" />
+          </NAvatar>
+        </template>
+
         <template v-else-if="showOnlineIcon">
           <NAvatar :size="props.size" :style="avatarStyle">
-            <Icon style="font-size: 35px;" :icon="itemIcon.text || ''" />
+            <Icon :style="{ fontSize: vectorSizePx }" :icon="itemIcon.text || ''" />
           </NAvatar>
         </template>
 
         <template v-else>
-          <NAvatar :size="props.size" :title="t('iconItem.iconLoadFailed')" :style="avatarStyle">
+          <NAvatar :size="props.size" :title="t('iconItem.iconLoadFailed')" :style="fallbackAvatarStyle">
             {{ letter }}
           </NAvatar>
         </template>

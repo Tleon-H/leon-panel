@@ -73,9 +73,9 @@ const refreshInterval = 5000
       <template #icon>
         <!-- 图标 -->
         <div class="app-icon w-full h-full flex items-center justify-center">
-          <SvgIcon v-if="monitorType === MonitorType.cpu" icon="solar-cpu-bold" class="text-[24px] sm:text-[30px]" :style="{ color: effectiveTextColor }" />
-          <SvgIcon v-if="monitorType === MonitorType.memory" icon="material-symbols-memory-alt-rounded" class="text-[24px] sm:text-[30px]" :style="{ color: effectiveTextColor }" />
-          <SvgIcon v-if="monitorType === MonitorType.disk" icon="clarity-hard-disk-solid" class="text-[24px] sm:text-[30px]" :style="{ color: effectiveTextColor }" />
+          <SvgIcon v-if="monitorType === MonitorType.cpu" icon="lucide:cpu" class="text-[22px] sm:text-[26px]" :style="{ color: effectiveTextColor }" />
+          <SvgIcon v-if="monitorType === MonitorType.memory" icon="lucide:memory-stick" class="text-[22px] sm:text-[26px]" :style="{ color: effectiveTextColor }" />
+          <SvgIcon v-if="monitorType === MonitorType.disk" icon="lucide:hard-drive" class="text-[22px] sm:text-[26px]" :style="{ color: effectiveTextColor }" />
         </div>
       </template>
       <template #info>

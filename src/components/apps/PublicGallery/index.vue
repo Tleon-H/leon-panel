@@ -171,7 +171,7 @@ onMounted(() => {
                     </NButton>
                     <NButton size="tiny" tertiary :title="$t('apps.uploadsFileManager.copyLink')" @click="copyImageUrl(item.src)">
                       <template #icon>
-                        <SvgIcon icon="ion-copy" />
+                        <SvgIcon icon="lucide:copy" />
                       </template>
                     </NButton>
                     <NButton v-if="!selectable" size="tiny" tertiary :disabled="!panelStore.isCloudConfigReady" :title="$t('apps.uploadsFileManager.setWallpaper')" @click="setWallpaper(item.src)">

@@ -82,16 +82,16 @@ const isBauhausBadge = computed(() => !cardAppearance.value.hasCustomBackground 
     >
       <span class="leon-card-corner" aria-hidden="true" />
       <!-- 图标 -->
-      <div class="app-icon-info-icon w-[70px] h-[70px] shrink-0">
-        <div class="w-[70px] h-full flex items-center justify-center">
+      <div class="app-icon-info-icon w-[66px] h-[68px] shrink-0">
+        <div class="w-[66px] h-full flex items-center justify-center">
           <div class="leon-icon-badge" :class="iconBadgeClass">
             <ItemIcon
               :item-icon="itemInfo?.icon"
               :fallback-text="itemInfo?.title"
               force-background="transparent"
               :foreground-color="iconForegroundColor"
-              :size="46"
-              :class="isBauhausBadge ? 'overflow-hidden rounded-none' : 'overflow-hidden rounded-xl'"
+              :size="44"
+              :class="isBauhausBadge ? 'overflow-hidden rounded-none' : 'overflow-hidden rounded-[10px]'"
             />
           </div>
         </div>
@@ -100,20 +100,20 @@ const isBauhausBadge = computed(() => !cardAppearance.value.hasCustomBackground 
       <!-- 文字 -->
       <div
         class="flex items-center min-w-0 flex-1 pr-3"
-        :style="{ color: cardAppearance.textColor, maxWidth: 'calc(100% - 76px)' }"
+        :style="{ color: cardAppearance.textColor, maxWidth: 'calc(100% - 72px)' }"
       >
         <div class="app-icon-info-text-box w-full min-w-0">
-          <div class="app-icon-info-text-box-title font-semibold w-full">
+          <div class="app-icon-info-text-box-title text-[14px] leading-snug font-semibold tracking-[-0.01em] w-full">
             <NEllipsis>
               {{ itemInfo?.title }}
             </NEllipsis>
           </div>
           <div
             v-if="!iconTextInfoHideDescription"
-            class="app-icon-info-text-box-description"
+            class="app-icon-info-text-box-description mt-0.5 leading-snug"
             :style="{ color: cardAppearance.secondaryTextColor }"
           >
-            <NEllipsis :line-clamp="2" class="text-xs">
+            <NEllipsis :line-clamp="2" class="text-[12px]">
               {{ itemInfo?.description }}
             </NEllipsis>
           </div>

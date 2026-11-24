@@ -10,6 +10,7 @@ interface App {
   name: string
   componentName: string
   icon: string
+  section: 'account' | 'appearance' | 'resources' | 'system'
   auth?: number
 }
 const props = defineProps<{
@@ -41,51 +42,78 @@ const apps = ref<App[]>([
   {
     name: t('apps.userInfo.appName'),
     componentName: 'UserInfo',
-    icon: 'material-symbols-person-edit-outline-rounded',
+    icon: 'lucide:user-cog',
+    section: 'account',
   },
   {
     name: t('apps.accountSwitch.appName'),
     componentName: 'AccountSwitch',
     icon: 'lucide:arrow-left-right',
+    section: 'account',
   },
   {
     name: t('apps.baseSettings.appName'),
     componentName: 'Style',
-    icon: 'ion-color-palette-outline',
+    icon: 'lucide:palette',
+    section: 'appearance',
   },
   {
     name: t('apps.leonStudio.appName'),
     componentName: 'LeonStudio',
     icon: 'lucide:sparkles',
+    section: 'appearance',
   },
   {
     name: t('apps.itemGroupManage.appName'),
     componentName: 'ItemGroupManage',
-    icon: 'material-symbols-ad-group-outline-rounded',
+    icon: 'lucide:folder-kanban',
+    section: 'resources',
   },
   {
     name: t('apps.uploadsFileManager.appName'),
     componentName: 'UploadFileManager',
-    icon: 'tabler:file-upload',
+    icon: 'lucide:upload',
+    section: 'resources',
   },
   {
     name: t('apps.publicGallery.appName'),
     componentName: 'PublicGallery',
     icon: 'lucide:images',
+    section: 'resources',
   },
   {
     name: t('apps.exportImport.appName'),
     componentName: 'ImportExport',
-    icon: 'icon-park-outline-import-and-export',
+    icon: 'lucide:arrow-up-down',
+    section: 'resources',
   },
   {
     name: t('apps.about.appName'),
     componentName: 'About',
-    icon: 'lucide-info',
+    icon: 'lucide:info',
+    section: 'system',
   },
 ])
 
 const authStore = useAuthStore()
+
+const sectionLabels: Record<App['section'], string> = {
+  account: t('appLauncher.sectionAccount'),
+  appearance: t('appLauncher.sectionAppearance'),
+  resources: t('appLauncher.sectionResources'),
+  system: t('appLauncher.sectionSystem'),
+}
+
+const groupedApps = computed(() => {
+  const order: App['section'][] = ['account', 'appearance', 'resources', 'system']
+  return order
+    .map(section => ({
+      section,
+      label: sectionLabels[section],
+      items: apps.value.filter(item => item.section === section),
+    }))
+    .filter(group => group.items.length > 0)
+})
 
 const show = computed({
   get: () => props.visible,
@@ -124,7 +152,8 @@ onMounted(() => {
   const adminApp: App = {
     name: t('adminSettingUsers.appName'),
     componentName: 'Users',
-    icon: 'lucide-users',
+    icon: 'lucide:users',
+    section: 'system',
     auth: 1,
   }
   // 初始化
@@ -134,6 +163,7 @@ onMounted(() => {
       name: t('apps.backup.appName'),
       componentName: 'Backup',
       icon: 'lucide:download',
+      section: 'system',
       auth: 1,
     })
   }
@@ -162,12 +192,12 @@ onUnmounted(() => {
             :title="defaultTitle"
             @click="collapsed = !collapsed"
           >
-            <SvgIcon class="transition-all duration-300" :icon="collapsed ? 'tabler-layout-sidebar-right-collapse-filled' : 'tabler-layout-sidebar-left-collapse-filled'" />
+            <SvgIcon class="transition-all duration-200" :icon="collapsed ? 'lucide:panel-left-open' : 'lucide:panel-left-close'" />
           </button>
-          <img :src="brandLogoSvg" width="22" height="22" alt="Leon Panel" class="shrink-0">
+          <img :src="brandLogoSvg" width="22" height="22" alt="Leon Panel" class="shrink-0 rounded-[5px]">
           <div class="leon-starter-title">
             <span>{{ title === '' ? defaultTitle : title }}</span>
-            <span class="leon-starter-sep">//</span>
+            <span class="leon-starter-sep">/</span>
             <span class="leon-starter-active-label">{{ activeAppName }}</span>
           </div>
         </div>
@@ -191,18 +221,26 @@ onUnmounted(() => {
                 height,
               }"
             >
-              <button
-                v-for="(item, index) in apps"
-                :key="item.componentName"
-                type="button"
-                class="leon-starter-nav-item"
-                :class="{ 'is-active': componentName === item.componentName }"
-                @click="handleClickApp(item)"
+              <div
+                v-for="group in groupedApps"
+                :key="group.section"
+                class="leon-starter-group"
               >
-                <span class="leon-starter-nav-index">{{ String(index + 1).padStart(2, '0') }}</span>
-                <SvgIcon class="leon-starter-nav-icon" :icon="item.icon" />
-                <span class="leon-starter-nav-text">{{ item.name }}</span>
-              </button>
+                <div class="leon-starter-group-label">
+                  {{ group.label }}
+                </div>
+                <button
+                  v-for="item in group.items"
+                  :key="item.componentName"
+                  type="button"
+                  class="leon-starter-nav-item"
+                  :class="{ 'is-active': componentName === item.componentName }"
+                  @click="handleClickApp(item)"
+                >
+                  <SvgIcon class="leon-starter-nav-icon" :icon="item.icon" />
+                  <span class="leon-starter-nav-text">{{ item.name }}</span>
+                </button>
+              </div>
             </nav>
           </NLayoutSider>
 
@@ -235,16 +273,17 @@ onUnmounted(() => {
   height: 30px;
   padding: 0;
   border: 1px solid var(--leon-ui-border, #d4d4d8);
-  border-radius: var(--leon-ui-radius, 0px);
+  border-radius: var(--leon-ui-radius, 8px);
   background: transparent;
-  color: var(--leon-ui-primary, #ff4f00);
-  font-size: 20px;
+  color: inherit;
+  font-size: 16px;
   cursor: pointer;
-  transition: background-color 0.14s ease, border-color 0.14s ease;
+  transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
 }
 
 .leon-starter-collapse-btn:hover {
-  border-color: var(--leon-ui-primary, #ff4f00);
+  border-color: var(--leon-ui-primary, #0ea5e9);
+  color: var(--leon-ui-primary, #0ea5e9);
 }
 
 .leon-starter-title {
@@ -252,34 +291,49 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .leon-starter-sep {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--leon-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   font-size: 12px;
-  opacity: 0.45;
+  opacity: 0.35;
 }
 
 .leon-starter-active-label {
   font-size: 13px;
   font-weight: 600;
-  color: var(--leon-ui-primary, #ff4f00);
+  color: var(--leon-ui-primary, #0ea5e9);
 }
 
 .leon-starter-layout {
   border: 1px solid var(--leon-ui-border, #e4e4e7);
-  border-radius: var(--leon-ui-radius, 0px);
+  border-radius: var(--leon-ui-radius, 8px);
 }
 
 .leon-starter-nav {
-  padding: 8px;
+  padding: 10px 8px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 12px;
   background: var(--leon-ui-canvas, #f5f5f3);
+}
+
+.leon-starter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.leon-starter-group-label {
+  padding: 2px 10px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.52;
 }
 
 .leon-starter-nav-item {
@@ -287,14 +341,13 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 9px 10px;
+  padding: 8px 10px;
   border: 1px solid transparent;
-  border-left: 3px solid transparent;
-  border-radius: var(--leon-ui-radius, 0px);
+  border-radius: var(--leon-ui-radius, 8px);
   background: transparent;
   color: inherit;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
   text-align: left;
   cursor: pointer;
   transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
@@ -302,27 +355,25 @@ onUnmounted(() => {
 
 .leon-starter-nav-item:hover {
   background: var(--leon-ui-surface, #ffffff);
-  border-color: var(--leon-ui-border, #d4d4d8);
+  border-color: var(--leon-ui-border, #e2e8f0);
 }
 
 .leon-starter-nav-item.is-active {
   background: var(--leon-ui-surface, #ffffff);
-  border-color: var(--leon-ui-border, #18181b);
-  border-left-color: var(--leon-ui-primary, #ff4f00);
-  color: var(--leon-ui-primary, #ff4f00);
-}
-
-.leon-starter-nav-index {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11px;
-  opacity: 0.55;
-  width: 18px;
-  shrink: 0;
+  border-color: var(--leon-ui-border, #cbd5e1);
+  color: var(--leon-ui-primary, #0ea5e9);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
 .leon-starter-nav-icon {
-  font-size: 17px;
+  font-size: 16px;
   flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.leon-starter-nav-item.is-active .leon-starter-nav-icon {
+  opacity: 1;
 }
 
 .leon-starter-nav-text {
@@ -334,7 +385,7 @@ onUnmounted(() => {
 .leon-starter-pane {
   height: 100%;
   overflow-y: auto;
-  padding: 4px 12px 12px;
+  padding: 8px 14px 14px;
   min-width: 280px;
   transition: opacity 0.2s ease;
 }
@@ -342,15 +393,15 @@ onUnmounted(() => {
 
 <style>
 .dark .app-starter-modal-content .n-layout {
-  background-color: #121215;
+  background-color: #14171f;
 }
 
 .dark .leon-starter-nav {
-  background-color: #09090b;
+  background-color: #0b0d11;
 }
 
 .dark .leon-starter-nav-item:hover,
 .dark .leon-starter-nav-item.is-active {
-  background-color: #18181b;
+  background-color: #191d27;
 }
 </style>

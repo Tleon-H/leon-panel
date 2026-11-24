@@ -33,7 +33,7 @@ const data = computed({
         <GenericMonitorCard
           icon-text-icon-hide-title
           :card-type-style="PanelPanelConfigStyleEnum.info"
-          icon="solar-cpu-bold"
+          icon="lucide:cpu"
           :background-color="data.backgroundColor"
           :text-color="data.color"
         >
@@ -56,7 +56,7 @@ const data = computed({
         <GenericMonitorCard
           icon-text-icon-hide-title
           :card-type-style="PanelPanelConfigStyleEnum.icon"
-          icon="solar-cpu-bold"
+          icon="lucide:cpu"
           :background-color="data.backgroundColor"
           :icon-text-color="data.color"
         >

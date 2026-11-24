@@ -182,21 +182,29 @@ function handleRightMenuSelect(key: string | number) {
       @mouseleave="handleSetHoverStatus(false)"
     >
       <!-- 分组标题 -->
-      <div class="system-monitor-header leon-chrome-text text-xl font-extrabold mb-[20px] ml-[10px] flex items-center">
-        <span v-if="showTitle" class="group-title text-shadow">
+      <div class="system-monitor-header leon-group-header leon-chrome-text">
+        <span v-if="showTitle" class="group-title text-[15px] font-semibold tracking-tight text-shadow">
           {{ $t('deskModule.systemMonitor.systemState') }}
         </span>
+        <span v-if="showTitle" class="leon-group-rule" aria-hidden="true" />
         <div
           v-if="allowEdit"
-          class="system-monitor-buttons leon-hover-actions ml-2 flex"
-          :class="monitorGroup.hoverStatus ? 'is-open' : ''"
+          class="system-monitor-buttons leon-hover-actions flex items-center gap-1"
+          :class="monitorGroup.hoverStatus || monitorGroup.sortStatus ? 'is-open' : ''"
         >
-          <span class="mr-2 cursor-pointer" @click="handleAddItem()">
-            <SvgIcon class="leon-chrome-text font-xl" icon="typcn:plus" />
-          </span>
-          <span class="mr-2 cursor-pointer" @click="handleSetSortStatus(!monitorGroup.sortStatus)">
-            <SvgIcon class="leon-chrome-text font-xl" icon="ri:drag-drop-line" />
-          </span>
+          <button type="button" class="leon-group-action-btn" :title="$t('common.add')" :aria-label="$t('common.add')" @click="handleAddItem()">
+            <SvgIcon icon="lucide:plus" />
+          </button>
+          <button
+            type="button"
+            class="leon-group-action-btn"
+            :class="{ 'is-active': monitorGroup.sortStatus }"
+            :title="$t('common.sort')"
+            :aria-label="$t('common.sort')"
+            @click="handleSetSortStatus(!monitorGroup.sortStatus)"
+          >
+            <SvgIcon icon="lucide:grip-vertical" />
+          </button>
         </div>
       </div>
 
@@ -262,7 +270,7 @@ function handleRightMenuSelect(key: string | number) {
             @click="handleSaveSort()"
           >
             <template #icon>
-              <SvgIcon class="font-xl" icon="material-symbols:save" />
+              <SvgIcon class="font-xl" icon="lucide:check" />
             </template>
             <div>
               {{ $t('common.saveSort') }}

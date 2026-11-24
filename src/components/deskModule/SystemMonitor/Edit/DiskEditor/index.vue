@@ -92,7 +92,7 @@ defineExpose({
         <GenericMonitorCard
           icon-text-icon-hide-title
           :card-type-style="PanelPanelConfigStyleEnum.info"
-          icon="solar-cpu-bold"
+          icon="lucide:hard-drive"
           :background-color="extendParam.backgroundColor"
           :text-color="extendParam.color"
         >
@@ -115,7 +115,7 @@ defineExpose({
         <GenericMonitorCard
           icon-text-icon-hide-title
           :card-type-style="PanelPanelConfigStyleEnum.icon"
-          icon="solar-cpu-bold"
+          icon="lucide:hard-drive"
           :background-color="extendParam.backgroundColor"
           :icon-text-color="extendParam.color"
         >

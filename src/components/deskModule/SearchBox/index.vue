@@ -242,45 +242,59 @@ onMounted(() => {
 
       <input ref="searchInput" v-model="searchTerm" :placeholder="$t('deskModule.searchBox.inputPlaceholder')" :aria-keyshortcuts="localSearchEnabled ? 'ArrowUp ArrowDown Enter Escape' : 'Enter Escape'" @focus="onFocus" @blur="onBlur" @input="handleItemSearch" @keydown="handleKeydown">
 
-      <div v-if="searchTerm !== ''" class="search-box-btn-clear w-[25px] mr-[10px] flex justify-center cursor-pointer" @click="handleClearSearchTerm">
-        <SvgIcon style="width: 20px;height: 20px;" icon="line-md:close-small" />
-      </div>
+      <button
+        v-if="searchTerm !== ''"
+        type="button"
+        class="search-box-btn-clear"
+        :aria-label="$t('common.clear')"
+        @click="handleClearSearchTerm"
+      >
+        <SvgIcon class="w-[17px] h-[17px]" icon="lucide:x" />
+      </button>
       <kbd v-else-if="!isFocused" class="leon-search-kbd" aria-hidden="true">/</kbd>
-      <div class="search-box-btn-search w-[25px] flex justify-center cursor-pointer" @click="handleSearchClick">
-        <SvgIcon style="width: 20px;height: 20px;" icon="iconamoon:search-fill" />
-      </div>
+      <button
+        type="button"
+        class="search-box-btn-search"
+        :aria-label="$t('common.search')"
+        @click="handleSearchClick"
+      >
+        <SvgIcon class="w-[18px] h-[18px]" icon="lucide:search" />
+      </button>
     </div>
 
-    <div v-if="searchSelectListShow" class="leon-search-popover w-full mt-[10px] p-[10px]" :style="{ background, color: textColor }">
+    <div v-if="searchSelectListShow" class="leon-search-popover w-full mt-[10px] p-[12px]" :style="{ background, color: textColor }">
       <div
         v-for="(item, index) in config.engines"
         :key="item.id"
         class="engine-row"
+        :class="{ 'is-current': item.id === current.id }"
       >
         <button type="button" class="engine-pick" :title="item.title" @click="handleEngineUpdate(item)">
           <img v-if="engineIcon(item)" class="engine-mark" :src="engineIcon(item)" alt="">
           <span v-else class="engine-letter">{{ engineLetter(item) }}</span>
           <span class="engine-title">{{ item.title }}</span>
         </button>
-        <button type="button" class="engine-action" :disabled="index === 0" @click="moveAt(index, -1)">
-          {{ $t('deskModule.searchBox.engineUp') }}
+        <button type="button" class="engine-icon-btn" :disabled="index === 0" :title="$t('deskModule.searchBox.engineUp')" :aria-label="$t('deskModule.searchBox.engineUp')" @click="moveAt(index, -1)">
+          <SvgIcon icon="lucide:chevron-up" />
         </button>
-        <button type="button" class="engine-action" :disabled="index === config.engines.length - 1" @click="moveAt(index, 1)">
-          {{ $t('deskModule.searchBox.engineDown') }}
+        <button type="button" class="engine-icon-btn" :disabled="index === config.engines.length - 1" :title="$t('deskModule.searchBox.engineDown')" :aria-label="$t('deskModule.searchBox.engineDown')" @click="moveAt(index, 1)">
+          <SvgIcon icon="lucide:chevron-down" />
         </button>
-        <button v-if="!item.builtin" type="button" class="engine-action" @click="beginEdit(item)">
-          {{ $t('deskModule.searchBox.engineEdit') }}
+        <button v-if="!item.builtin" type="button" class="engine-icon-btn" :title="$t('deskModule.searchBox.engineEdit')" :aria-label="$t('deskModule.searchBox.engineEdit')" @click="beginEdit(item)">
+          <SvgIcon icon="lucide:pencil" />
         </button>
-        <button v-if="!item.builtin" type="button" class="engine-action" @click="removeAt(item)">
-          {{ $t('deskModule.searchBox.engineDelete') }}
+        <button v-if="!item.builtin" type="button" class="engine-icon-btn is-danger" :title="$t('deskModule.searchBox.engineDelete')" :aria-label="$t('deskModule.searchBox.engineDelete')" @click="removeAt(item)">
+          <SvgIcon icon="lucide:trash-2" />
         </button>
       </div>
 
       <div class="engine-form">
-        <input v-model="draftTitle" :placeholder="$t('deskModule.searchBox.engineTitle')">
-        <input v-model="draftUrl" placeholder="https://example.com/search?q=%s" spellcheck="false">
-        <div class="engine-form-actions">
-          <button type="button" class="engine-action" @click="submitDraft">
+        <div class="engine-form-fields">
+          <input v-model="draftTitle" :placeholder="$t('deskModule.searchBox.engineTitle')">
+          <input v-model="draftUrl" placeholder="https://example.com/search?q=%s" spellcheck="false">
+        </div>
+        <div class="engine-form-actions mt-2">
+          <button type="button" class="engine-action is-primary" @click="submitDraft">
             {{ editingId ? $t('deskModule.searchBox.engineSave') : $t('deskModule.searchBox.engineAdd') }}
           </button>
           <button v-if="editingId" type="button" class="engine-action" @click="cancelEdit">
@@ -295,7 +309,7 @@ onMounted(() => {
         </p>
       </div>
 
-      <div class="mt-[10px]">
+      <div class="mt-[10px] pt-[10px] border-t border-white/10">
         <NCheckbox :checked="config.newWindowOpen" @update:checked="onNewWindow">
           <span :style="{ color: textColor }">
             {{ $t('deskModule.searchBox.openWithNewOpen') }}
@@ -312,16 +326,17 @@ onMounted(() => {
 <style scoped>
 .search-container {
   border: var(--leon-card-border-width, 1px) solid var(--leon-search-border, #ccc);
-  border-radius: var(--leon-card-radius, 16px);
-  transition: box-shadow 0.2s, backdrop-filter 0.2s, border-color 0.2s, transform 0.15s;
-  padding: 2px 12px;
+  border-radius: var(--leon-card-radius, 12px);
+  box-shadow: var(--leon-card-shadow, none);
+  transition: box-shadow 0.18s ease, backdrop-filter 0.18s ease, border-color 0.18s ease, transform 0.15s ease;
+  padding: 2px 10px 2px 12px;
   backdrop-filter: blur(var(--leon-card-blur, 8px));
   flex-wrap: nowrap;
 }
 
 .focused, .search-container:hover {
-  border-color: var(--leon-accent-color, #ff4f00);
-  box-shadow: var(--leon-card-hover-shadow, 0px 0px 0px 2px rgba(56, 189, 248, 0.2));
+  border-color: var(--leon-accent-color, #0ea5e9);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--leon-accent-color, #0ea5e9) 18%, transparent);
 }
 
 .search-box-btn-engine {
@@ -330,15 +345,48 @@ onMounted(() => {
   padding: 0 6px 0 2px;
   margin-right: 4px;
   border: 0;
+  border-radius: 8px;
   background: transparent;
   color: inherit;
   flex-shrink: 0;
-  transition: opacity 0.15s ease;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+
+.search-box-btn-engine:hover {
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.search-box-btn-clear,
+.search-box-btn-search {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  opacity: 0.72;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+
+.search-box-btn-clear {
+  margin-right: 4px;
+}
+
+.search-box-btn-clear:hover,
+.search-box-btn-search:hover {
+  opacity: 1;
+  background: rgba(148, 163, 184, 0.14);
 }
 
 .engine-chevron {
-  width: 13px;
-  height: 13px;
+  width: 14px;
+  height: 14px;
   opacity: 0.65;
   flex-shrink: 0;
   transition: transform 0.18s ease, opacity 0.15s ease;
@@ -359,14 +407,14 @@ onMounted(() => {
   justify-content: center;
   min-width: 22px;
   height: 22px;
-  margin-right: 8px;
-  padding: 0 5px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  margin-right: 6px;
+  padding: 0 6px;
+  font-family: var(--leon-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   font-size: 11px;
-  font-weight: 700;
-  border: 1px solid var(--leon-search-border, rgba(148, 163, 184, 0.5));
-  border-radius: var(--leon-card-radius, 4px);
-  opacity: 0.65;
+  font-weight: 600;
+  border: 1px solid var(--leon-search-border, rgba(148, 163, 184, 0.4));
+  border-radius: 6px;
+  opacity: 0.6;
   pointer-events: none;
 }
 
@@ -379,6 +427,7 @@ onMounted(() => {
 .leon-search-popover {
   border: var(--leon-card-border-width, 1px) solid var(--leon-search-border, #ccc);
   border-radius: var(--leon-card-radius, 12px);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.22);
   backdrop-filter: blur(var(--leon-card-blur, 8px));
 }
 
@@ -388,16 +437,16 @@ input {
   width: auto;
   flex: 1;
   min-width: 0;
-  height: 40px;
-  padding: 10px 5px;
+  height: 42px;
+  padding: 8px 6px;
   border: none;
   outline: none;
-  font-size: 17px;
+  font-size: 15px;
   color: inherit;
 }
 
 input::placeholder {
-  color: var(--leon-search-placeholder, rgba(255, 255, 255, 0.78));
+  color: var(--leon-search-placeholder, rgba(255, 255, 255, 0.72));
 }
 
 .engine-row,
@@ -408,7 +457,15 @@ input::placeholder {
 }
 
 .engine-row {
-  margin-bottom: 8px;
+  padding: 5px 6px;
+  margin-bottom: 4px;
+  border-radius: 8px;
+  transition: background-color 0.14s ease;
+}
+
+.engine-row:hover,
+.engine-row.is-current {
+  background: rgba(148, 163, 184, 0.12);
 }
 
 .engine-pick {
@@ -423,6 +480,8 @@ input::placeholder {
   color: inherit;
   cursor: pointer;
   text-align: left;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .engine-title {
@@ -433,31 +492,72 @@ input::placeholder {
 
 .engine-mark,
 .engine-letter {
-  width: 22px;
-  height: 22px;
-  flex: 0 0 22px;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
 }
 
 .engine-letter {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: var(--leon-card-radius, 6px);
+  border-radius: 6px;
   background: var(--leon-search-badge-bg, #f4f4f5);
   border: 1px solid var(--leon-search-border, rgba(148, 163, 184, 0.55));
   color: var(--leon-search-text, #0f172a);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   line-height: 1;
 }
 
-.engine-action {
-  border: 1px solid var(--leon-search-border, rgba(255, 255, 255, 0.45));
+.engine-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
   background: transparent;
   color: inherit;
-  border-radius: 8px;
-  padding: 2px 6px;
+  opacity: 0.72;
+  font-size: 14px;
   cursor: pointer;
+  transition: opacity 0.14s ease, background-color 0.14s ease, border-color 0.14s ease;
+}
+
+.engine-icon-btn:hover:not(:disabled) {
+  opacity: 1;
+  background: rgba(148, 163, 184, 0.16);
+  border-color: var(--leon-search-border, rgba(148, 163, 184, 0.3));
+}
+
+.engine-icon-btn.is-danger:hover:not(:disabled) {
+  color: #ef4444;
+}
+
+.engine-icon-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.engine-action {
+  border: 1px solid var(--leon-search-border, rgba(148, 163, 184, 0.38));
+  background: transparent;
+  color: inherit;
+  border-radius: 7px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.14s ease, border-color 0.14s ease;
+}
+
+.engine-action.is-primary {
+  background: var(--leon-accent-color, #0ea5e9);
+  border-color: var(--leon-accent-color, #0ea5e9);
+  color: #ffffff;
 }
 
 .engine-action:disabled {
@@ -465,22 +565,42 @@ input::placeholder {
   cursor: default;
 }
 
+.engine-form {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.engine-form-fields {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+
 .engine-form input {
   display: block;
   width: 100%;
-  margin-top: 6px;
-  border: 1px solid var(--leon-search-border, rgba(255, 255, 255, 0.45));
+  height: 34px;
+  padding: 6px 10px;
+  font-size: 13px;
+  border: 1px solid var(--leon-search-border, rgba(148, 163, 184, 0.38));
   border-radius: 8px;
+}
+
+.engine-form input:focus {
+  border-color: var(--leon-accent-color, #0ea5e9);
 }
 
 .engine-help,
 .engine-error {
-  margin: 8px 0 0;
-  font-size: 13px;
+  margin: 6px 0 0;
+  font-size: 12px;
   line-height: 1.4;
+  opacity: 0.78;
 }
 
 .engine-error {
-  color: #fecaca;
+  opacity: 1;
+  color: #f87171;
 }
 </style>

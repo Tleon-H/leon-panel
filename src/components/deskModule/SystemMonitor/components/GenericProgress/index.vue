@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { NProgress } from 'naive-ui'
 import { PanelPanelConfigStyleEnum } from '@/enums'
 
@@ -13,7 +14,15 @@ interface Prop {
   infoCardRightText?: string
 }
 
-defineProps<Prop>()
+const props = defineProps<Prop>()
+
+const resolvedProgressColor = computed(() => {
+  if (props.percentage >= 85)
+    return '#ef4444'
+  if (props.percentage >= 65)
+    return '#f59e0b'
+  return props.progressColor
+})
 </script>
 
 <template>
@@ -27,7 +36,7 @@ defineProps<Prop>()
           {{ infoCardLeftText }}
         </span>
         <span
-          class="leon-monitor-progress-value shrink-0 whitespace-nowrap tabular-nums text-[10px] sm:text-[11px]"
+          class="leon-monitor-progress-value shrink-0 whitespace-nowrap font-mono tabular-nums text-[10px] sm:text-[11px] opacity-85"
           :title="infoCardRightText"
         >
           {{ infoCardRightText }}
@@ -36,9 +45,9 @@ defineProps<Prop>()
       <div class="leon-monitor-progress-bar w-full">
         <NProgress
           type="line"
-          :color="progressColor"
+          :color="resolvedProgressColor"
           :rail-color="progressRailColor"
-          :height="progressHeight"
+          :height="progressHeight || 6"
           :percentage="percentage"
           :show-indicator="false"
           :stroke-width="15"
@@ -48,15 +57,16 @@ defineProps<Prop>()
     </div>
   </template>
   <template v-else>
-    <div class="w-full flex justify-center h-full w-full mt-3">
+    <div class="w-full flex justify-center h-full mt-3">
       <NProgress
-        :color="progressColor"
+        :color="resolvedProgressColor"
         :rail-color="progressRailColor"
         type="dashboard"
-        :percentage="percentage" :stroke-width="15"
+        :percentage="percentage"
+        :stroke-width="14"
         style="width: 50px;"
       >
-        <div class="text-white" style="font-size: 8px;" :style="{ color: textColor }">
+        <div class="font-mono tabular-nums font-semibold" style="font-size: 9px;" :style="{ color: textColor }">
           {{ percentage }}%
         </div>
       </NProgress>

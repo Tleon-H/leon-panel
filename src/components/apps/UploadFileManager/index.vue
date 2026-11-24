@@ -421,12 +421,12 @@ onMounted(() => {
                   <NButtonGroup>
                     <NButton size="tiny" tertiary style="cursor: pointer;" :title="$t('apps.uploadsFileManager.copyLink')" @click="copyImageUrl(item.src)">
                       <template #icon>
-                        <SvgIcon icon="ion-copy" />
+                        <SvgIcon icon="lucide:copy" />
                       </template>
                     </NButton>
                     <NButton size="tiny" tertiary style="cursor: pointer;" :title="timeFormat(item.createTime)" @click="handleInfoClick(item)">
                       <template #icon>
-                        <SvgIcon icon="mdi-information-box-outline" />
+                        <SvgIcon icon="lucide:info" />
                       </template>
                     </NButton>
                     <NButton size="tiny" tertiary style="cursor: pointer;" :disabled="!panelStore.isCloudConfigReady" :title="$t('apps.uploadsFileManager.setWallpaper')" @click="handleSetWallpaper(item.src)">
@@ -445,7 +445,7 @@ onMounted(() => {
                     </NButton>
                     <NButton size="tiny" tertiary type="error" style="cursor: pointer;" data-testid="file-delete-one" :disabled="deleting" :title="$t('common.delete')" @click="askDelete([item.id as number])">
                       <template #icon>
-                        <SvgIcon icon="material-symbols-delete" />
+                        <SvgIcon icon="lucide:trash-2" />
                       </template>
                     </NButton>
                   </NButtonGroup>

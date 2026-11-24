@@ -1,31 +1,37 @@
 import { ss } from '@/utils/storage'
 import { getStorage as getAuthStorage } from '@/store/modules/auth/helper'
 import { normalizeMaxWidth } from '@/utils/panel/maxWidth'
-import { DEFAULT_APPEARANCE_SCOPES, isPanelStateOwnedByAccount, normalizePanelAppearance, serializePanelConfig } from '@/utils/panel/appearance'
+import { APPEARANCE_PRESETS, DEFAULT_APPEARANCE_SCOPES, isPanelStateOwnedByAccount, normalizePanelAppearance, serializePanelConfig } from '@/utils/panel/appearance'
 import { PanelPanelConfigStyleEnum, PanelStateNetworkModeEnum } from '@/enums'
-import defaultBackground from '@/assets/defaultBackground.webp'
 const LOCAL_NAME = 'panelStorage'
 
-const defaultFooterHtml = '<div class="flex justify-center text-slate-300" style="margin-top:100px">Powered by <a href="https://github.com/Tleon-H/leon-panel" target="_blank" class="ml-[5px]">Leon Panel</a></div>'
+const defaultFooterHtml = '<div class="flex justify-center text-slate-400 text-xs" style="margin-top:80px">Powered by <a href="https://github.com/Tleon-H/leon-panel" target="_blank" class="ml-[5px]">Leon Panel</a></div>'
 
 export function defaultStatePanelConfig(): Panel.panelConfig {
+  const preset = APPEARANCE_PRESETS['obsidian-slate']
   return normalizePanelAppearance<Panel.panelConfig>({
-    backgroundImageSrc: defaultBackground,
-    backgroundBlur: 0,
-    backgroundMaskNumber: 0,
-    cardSurface: 'default',
-    iconStyle: PanelPanelConfigStyleEnum.icon,
-    iconBadgeStyle: 'default',
-    iconTextColor: '#ffffff',
+    backgroundImageSrc: preset.wallpaper.backgroundImageSrc,
+    backgroundBlur: preset.wallpaper.backgroundBlur,
+    backgroundMaskNumber: preset.wallpaper.backgroundMaskNumber,
+    wallpaperTone: preset.wallpaper.wallpaperTone,
+    cardSurface: preset.cardStyle.cardSurface,
+    cardBackgroundColor: preset.cardStyle.cardBackgroundColor,
+    cardBorderColor: preset.cardStyle.cardBorderColor,
+    cardBlur: preset.cardStyle.cardBlur,
+    cardBorderRadius: preset.cardStyle.cardBorderRadius,
+    cardAccentColor: preset.cardStyle.cardAccentColor,
+    iconStyle: PanelPanelConfigStyleEnum.info,
+    iconBadgeStyle: preset.iconStyle.iconBadgeStyle,
+    iconTextColor: preset.iconStyle.iconTextColor,
     iconTextInfoHideDescription: false,
     iconTextIconHideTitle: false,
     logoText: 'Leon Panel',
     logoImageSrc: '',
     clockShowSecond: false,
-    searchBoxShow: false,
-    searchBoxSearchIcon: false,
-    marginBottom: 10,
-    marginTop: 10,
+    searchBoxShow: true,
+    searchBoxSearchIcon: true,
+    marginBottom: 8,
+    marginTop: 6,
     maxWidth: 1200,
     maxWidthUnit: 'px',
     marginX: 5,
