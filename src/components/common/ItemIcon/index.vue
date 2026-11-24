@@ -4,8 +4,21 @@ import { NAvatar } from 'naive-ui'
 import { computed, ref, watch, withDefaults } from 'vue'
 import SvgIcon from '../SvgIcon/index.vue'
 import { t } from '@/locales'
-import { createRemoteIconController, fallbackLabel, isRemoteIconType, rejectAfter, type RemoteIconPhase } from '@/utils/icon/remoteIcon'
-import { computeDynamicImagePadding, computeDynamicVectorSize, computeMonogramBackground, isBundledLocalIcon, normalizeLocalIconKey } from '@/utils/icon/localIcons'
+import {
+  computeDynamicVectorSize,
+  computeIconImagePadding,
+  computeMonogramBackground,
+  isBundledLocalIcon,
+  normalizeLocalIconKey,
+  resolveIconImageFit,
+} from '@/utils/icon/localIcons'
+import {
+  type RemoteIconPhase,
+  createRemoteIconController,
+  fallbackLabel,
+  isRemoteIconType,
+  rejectAfter,
+} from '@/utils/icon/remoteIcon'
 import { isLegacyDefaultCardBackground, resolveIconForegroundColor } from '@/utils/panel/appearance'
 
 interface Prop {
@@ -29,18 +42,22 @@ const defaultStyle = computed(() => ({
   width: `${props.size}px`,
   height: `${props.size}px`,
 }))
-const iconExt = computed(() => {
-  const cleanSrc = props.itemIcon?.src?.split('?')[0]?.split('#')[0] || ''
-  return cleanSrc.split('.').pop()?.toLowerCase()
-})
+const imageFit = computed(() => resolveIconImageFit(props.itemIcon?.imageFit))
+const isFullBleedImage = computed(() => imageFit.value === 'cover')
 const vectorSizePx = computed(() => `${computeDynamicVectorSize(props.size)}px`)
-const imagePaddingPx = computed(() => `${computeDynamicImagePadding(props.size)}px`)
+const imagePaddingPx = computed(() => `${computeIconImagePadding(props.size, imageFit.value)}px`)
 const rawBackgroundColor = computed(() => (props.forceBackground ?? props.itemIcon?.backgroundColor) || defaultBackground)
 const isBundledLocal = computed(() => props.itemIcon?.itemType === 3 && isBundledLocalIcon(props.itemIcon?.text))
 const normalizedLocalIcon = computed(() => normalizeLocalIconKey(props.itemIcon?.text))
 const letter = computed(() => fallbackLabel(props.itemIcon?.itemType, props.itemIcon?.text, props.fallbackText))
 const monogramFontSizePx = computed(() => `${Math.max(13, Math.round(props.size * 0.42))}px`)
 const fallbackAvatarBackground = computed(() => {
+  // Always keep a readable solid surface when an image fails to load so the fallback monogram stays legible
+  if (props.itemIcon?.itemType === 2) {
+    if (!isLegacyDefaultCardBackground(props.itemIcon?.backgroundColor) && props.itemIcon?.backgroundColor !== 'transparent' && props.itemIcon?.backgroundColor !== '#00000000')
+      return props.itemIcon?.backgroundColor as string
+    return computeMonogramBackground(props.fallbackText || letter.value)
+  }
   if (props.forceBackground && props.forceBackground !== 'transparent')
     return props.forceBackground
   if (!isLegacyDefaultCardBackground(props.itemIcon?.backgroundColor))
@@ -65,6 +82,11 @@ const fallbackAvatarStyle = computed(() => ({
   fontWeight: 600,
   letterSpacing: '-0.02em',
 }))
+const imageBoxStyle = computed(() => ({
+  ...defaultStyle.value,
+  backgroundColor: isFullBleedImage.value ? 'transparent' : rawBackgroundColor.value,
+  padding: imagePaddingPx.value,
+}))
 const remoteKey = computed(() => {
   if (!isRemoteIconType(props.itemIcon?.itemType))
     return ''
@@ -88,7 +110,7 @@ watch(remoteKey, () => {
   }
   const name = props.itemIcon?.text?.trim()
   if (name)
-    void loadOnlineIcon(name, next.requestId)
+    loadOnlineIcon(name, next.requestId)
 }, { immediate: true })
 
 async function loadOnlineIcon(name: string, serial: number) {
@@ -120,7 +142,7 @@ function onImgError(event: Event) {
 </script>
 
 <template>
-  <div class="item-icon" :style="defaultStyle">
+  <div class="item-icon" :style="defaultStyle" :data-image-fit="itemIcon?.itemType === 2 ? imageFit : undefined">
     <slot>
       <template v-if="itemIcon">
         <template v-if="itemIcon.itemType === 1">
@@ -131,16 +153,15 @@ function onImgError(event: Event) {
 
         <template v-else-if="showImage">
           <div
-            :style="{ backgroundColor: rawBackgroundColor, ...defaultStyle, padding: iconExt === 'svg' ? '0px' : imagePaddingPx }"
-            class="flex justify-center items-center overflow-hidden box-border"
+            :style="imageBoxStyle"
+            class="leon-icon-img-box flex justify-center items-center overflow-hidden box-border"
           >
             <img
               :key="requestSerial"
               :data-request="requestSerial"
               :src="itemIcon.src"
               :alt="fallbackText || letter"
-              :style="iconExt === 'svg' ? { width: vectorSizePx, height: vectorSizePx } : undefined"
-              :class="iconExt === 'svg' ? 'object-contain' : 'w-full h-full object-contain'"
+              :class="isFullBleedImage ? 'w-full h-full object-cover block' : 'w-full h-full object-contain block'"
               @load="onImgLoad"
               @error="onImgError"
             >

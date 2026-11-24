@@ -1,13 +1,13 @@
 <script setup lang="ts">
-import { NButton, NColorPicker, NInput, NModal, NRadio, NUpload } from 'naive-ui'
+import { NButton, NColorPicker, NInput, NModal, NRadio, NSwitch, NUpload } from 'naive-ui'
 import type { UploadFileInfo } from 'naive-ui'
 import { computed, defineProps, ref } from 'vue'
-import { ItemIcon, SvgIcon } from '@/components/common'
 import OwnGallery from '@/components/apps/OwnGallery/index.vue'
 import PublicGallery from '@/components/apps/PublicGallery/index.vue'
+import { ItemIcon, SvgIcon } from '@/components/common'
 import { useAuthStore } from '@/store'
-import { apiRespErrMsg } from '@/utils/request/apiMessage'
 import { type HomelabIconPreset, filterHomelabPresets } from '@/utils/icon/localIcons'
+import { apiRespErrMsg } from '@/utils/request/apiMessage'
 
 const props = defineProps<{
   itemIcon: Panel.ItemIcon | null
@@ -96,6 +96,11 @@ const handleUploadFinish = ({
   }
 
   return file
+}
+
+function handleImageFitToggle(contain: boolean) {
+  itemIconInfo.value.imageFit = contain ? 'contain' : 'cover'
+  handleChange()
 }
 
 function usePublicIcon(src: string) {
@@ -196,7 +201,15 @@ function useOwnIcon(src: string) {
 
           <!-- 图片 -->
           <div v-if="itemIconInfo.itemType === 2">
-            <NInput v-model:value="itemIconInfo.src" class="mb-[5px] w-full" size="small" type="text" :placeholder="$t('iconItem.inputIconUrlOrUpload')" @input="handleChange" />
+            <NInput
+              v-model:value="itemIconInfo.src"
+              class="mb-[5px] w-full"
+              size="small"
+              type="text"
+              data-testid="icon-src-input"
+              :placeholder="$t('iconItem.inputIconUrlOrUpload')"
+              @input="handleChange"
+            />
             <NUpload
               action="/api/file/uploadImg"
               :show-file-list="false"
@@ -218,6 +231,16 @@ function useOwnIcon(src: string) {
               <NButton size="small" data-testid="open-public-icons" @click="showPublicIcons = true">
                 {{ $t('apps.publicGallery.open') }}
               </NButton>
+            </div>
+            <div class="mt-2 flex items-center gap-2 text-xs">
+              <NSwitch
+                :value="itemIconInfo.imageFit === 'contain'"
+                size="small"
+                data-testid="icon-image-fit-toggle"
+                @update:value="handleImageFitToggle"
+              />
+              <span class="font-medium">{{ $t('iconItem.imageFitContain') }}</span>
+              <span class="opacity-65">{{ $t('iconItem.imageFitContainTip') }}</span>
             </div>
             <NModal v-model:show="showOwnIcons" preset="card" :title="$t('apps.ownGallery.title')" style="width: min(720px, 96vw);">
               <OwnGallery selectable @select="useOwnIcon" />

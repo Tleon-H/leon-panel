@@ -10,7 +10,6 @@ import {
   NPopconfirm,
   NSelect,
   NSlider,
-  NSpace,
   NSwitch,
   NTabPane,
   NTabs,
@@ -29,7 +28,10 @@ import {
 import {
   type DesktopWidgetItem,
   type DesktopWidgetType,
+  MAX_COUNTDOWN_ENTRIES,
+  WIDGET_CATALOG,
   createDesktopWidget,
+  formatIsoDateLocal,
   sanitizeWidgetUrl,
 } from '@/utils/studio/studioConfig'
 
@@ -165,6 +167,35 @@ function moveWidget(index: number, delta: number) {
 
 function removeWidget(index: number) {
   studioStore.config.widgets.splice(index, 1)
+  persistStudio()
+}
+
+function addCountdownEntry(widget: DesktopWidgetItem) {
+  if (!Array.isArray(widget.countdownEntries))
+    widget.countdownEntries = []
+  if (widget.countdownEntries.length >= MAX_COUNTDOWN_ENTRIES)
+    return
+  const nextMonth = new Date()
+  nextMonth.setDate(nextMonth.getDate() + 30)
+  widget.countdownEntries.push({
+    id: `c-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+    label: t('apps.leonStudio.countdownDefaultLabel'),
+    targetDate: formatIsoDateLocal(nextMonth),
+  })
+  persistStudio()
+}
+
+function removeCountdownEntry(widget: DesktopWidgetItem, entryIdx: number) {
+  if (!Array.isArray(widget.countdownEntries))
+    return
+  widget.countdownEntries.splice(entryIdx, 1)
+  persistStudio()
+}
+
+function clearCompletedTodos(widget: DesktopWidgetItem) {
+  if (!Array.isArray(widget.todoItems))
+    return
+  widget.todoItems = widget.todoItems.filter(item => !item.done)
   persistStudio()
 }
 
@@ -403,21 +434,36 @@ function removeCustomSnippet(index: number) {
         </div>
       </NTabPane>
 
-      <!-- TAB 2: 桌面小组件 -->
+      <!-- TAB 2: 桌面小组件（可视化组件选择器 + 列表） -->
       <NTabPane name="widgets" :tab="$t('apps.leonStudio.tabWidgets')">
-        <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
-          <span class="text-xs opacity-75">{{ $t('apps.leonStudio.widgetsHint') }}</span>
-          <NSpace size="small">
-            <NButton size="small" @click="addWidget('clock')">
-              + {{ $t('apps.leonStudio.addClockWidget') }}
-            </NButton>
-            <NButton size="small" @click="addWidget('memo')">
-              + {{ $t('apps.leonStudio.addMemoWidget') }}
-            </NButton>
-            <NButton size="small" type="primary" @click="addWidget('iframe')">
-              + {{ $t('apps.leonStudio.addIframeWidget') }}
-            </NButton>
-          </NSpace>
+        <div class="mb-3">
+          <div class="text-xs font-semibold mb-2 opacity-80">
+            {{ $t('apps.leonStudio.widgetPickerTitle') }}
+          </div>
+          <div class="grid grid-cols-2 sm:grid-cols-5 gap-2" data-testid="visual-widget-picker">
+            <button
+              v-for="item in WIDGET_CATALOG"
+              :key="item.type"
+              type="button"
+              class="leon-widget-picker-card"
+              :data-testid="`widget-picker-${item.type}`"
+              @click="addWidget(item.type)"
+            >
+              <div class="flex items-center justify-between gap-1 w-full">
+                <span class="leon-widget-picker-icon" :style="{ backgroundColor: item.accent }">
+                  <SvgIcon :icon="item.icon" class="text-[15px] text-white" />
+                </span>
+                <span v-if="item.isNew" class="leon-widget-new-badge">NEW</span>
+                <SvgIcon v-else icon="lucide:plus" class="text-[13px] opacity-50" />
+              </div>
+              <div class="font-semibold text-xs truncate mt-2">
+                {{ $t(item.nameKey) }}
+              </div>
+              <div class="text-[11px] opacity-60 truncate mt-0.5">
+                {{ $t(item.tagKey) }}
+              </div>
+            </button>
+          </div>
         </div>
 
         <div v-if="studioStore.config.widgets.length === 0" class="p-6 text-center text-xs opacity-65 border border-dashed rounded-lg">
@@ -431,7 +477,7 @@ function removeCustomSnippet(index: number) {
                 <NTag size="small" type="info">
                   {{ widget.type.toUpperCase() }}
                 </NTag>
-                <NInput v-model:value="widget.title" size="tiny" style="width: 160px;" :placeholder="$t('common.title')" />
+                <NInput v-model:value="widget.title" size="tiny" style="width: 150px;" :placeholder="$t('common.title')" />
                 <NSwitch v-model:value="widget.enabled" size="small" />
               </div>
               <div class="flex items-center gap-1">
@@ -455,7 +501,57 @@ function removeCustomSnippet(index: number) {
               </div>
             </div>
 
-            <div v-if="widget.type === 'memo'" class="mt-2">
+            <div v-if="widget.type === 'todo'" class="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <span class="opacity-75">
+                {{ $t('apps.leonStudio.todoEditorSummary', {
+                  done: (widget.todoItems || []).filter(i => i.done).length,
+                  total: (widget.todoItems || []).length,
+                }) }}
+              </span>
+              <NButton
+                size="tiny"
+                secondary
+                :disabled="!(widget.todoItems || []).some(i => i.done)"
+                @click="clearCompletedTodos(widget)"
+              >
+                {{ $t('apps.leonStudio.todoClearDone') }}
+              </NButton>
+            </div>
+
+            <div v-else-if="widget.type === 'countdown'" class="mt-2 space-y-2">
+              <div
+                v-for="(entry, eIdx) in (widget.countdownEntries || [])"
+                :key="entry.id"
+                class="flex flex-wrap items-center gap-2"
+              >
+                <NInput
+                  v-model:value="entry.label"
+                  size="small"
+                  class="flex-1 min-w-[130px]"
+                  :placeholder="$t('apps.leonStudio.countdownLabelPlaceholder')"
+                />
+                <input
+                  v-model="entry.targetDate"
+                  type="date"
+                  class="leon-date-input"
+                >
+                <NButton size="tiny" type="error" secondary @click="removeCountdownEntry(widget, eIdx)">
+                  ×
+                </NButton>
+              </div>
+              <div>
+                <NButton
+                  size="tiny"
+                  secondary
+                  :disabled="(widget.countdownEntries || []).length >= MAX_COUNTDOWN_ENTRIES"
+                  @click="addCountdownEntry(widget)"
+                >
+                  + {{ $t('apps.leonStudio.countdownAddEntry') }}
+                </NButton>
+              </div>
+            </div>
+
+            <div v-else-if="widget.type === 'memo'" class="mt-2">
               <NInput v-model:value="widget.content" type="textarea" :rows="3" :placeholder="$t('apps.leonStudio.widgetMemoPlaceholder')" />
             </div>
 
@@ -571,5 +667,59 @@ function removeCustomSnippet(index: number) {
   border-radius: 8px;
   border: 1px solid rgba(148, 163, 184, 0.24);
   background: rgba(148, 163, 184, 0.04);
+}
+
+.leon-widget-picker-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(148, 163, 184, 0.05);
+  color: inherit;
+  cursor: pointer;
+  transition: border-color 0.16s ease, background-color 0.16s ease, transform 0.14s ease;
+}
+
+.leon-widget-picker-card:hover,
+.leon-widget-picker-card:focus-visible {
+  outline: none;
+  border-color: var(--leon-ui-primary, #0ea5e9);
+  background: color-mix(in srgb, var(--leon-ui-primary, #0ea5e9) 9%, transparent);
+  transform: translateY(-1px);
+  box-shadow: 0 0 0 1px var(--leon-ui-primary, #0ea5e9);
+}
+
+.leon-widget-picker-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.leon-widget-new-badge {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--leon-ui-primary, #0ea5e9) 18%, transparent);
+  color: var(--leon-ui-primary, #0ea5e9);
+}
+
+.leon-date-input {
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  font-family: var(--leon-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
 }
 </style>

@@ -106,14 +106,16 @@ test('Style Studio pins the live preview dock above an independent scroll pane a
 
   assert.match(style, /class="leon-pinned-dock"/)
   assert.match(style, /class="leon-visual-scroll"/)
+  assert.match(style, /data-testid="style-undo-btn"/)
   assert.doesNotMatch(style, /NTabs/)
   assert.match(style, /CARD_HOVER_EFFECT_OPTIONS/)
   assert.match(style, /CURSOR_PRESET_OPTIONS/)
 
-  // LeonStudio focuses strictly on layout, header toggles, widgets, and custom code without duplicating theme/modular pickers
+  // LeonStudio focuses strictly on layout, header toggles, visual widget picker, and custom code without duplicating theme/modular pickers
   assert.doesNotMatch(studio, /APPEARANCE_PRESETS/)
   assert.doesNotMatch(studio, /CARD_HOVER_EFFECT_OPTIONS/)
   assert.match(studio, /layout-mode-select/)
+  assert.match(studio, /visual-widget-picker/)
 })
 
 test('computeCardPointerVars maps center, corners, clamps out-of-bounds coordinates, and guards zero dimensions', () => {

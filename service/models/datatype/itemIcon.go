@@ -6,4 +6,5 @@ type ItemIconIconInfo struct {
 	Text     string `json:"text"`
 	// BgColor  string `json:"bgColor"`
 	BackgroundColor string `json:"backgroundColor"`
+	ImageFit        string `json:"imageFit,omitempty"`
 }

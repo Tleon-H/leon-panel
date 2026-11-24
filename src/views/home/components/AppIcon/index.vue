@@ -4,7 +4,15 @@ import { NEllipsis } from 'naive-ui'
 import { ItemIcon } from '@/components/common'
 import { PanelPanelConfigStyleEnum } from '@/enums'
 import { usePanelState } from '@/store'
-import { resolveCardAppearance, resolveHomepageThemeVars, resolveIconBadgeBackgroundColor, resolveIconForegroundColor, resolveSmallIconBackgroundColor, resolveSmallTitleColor } from '@/utils/panel/appearance'
+import { resolveIconImageFit } from '@/utils/icon/localIcons'
+import {
+  resolveCardAppearance,
+  resolveHomepageThemeVars,
+  resolveIconBadgeBackgroundColor,
+  resolveIconForegroundColor,
+  resolveSmallIconBackgroundColor,
+  resolveSmallTitleColor,
+} from '@/utils/panel/appearance'
 
 interface Prop {
   itemInfo?: Panel.ItemInfo
@@ -34,6 +42,9 @@ const iconForegroundColor = computed(() => resolveIconForegroundColor(infoIconBa
 const smallIconBackground = computed(() => resolveSmallIconBackgroundColor(effectiveConfig.value, props.itemInfo?.icon, props.forceBackground))
 const smallIconForegroundColor = computed(() => resolveIconForegroundColor(smallIconBackground.value, homepageTheme.value.canvasFallback))
 
+const isImageIcon = computed(() => props.itemInfo?.icon?.itemType === 2 && Boolean(props.itemInfo?.icon?.src))
+const isFullBleedImage = computed(() => isImageIcon.value && resolveIconImageFit(props.itemInfo?.icon?.imageFit) === 'cover')
+
 const infoCardStyle = computed(() => ({
   background: cardAppearance.value.backgroundColor,
   borderColor: cardAppearance.value.borderColor,
@@ -44,14 +55,16 @@ const infoCardStyle = computed(() => ({
 
 const smallIconTileStyle = computed(() => ({
   borderRadius: cardAppearance.value.borderRadius,
-  borderColor: cardAppearance.value.borderColor,
-  backdropFilter: cardAppearance.value.backdropFilter,
-  WebkitBackdropFilter: cardAppearance.value.backdropFilter,
+  borderColor: isFullBleedImage.value ? 'transparent' : cardAppearance.value.borderColor,
+  backdropFilter: isFullBleedImage.value ? 'none' : cardAppearance.value.backdropFilter,
+  WebkitBackdropFilter: isFullBleedImage.value ? 'none' : cardAppearance.value.backdropFilter,
 }))
 
 const smallItemForceBackground = computed(() => {
   if (props.forceBackground)
     return props.forceBackground
+  if (isFullBleedImage.value)
+    return 'transparent'
   return cardAppearance.value.hasCustomBackground ? undefined : cardAppearance.value.backgroundColor
 })
 
@@ -84,14 +97,17 @@ const isBauhausBadge = computed(() => !cardAppearance.value.hasCustomBackground 
       <!-- 图标 -->
       <div class="app-icon-info-icon w-[66px] h-[68px] shrink-0">
         <div class="w-[66px] h-full flex items-center justify-center">
-          <div class="leon-icon-badge" :class="iconBadgeClass">
+          <div
+            class="leon-icon-badge"
+            :class="[iconBadgeClass, { 'leon-icon-badge-fullbleed': isFullBleedImage }]"
+          >
             <ItemIcon
               :item-icon="itemInfo?.icon"
               :fallback-text="itemInfo?.title"
               force-background="transparent"
               :foreground-color="iconForegroundColor"
-              :size="44"
-              :class="isBauhausBadge ? 'overflow-hidden rounded-none' : 'overflow-hidden rounded-[10px]'"
+              :size="isFullBleedImage ? 48 : 44"
+              :class="isFullBleedImage ? 'w-full h-full overflow-hidden' : (isBauhausBadge ? 'overflow-hidden rounded-none' : 'overflow-hidden rounded-[10px]')"
             />
           </div>
         </div>
@@ -125,7 +141,7 @@ const isBauhausBadge = computed(() => !cardAppearance.value.hasCustomBackground 
     <div v-if="style === PanelPanelConfigStyleEnum.icon" class="app-icon-small min-w-0 w-full">
       <div
         class="app-icon-small-icon leon-themed-small-tile flex items-center justify-center overflow-hidden rounded-2xl w-[70px] h-[70px] mx-auto transition-all duration-200"
-        :class="iconBadgeClass"
+        :class="[iconBadgeClass, { 'leon-small-tile-fullbleed': isFullBleedImage }]"
         :style="smallIconTileStyle"
         :title="itemInfo?.description || itemInfo?.title"
       >
@@ -134,6 +150,7 @@ const isBauhausBadge = computed(() => !cardAppearance.value.hasCustomBackground 
           :fallback-text="itemInfo?.title"
           :force-background="smallItemForceBackground"
           :foreground-color="smallIconForegroundColor"
+          :size="70"
         />
       </div>
       <div

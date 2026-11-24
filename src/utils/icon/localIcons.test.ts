@@ -8,10 +8,12 @@ import {
   HOMELAB_ICON_PRESETS,
   computeDynamicImagePadding,
   computeDynamicVectorSize,
+  computeIconImagePadding,
   computeMonogramBackground,
   filterHomelabPresets,
   isBundledLocalIcon,
   normalizeLocalIconKey,
+  resolveIconImageFit,
 } from './localIcons.ts'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '../../..')
@@ -92,4 +94,28 @@ test('dynamic icon sizing, monogram tone, and preset search work cleanly across 
 test('new Obsidian Slate and Alabaster Paper wallpaper assets exist', () => {
   assert.ok(existsSync(join(root, 'public/assets/wallpapers/obsidian-slate.svg')))
   assert.ok(existsSync(join(root, 'public/assets/wallpapers/alabaster-paper.svg')))
+})
+
+test('image icons default to zero-padding full-bleed cover and support per-icon contain mode', () => {
+  assert.equal(resolveIconImageFit(undefined), 'cover')
+  assert.equal(resolveIconImageFit(''), 'cover')
+  assert.equal(resolveIconImageFit('cover'), 'cover')
+  assert.equal(resolveIconImageFit('contain'), 'contain')
+
+  assert.equal(computeIconImagePadding(70, undefined), 0)
+  assert.equal(computeIconImagePadding(48, 'cover'), 0)
+  assert.equal(computeIconImagePadding(44, 'contain'), 6)
+  assert.equal(computeIconImagePadding(70, 'contain'), 10)
+
+  const itemIconSrc = readFileSync(join(root, 'src/components/common/ItemIcon/index.vue'), 'utf8')
+  const appIconSrc = readFileSync(join(root, 'src/views/home/components/AppIcon/index.vue'), 'utf8')
+  const editorSrc = readFileSync(join(root, 'src/views/home/components/EditItem/IconEditor.vue'), 'utf8')
+  const goIconModel = readFileSync(join(root, 'service/models/datatype/itemIcon.go'), 'utf8')
+
+  assert.match(itemIconSrc, /object-cover/)
+  assert.match(itemIconSrc, /object-contain/)
+  assert.match(appIconSrc, /leon-icon-badge-fullbleed/)
+  assert.match(appIconSrc, /leon-small-tile-fullbleed/)
+  assert.match(editorSrc, /icon-image-fit-toggle/)
+  assert.match(goIconModel, /json:"imageFit,omitempty"/)
 })
