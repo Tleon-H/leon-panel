@@ -1,3 +1,9 @@
+import {
+  type StudioModularStyleConfig,
+  defaultModularStyleConfig,
+  normalizeModularStyleConfig,
+} from './modularStyle'
+
 export interface StudioEffectsConfig {
   gridOverlay: boolean
   hardShadowHover: boolean
@@ -24,6 +30,7 @@ export interface DesktopWidgetItem {
 
 export interface LeonStudioConfig {
   effects: StudioEffectsConfig
+  modular: StudioModularStyleConfig
   widgets: DesktopWidgetItem[]
 }
 
@@ -39,6 +46,7 @@ export function defaultStudioConfig(): LeonStudioConfig {
       enhancedClock: false,
       clockGreeting: '',
     },
+    modular: defaultModularStyleConfig(),
     widgets: [],
   }
 }
@@ -90,6 +98,8 @@ export function normalizeStudioConfig(raw: unknown): LeonStudioConfig {
     clockGreeting: typeof rawEffects.clockGreeting === 'string' ? rawEffects.clockGreeting.slice(0, 80) : '',
   }
 
+  const modular = normalizeModularStyleConfig(obj.modular)
+
   const widgets: DesktopWidgetItem[] = []
   if (Array.isArray(obj.widgets)) {
     const seen = new Set<string>()
@@ -131,7 +141,7 @@ export function normalizeStudioConfig(raw: unknown): LeonStudioConfig {
     }
   }
 
-  return { effects, widgets }
+  return { effects, modular, widgets }
 }
 
 export function createDesktopWidget(type: DesktopWidgetType, idSeed = Date.now()): DesktopWidgetItem {

@@ -6,6 +6,7 @@ import {
   defaultStudioConfig,
   normalizeStudioConfig,
 } from '@/utils/studio/studioConfig'
+import { applyModularStyleToDocument } from '@/utils/studio/modularStyle'
 import {
   CUSTOM_CODE_MODULE_NAME,
   type CustomCodeSnippet,
@@ -41,6 +42,14 @@ export const useStudioStore = defineStore('leon-studio-store', {
         this.safeMode = isSafeModeActive(window.location)
     },
 
+    applyRuntimeModularStyle() {
+      this.refreshSafeMode()
+      applyModularStyleToDocument(this.config.modular, {
+        safeMode: this.safeMode,
+        reduceMotion: this.config.effects.reduceMotion,
+      })
+    },
+
     async loadFromCloud() {
       this.refreshSafeMode()
       const moduleConfig = useModuleConfig()
@@ -62,6 +71,7 @@ export const useStudioStore = defineStore('leon-studio-store', {
       }
 
       this.loaded = true
+      this.applyRuntimeModularStyle()
       this.applyRuntimeCustomCode()
     },
 
@@ -77,6 +87,7 @@ export const useStudioStore = defineStore('leon-studio-store', {
     async saveStudioConfig(next?: LeonStudioConfig) {
       if (next)
         this.config = normalizeStudioConfig(next)
+      this.applyRuntimeModularStyle()
       const moduleConfig = useModuleConfig()
       return await moduleConfig.saveToCloud(STUDIO_CONFIG_MODULE_NAME, this.config)
     },
@@ -96,6 +107,7 @@ export const useStudioStore = defineStore('leon-studio-store', {
       this.customCode = defaultCustomCodeConfig()
       this.loaded = false
       this.jsErrors = []
+      this.applyRuntimeModularStyle()
       if (typeof document !== 'undefined')
         applyCustomCssToDocument([], true, document)
     },

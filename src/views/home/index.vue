@@ -29,6 +29,7 @@ import { browserHomeStorage, dropHomeSnapshot, readHomeSnapshot, readHomeSnapsho
 import type { HomeSnapshotIdentity } from '@/utils/panel/homeSnapshot'
 import { requestFailureDetails } from '@/utils/request/failure'
 import { buildSafeModeExitUrl } from '@/utils/studio/customCode'
+import { applyCardPointerFx, resetCardPointerFx } from '@/utils/studio/modularStyle'
 import brandLogoSvg from '@/assets/logo.svg'
 
 interface ItemCard extends Panel.ItemInfo {
@@ -905,6 +906,8 @@ function handleAddItem(itemIconGroupId?: number) {
                       :class="item === activeSearchItem ? 'leon-search-hit' : ''"
                       @contextmenu="(e) => handleContextMenu(e, itemGroupIndex, item)"
                       @keydown.enter.prevent="handleItemClick(itemGroupIndex, item)"
+                      @pointermove="(e) => applyCardPointerFx(e, studioStore.config.modular.cardHoverEffect, studioStore.config.effects.reduceMotion)"
+                      @pointerleave="resetCardPointerFx"
                     >
                       <AppIcon
                         :class="itemGroup.sortStatus ? 'cursor-move' : 'cursor-pointer'"
@@ -953,6 +956,8 @@ function handleAddItem(itemIconGroupId?: number) {
                       :class="item === activeSearchItem ? 'leon-search-hit' : ''"
                       @contextmenu="(e) => handleContextMenu(e, itemGroupIndex, item)"
                       @keydown.enter.prevent="handleItemClick(itemGroupIndex, item)"
+                      @pointermove="(e) => applyCardPointerFx(e, studioStore.config.modular.cardHoverEffect, studioStore.config.effects.reduceMotion)"
+                      @pointerleave="resetCardPointerFx"
                     >
                       <AppIcon
                         :class="itemGroup.sortStatus ? 'cursor-move' : 'cursor-pointer'"

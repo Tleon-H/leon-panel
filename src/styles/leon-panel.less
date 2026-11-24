@@ -920,3 +920,274 @@
   transform: translateY(-3px);
   border-color: var(--leon-accent-color, #ff4f00);
 }
+
+/* ===== Modular Design Studio: Typography, Icon Shape/Tone, Custom Cursors & Card Hover FX ===== */
+
+[data-leon-font] .leon-home-header .logo span,
+[data-leon-font] .group-title {
+  font-family: var(--leon-font-display, var(--leon-font-sans));
+  letter-spacing: var(--leon-font-tracking, -0.01em);
+}
+
+/* Icon Shape Module */
+[data-leon-icon-shape='circle'] .leon-icon-badge,
+[data-leon-icon-shape='circle'] .app-icon-small-icon,
+[data-leon-icon-shape='circle'] .leon-icon-badge .item-icon,
+[data-leon-icon-shape='circle'] .app-icon-small-icon .item-icon,
+[data-leon-icon-shape='circle'] .leon-icon-badge .n-avatar,
+[data-leon-icon-shape='circle'] .app-icon-small-icon .n-avatar {
+  border-radius: 999px !important;
+}
+
+[data-leon-icon-shape='sharp'] .leon-icon-badge,
+[data-leon-icon-shape='sharp'] .app-icon-small-icon,
+[data-leon-icon-shape='sharp'] .leon-icon-badge .item-icon,
+[data-leon-icon-shape='sharp'] .app-icon-small-icon .item-icon,
+[data-leon-icon-shape='sharp'] .leon-icon-badge .n-avatar,
+[data-leon-icon-shape='sharp'] .app-icon-small-icon .n-avatar {
+  border-radius: 0px !important;
+}
+
+[data-leon-icon-shape='pill'] .leon-icon-badge,
+[data-leon-icon-shape='pill'] .app-icon-small-icon,
+[data-leon-icon-shape='pill'] .leon-icon-badge .item-icon,
+[data-leon-icon-shape='pill'] .app-icon-small-icon .item-icon,
+[data-leon-icon-shape='pill'] .leon-icon-badge .n-avatar,
+[data-leon-icon-shape='pill'] .app-icon-small-icon .n-avatar {
+  border-radius: 20px !important;
+}
+
+/* Icon Tone Filter Module */
+[data-leon-icon-tone='soft-mono'] .leon-card-item .item-icon,
+[data-leon-icon-tone='soft-mono'] .leon-hover-demo-card .item-icon {
+  filter: grayscale(88%) opacity(0.88);
+  transition: filter 0.22s ease, transform 0.18s cubic-bezier(0.2, 0, 0, 1);
+}
+
+[data-leon-icon-tone='soft-mono'] .leon-card-item:hover .item-icon,
+[data-leon-icon-tone='soft-mono'] .leon-hover-demo-card:hover .item-icon {
+  filter: grayscale(0%) opacity(1);
+}
+
+[data-leon-icon-tone='high-contrast'] .leon-card-item .item-icon,
+[data-leon-icon-tone='high-contrast'] .leon-hover-demo-card .item-icon {
+  filter: contrast(1.16) saturate(1.14);
+}
+
+[data-leon-icon-tone='luminous'] .leon-card-item:hover .item-icon,
+[data-leon-icon-tone='luminous'] .leon-hover-demo-card:hover .item-icon {
+  filter: drop-shadow(0 4px 12px color-mix(in srgb, var(--leon-accent-color, #0ea5e9) 46%, transparent));
+}
+
+/* Native Zero-Latency SVG Custom Cursors (fine pointer desktop only) */
+@media (hover: hover) and (pointer: fine) {
+  [data-leon-cursor='precision-dot'],
+  [data-leon-cursor='precision-dot'] body,
+  [data-leon-cursor='precision-dot'] a,
+  [data-leon-cursor='precision-dot'] button,
+  [data-leon-cursor='precision-dot'] [role='link'],
+  [data-leon-cursor='neon-ring'],
+  [data-leon-cursor='neon-ring'] body,
+  [data-leon-cursor='neon-ring'] a,
+  [data-leon-cursor='neon-ring'] button,
+  [data-leon-cursor='neon-ring'] [role='link'] {
+    cursor: none !important;
+  }
+
+  [data-leon-cursor='crosshair-tech'],
+  [data-leon-cursor='crosshair-tech'] body {
+    cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none'%3E%3Ccircle cx='12' cy='12' r='4.5' stroke='%230ea5e9' stroke-width='1.5'/%3E%3Cpath d='M12 2v5M12 17v5M2 12h5M17 12h5' stroke='%230ea5e9' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E") 12 12, crosshair;
+  }
+
+  [data-leon-cursor='minimal-arrow'],
+  [data-leon-cursor='minimal-arrow'] body {
+    cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 22 22' fill='none'%3E%3Cpath d='M3.5 2.5L17.5 11.2L10.8 12.6L8.2 19L3.5 2.5Z' fill='%2309090b' stroke='%23ffffff' stroke-width='1.6' stroke-linejoin='round'/%3E%3C/svg%3E") 3 2, auto;
+  }
+}
+
+/* Pointer-Tracking Card Hover FX Engine (applies to .leon-themed-card, .leon-themed-small-tile, and live studio preview cards) */
+.leon-themed-card,
+.leon-themed-small-tile,
+.leon-hover-demo-card {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+/* 1. Linear / Vercel Pointer Spotlight */
+[data-leon-hover-fx='spotlight'] .leon-themed-card::before,
+[data-leon-hover-fx='spotlight'] .leon-themed-small-tile::before,
+[data-leon-hover-fx='spotlight'] .leon-hover-demo-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(
+    220px circle at var(--leon-mx, 50%) var(--leon-my, 50%),
+    color-mix(in srgb, var(--leon-accent-color, #0ea5e9) 24%, transparent) 0%,
+    transparent 70%
+  );
+  transition: opacity 0.22s ease;
+}
+
+[data-leon-hover-fx='spotlight'] .leon-card-item:hover .leon-themed-card::before,
+[data-leon-hover-fx='spotlight'] .leon-card-item:hover .leon-themed-small-tile::before,
+[data-leon-hover-fx='spotlight'] .leon-hover-demo-card:hover::before {
+  opacity: 1;
+}
+
+[data-leon-hover-fx='spotlight'] .leon-themed-card > *,
+[data-leon-hover-fx='spotlight'] .leon-themed-small-tile > *,
+[data-leon-hover-fx='spotlight'] .leon-hover-demo-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* 2. 3D Perspective Tilt + Specular Glare */
+[data-leon-hover-fx='tilt-3d'] .leon-card-item,
+[data-leon-hover-fx='tilt-3d'] .leon-hover-demo-wrap {
+  perspective: 800px;
+}
+
+[data-leon-hover-fx='tilt-3d'] .leon-themed-card,
+[data-leon-hover-fx='tilt-3d'] .leon-themed-small-tile,
+[data-leon-hover-fx='tilt-3d'] .leon-hover-demo-card {
+  transform-style: preserve-3d;
+  transition: transform 0.14s cubic-bezier(0.2, 0, 0, 1), border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+[data-leon-hover-fx='tilt-3d'] .leon-card-item:hover .leon-themed-card,
+[data-leon-hover-fx='tilt-3d'] .leon-card-item:hover .leon-themed-small-tile,
+[data-leon-hover-fx='tilt-3d'] .leon-hover-demo-card:hover {
+  transform: rotateX(var(--leon-rx, 0deg)) rotateY(var(--leon-ry, 0deg)) translateY(-2px);
+}
+
+[data-leon-hover-fx='tilt-3d'] .leon-themed-card::before,
+[data-leon-hover-fx='tilt-3d'] .leon-themed-small-tile::before,
+[data-leon-hover-fx='tilt-3d'] .leon-hover-demo-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(
+    200px circle at var(--leon-mx, 50%) var(--leon-my, 50%),
+    rgba(255, 255, 255, 0.16) 0%,
+    transparent 65%
+  );
+  transition: opacity 0.2s ease;
+}
+
+[data-leon-hover-fx='tilt-3d'] .leon-card-item:hover .leon-themed-card::before,
+[data-leon-hover-fx='tilt-3d'] .leon-card-item:hover .leon-themed-small-tile::before,
+[data-leon-hover-fx='tilt-3d'] .leon-hover-demo-card:hover::before {
+  opacity: 1;
+}
+
+/* 3. Glossy Diagonal Shimmer Sweep */
+[data-leon-hover-fx='shimmer'] .leon-themed-card::after,
+[data-leon-hover-fx='shimmer'] .leon-themed-small-tile::after,
+[data-leon-hover-fx='shimmer'] .leon-hover-demo-card::after {
+  content: '';
+  position: absolute;
+  top: -20%;
+  left: -130%;
+  width: 65%;
+  height: 140%;
+  pointer-events: none;
+  background: linear-gradient(
+    112deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.06) 35%,
+    rgba(255, 255, 255, 0.26) 50%,
+    rgba(255, 255, 255, 0.06) 65%,
+    transparent 100%
+  );
+  transform: skewX(-18deg);
+}
+
+[data-leon-hover-fx='shimmer'] .leon-card-item:hover .leon-themed-card::after,
+[data-leon-hover-fx='shimmer'] .leon-card-item:hover .leon-themed-small-tile::after,
+[data-leon-hover-fx='shimmer'] .leon-hover-demo-card:hover::after {
+  animation: leon-card-shimmer 0.68s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes leon-card-shimmer {
+  0% {
+    left: -130%;
+  }
+
+  100% {
+    left: 150%;
+  }
+}
+
+/* 4. Border Glow Edge Tracking */
+[data-leon-hover-fx='border-glow'] .leon-themed-card::after,
+[data-leon-hover-fx='border-glow'] .leon-themed-small-tile::after,
+[data-leon-hover-fx='border-glow'] .leon-hover-demo-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(
+    170px circle at var(--leon-mx, 50%) var(--leon-my, 50%),
+    var(--leon-accent-color, #0ea5e9) 0%,
+    transparent 68%
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  transition: opacity 0.2s ease;
+}
+
+[data-leon-hover-fx='border-glow'] .leon-card-item:hover .leon-themed-card::after,
+[data-leon-hover-fx='border-glow'] .leon-card-item:hover .leon-themed-small-tile::after,
+[data-leon-hover-fx='border-glow'] .leon-hover-demo-card:hover::after {
+  opacity: 1;
+}
+
+/* 5. Elastic Magnetic Pull */
+[data-leon-hover-fx='magnetic'] .leon-card-item:hover .leon-themed-card,
+[data-leon-hover-fx='magnetic'] .leon-card-item:hover .leon-themed-small-tile,
+[data-leon-hover-fx='magnetic'] .leon-hover-demo-card:hover {
+  transform: translate3d(var(--leon-tx, 0px), var(--leon-ty, 0px), 0);
+}
+
+[data-leon-hover-fx='magnetic'] .leon-card-item:hover .item-icon,
+[data-leon-hover-fx='magnetic'] .leon-hover-demo-card:hover .item-icon {
+  transform: translate3d(calc(var(--leon-tx, 0px) * 0.45), calc(var(--leon-ty, 0px) * 0.45), 0) scale(1.06);
+}
+
+/* 6. Classic Elevated Lift */
+[data-leon-hover-fx='lift'] .leon-card-item:hover .leon-themed-card,
+[data-leon-hover-fx='lift'] .leon-card-item:hover .leon-themed-small-tile,
+[data-leon-hover-fx='lift'] .leon-hover-demo-card:hover {
+  transform: translateY(-3px);
+}
+
+/* 7. Bauhaus Geometric Pop */
+[data-leon-hover-fx='bauhaus-pop'] .leon-card-item:hover .leon-themed-card,
+[data-leon-hover-fx='bauhaus-pop'] .leon-card-item:hover .leon-themed-small-tile,
+[data-leon-hover-fx='bauhaus-pop'] .leon-hover-demo-card:hover {
+  transform: translate(-3px, -3px);
+  border-color: var(--leon-accent-color, #0ea5e9) !important;
+  box-shadow: 4px 4px 0 0 var(--leon-accent-color, #0ea5e9) !important;
+}
+
+/* 8. Static None */
+[data-leon-hover-fx='none'] .leon-themed-card:hover,
+[data-leon-hover-fx='none'] .leon-themed-small-tile:hover,
+[data-leon-hover-fx='none'] .leon-hover-demo-card:hover,
+[data-leon-hover-fx='none'] .leon-themed-card:hover .item-icon,
+[data-leon-hover-fx='none'] .leon-themed-small-tile:hover .item-icon,
+[data-leon-hover-fx='none'] .leon-hover-demo-card:hover .item-icon {
+  transform: none !important;
+}
+
