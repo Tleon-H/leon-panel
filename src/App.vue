@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { NConfigProvider } from 'naive-ui'
 import { NaiveProvider } from '@/components/common'
+import CustomCursor from '@/components/common/CustomCursor/index.vue'
 import { useTheme } from '@/hooks/useTheme'
 import { useLanguage } from '@/hooks/useLanguage'
 
@@ -17,6 +18,7 @@ const { language } = useLanguage()
   >
     <NaiveProvider>
       <RouterView />
+      <CustomCursor />
     </NaiveProvider>
   </NConfigProvider>
 </template>

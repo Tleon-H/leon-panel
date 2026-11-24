@@ -9,6 +9,7 @@ import {
   NModal,
   NPopconfirm,
   NSelect,
+  NSlider,
   NSpace,
   NSwitch,
   NTabPane,
@@ -16,15 +17,34 @@ import {
   NTag,
   useMessage,
 } from 'naive-ui'
+import { SvgIcon } from '@/components/common'
 import { useAuthStore, usePanelState, useStudioStore } from '@/store'
 import {
   APPEARANCE_PRESETS,
   APPEARANCE_PRESET_IDS,
   type AppearancePresetId,
+  type IconBadgeStyleId,
   type PanelLayoutMode,
   applyThemePackJson,
   exportThemePackJson,
+  resolveHomepageThemeVars,
 } from '@/utils/panel/appearance'
+import {
+  CARD_HOVER_EFFECT_OPTIONS,
+  CURSOR_PRESET_OPTIONS,
+  type CardHoverEffectId,
+  type CursorPresetId,
+  FONT_PRESETS,
+  FONT_PRESET_IDS,
+  type FontPresetId,
+  ICON_SHAPE_OPTIONS,
+  ICON_TONE_OPTIONS,
+  type IconShapeId,
+  type IconToneFilterId,
+  applyCardPointerFx,
+  defaultModularStyleConfig,
+  resetCardPointerFx,
+} from '@/utils/studio/modularStyle'
 import {
   type DesktopWidgetItem,
   type DesktopWidgetType,
@@ -45,6 +65,59 @@ const studioStore = useStudioStore()
 const isAdmin = computed(() => authStore.userInfo?.role === 1)
 const isEditable = computed(() => panelState.isCloudConfigReady)
 const presetList = computed(() => APPEARANCE_PRESET_IDS.map(id => APPEARANCE_PRESETS[id]))
+const fontPresetList = computed(() => FONT_PRESET_IDS.map(id => FONT_PRESETS[id]))
+
+const activeHomepageTheme = computed(() => resolveHomepageThemeVars(panelState.activePanelConfig))
+
+const sandboxCanvasStyle = computed(() => {
+  const cfg = panelState.activePanelConfig
+  const bgSrc = cfg.backgroundImageSrc?.trim()
+  return {
+    ...activeHomepageTheme.value.cssVars,
+    backgroundColor: activeHomepageTheme.value.canvasFallback,
+    backgroundImage: bgSrc ? `url("${bgSrc}")` : 'none',
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+  }
+})
+
+const sandboxMaskStyle = computed(() => {
+  const cfg = panelState.activePanelConfig
+  const blur = Math.max(0, Number(cfg.backgroundBlur) || 0)
+  const maskPct = Math.max(0, Math.min(100, Number(cfg.backgroundMaskNumber) || 0))
+  const isLight = activeHomepageTheme.value.isLightCanvas
+  return {
+    backdropFilter: blur > 0 ? `blur(${Math.min(12, blur)}px)` : 'none',
+    backgroundColor: maskPct > 0
+      ? (isLight ? `rgba(255, 255, 255, ${(maskPct / 100) * 0.45})` : `rgba(0, 0, 0, ${(maskPct / 100) * 0.65})`)
+      : 'transparent',
+  }
+})
+
+const sandboxCardStyle = computed(() => {
+  const card = activeHomepageTheme.value.card
+  return {
+    backgroundColor: card.backgroundColor,
+    borderColor: card.borderColor,
+    borderWidth: card.borderWidth,
+    borderStyle: 'solid',
+    borderRadius: `${card.borderRadius}px`,
+    boxShadow: card.shadow,
+    color: card.defaultTextColor,
+    backdropFilter: card.blur > 0 ? `blur(${card.blur}px)` : 'none',
+  }
+})
+
+const sandboxSecondaryTextColor = computed(() => activeHomepageTheme.value.card.secondaryTextColor)
+
+const iconBadgeOptions: Array<{ id: IconBadgeStyleId; labelKey: string }> = [
+  { id: 'precision', labelKey: 'apps.baseSettings.iconBadgePrecision' },
+  { id: 'default', labelKey: 'apps.baseSettings.iconBadgeDefault' },
+  { id: 'bauhaus', labelKey: 'apps.baseSettings.iconBadgeBauhaus' },
+  { id: 'glass', labelKey: 'apps.baseSettings.iconBadgeGlass' },
+  { id: 'soft', labelKey: 'apps.baseSettings.iconBadgeSoft' },
+  { id: 'outline', labelKey: 'apps.baseSettings.iconBadgeOutline' },
+]
 
 const layoutModeOptions: Array<{ label: string; value: PanelLayoutMode }> = [
   { label: t('apps.leonStudio.layoutStandard'), value: 'standard' },
@@ -68,7 +141,97 @@ const savingStudio = ref(false)
 onMounted(() => {
   if (!studioStore.loaded)
     studioStore.loadFromCloud()
+  studioStore.applyRuntimeModularStyle()
 })
+
+function handleDemoPointerMove(event: PointerEvent) {
+  applyCardPointerFx(event, studioStore.config.modular.cardHoverEffect, studioStore.config.effects.reduceMotion)
+}
+
+function handleDemoPointerLeave(event: PointerEvent) {
+  resetCardPointerFx(event)
+}
+
+function savePanelStyleNow() {
+  if (!isEditable.value)
+    return
+  panelState.recordState()
+  panelState.savePanelConfigToCloud().then((res) => {
+    if (res.ok)
+      ms.success(t('common.saveSuccess'))
+    else if (res.msg)
+      ms.error(res.msg)
+  })
+}
+
+function selectHoverFx(effect: CardHoverEffectId) {
+  studioStore.config.modular.cardHoverEffect = effect
+  studioStore.applyRuntimeModularStyle()
+  persistStudio()
+}
+
+function selectCursorPreset(cursor: CursorPresetId) {
+  studioStore.config.modular.cursorPreset = cursor
+  studioStore.applyRuntimeModularStyle()
+  persistStudio()
+}
+
+function selectFontPreset(font: FontPresetId) {
+  studioStore.config.modular.fontPreset = font
+  studioStore.applyRuntimeModularStyle()
+  persistStudio()
+}
+
+function selectIconShape(shape: IconShapeId) {
+  studioStore.config.modular.iconShape = shape
+  studioStore.applyRuntimeModularStyle()
+  persistStudio()
+}
+
+function selectIconTone(tone: IconToneFilterId) {
+  studioStore.config.modular.iconToneFilter = tone
+  studioStore.applyRuntimeModularStyle()
+  persistStudio()
+}
+
+function selectIconBadge(style: IconBadgeStyleId) {
+  if (!isEditable.value)
+    return
+  panelState.panelConfig.iconBadgeStyle = style
+  savePanelStyleNow()
+}
+
+function applyWallpaperOnly(presetId: AppearancePresetId) {
+  if (!isEditable.value)
+    return
+  if (!panelState.applyAppearancePreset(presetId, { wallpaper: true, cardStyle: false, iconStyle: false }))
+    return
+  panelState.savePanelConfigToCloud().then((res) => {
+    if (res.ok)
+      ms.success(t('common.saveSuccess'))
+    else if (res.msg)
+      ms.error(res.msg)
+  })
+}
+
+function applyCardSurfaceOnly(presetId: AppearancePresetId) {
+  if (!isEditable.value)
+    return
+  if (!panelState.applyAppearancePreset(presetId, { wallpaper: false, cardStyle: true, iconStyle: false }))
+    return
+  panelState.savePanelConfigToCloud().then((res) => {
+    if (res.ok)
+      ms.success(t('common.saveSuccess'))
+    else if (res.msg)
+      ms.error(res.msg)
+  })
+}
+
+function resetModularDefaults() {
+  studioStore.config.modular = defaultModularStyleConfig()
+  studioStore.applyRuntimeModularStyle()
+  persistStudio(t('apps.leonStudio.modular.resetModularDone'))
+}
 
 function handleLayoutModeChange(mode: PanelLayoutMode) {
   if (!isEditable.value)
@@ -151,12 +314,12 @@ function confirmImportThemeJson() {
   })
 }
 
-async function persistStudio() {
+async function persistStudio(successMessage?: unknown) {
   savingStudio.value = true
   try {
     const res = await studioStore.saveStudioConfig()
     if (res.code === 0)
-      ms.success(t('common.saveSuccess'))
+      ms.success((typeof successMessage === 'string' && successMessage) ? successMessage : t('common.saveSuccess'))
     else
       ms.error(res.msg || t('common.failed'))
   }
@@ -242,7 +405,396 @@ function removeCustomSnippet(index: number) {
       {{ $t('apps.leonStudio.safeModeActiveNotice') }}
     </NAlert>
 
-    <NTabs type="line" animated>
+    <NTabs type="line" animated default-value="modular">
+      <!-- TAB 0: 模块化设计工坊 -->
+      <NTabPane name="modular" :tab="$t('apps.leonStudio.tabModular')">
+        <div class="space-y-4">
+          <!-- 实时模块化交互预览沙盒 -->
+          <div class="leon-sandbox-shell" :style="sandboxCanvasStyle" data-testid="modular-live-sandbox">
+            <div class="leon-sandbox-mask" :style="sandboxMaskStyle" />
+            <div class="leon-sandbox-inner">
+              <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                <div class="flex items-center gap-2">
+                  <span
+                    class="leon-sandbox-pill"
+                    :style="{
+                      background: activeHomepageTheme.controlBackground,
+                      color: activeHomepageTheme.controlTextColor,
+                    }"
+                  >
+                    <SvgIcon icon="lucide:sparkles" class="text-[13px]" />
+                    <span>{{ $t('apps.leonStudio.modular.sandboxTitle') }}</span>
+                  </span>
+                </div>
+                <NButton size="tiny" secondary :loading="savingStudio" data-testid="modular-reset-btn" @click="resetModularDefaults">
+                  <template #icon>
+                    <SvgIcon icon="lucide:refresh-cw" class="text-[12px]" />
+                  </template>
+                  {{ $t('apps.leonStudio.modular.resetModular') }}
+                </NButton>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div class="leon-hover-demo-wrap">
+                  <div
+                    class="leon-hover-demo-card"
+                    :style="sandboxCardStyle"
+                    @pointermove="handleDemoPointerMove"
+                    @pointerleave="handleDemoPointerLeave"
+                  >
+                    <div
+                      class="leon-icon-badge shrink-0"
+                      :class="`leon-icon-badge-${activeHomepageTheme.iconBadgeStyle}`"
+                      style="width: 46px; height: 46px;"
+                    >
+                      <div class="item-icon leon-demo-icon-inner" style="background: linear-gradient(135deg, #0ea5e9, #2563eb);">
+                        <SvgIcon icon="lucide:container" class="text-[22px] text-white" />
+                      </div>
+                    </div>
+                    <div class="min-w-0 flex-1">
+                      <div class="text-sm font-semibold truncate">
+                        {{ $t('apps.leonStudio.modular.sandboxCardDockerTitle') }}
+                      </div>
+                      <div class="text-xs truncate mt-0.5" :style="{ color: sandboxSecondaryTextColor }">
+                        {{ $t('apps.leonStudio.modular.sandboxCardDockerDesc') }}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="leon-hover-demo-wrap">
+                  <div
+                    class="leon-hover-demo-card"
+                    :style="sandboxCardStyle"
+                    @pointermove="handleDemoPointerMove"
+                    @pointerleave="handleDemoPointerLeave"
+                  >
+                    <div
+                      class="leon-icon-badge shrink-0"
+                      :class="`leon-icon-badge-${activeHomepageTheme.iconBadgeStyle}`"
+                      style="width: 46px; height: 46px;"
+                    >
+                      <div class="item-icon leon-demo-icon-inner" style="background: linear-gradient(135deg, #8b5cf6, #ec4899);">
+                        <SvgIcon icon="lucide:play-circle" class="text-[22px] text-white" />
+                      </div>
+                    </div>
+                    <div class="min-w-0 flex-1">
+                      <div class="text-sm font-semibold truncate">
+                        {{ $t('apps.leonStudio.modular.sandboxCardMediaTitle') }}
+                      </div>
+                      <div class="text-xs truncate mt-0.5" :style="{ color: sandboxSecondaryTextColor }">
+                        {{ $t('apps.leonStudio.modular.sandboxCardMediaDesc') }}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div
+                class="mt-2.5 text-[11px] opacity-85"
+                :style="{ color: activeHomepageTheme.isLightCanvas ? '#334155' : '#cbd5e1' }"
+              >
+                {{ $t('apps.leonStudio.modular.sandboxHint') }}
+              </div>
+            </div>
+          </div>
+
+          <!-- 模块 1：指针划过标签动效 -->
+          <NCard size="small">
+            <div class="leon-mod-header">
+              <div class="leon-mod-title">
+                <SvgIcon icon="lucide:sparkles" class="text-[15px] opacity-80" />
+                <span>{{ $t('apps.leonStudio.modular.hoverFxTitle') }}</span>
+              </div>
+              <div class="leon-mod-desc">
+                {{ $t('apps.leonStudio.modular.hoverFxDesc') }}
+              </div>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <button
+                v-for="opt in CARD_HOVER_EFFECT_OPTIONS"
+                :key="opt.id"
+                type="button"
+                class="leon-mod-tile"
+                :class="{ 'is-active': studioStore.config.modular.cardHoverEffect === opt.id }"
+                :data-testid="`modular-hover-${opt.id}`"
+                @click="selectHoverFx(opt.id)"
+              >
+                <div class="font-semibold text-xs truncate">
+                  {{ $t(opt.nameKey) }}
+                </div>
+                <div class="text-[11px] opacity-65 mt-0.5 line-clamp-2 leading-snug">
+                  {{ $t(opt.descKey) }}
+                </div>
+              </button>
+            </div>
+          </NCard>
+
+          <!-- 模块 2：鼠标指针风格 -->
+          <NCard size="small">
+            <div class="leon-mod-header">
+              <div class="leon-mod-title">
+                <SvgIcon icon="lucide:compass" class="text-[15px] opacity-80" />
+                <span>{{ $t('apps.leonStudio.modular.cursorTitle') }}</span>
+              </div>
+              <div class="leon-mod-desc">
+                {{ $t('apps.leonStudio.modular.cursorDesc') }}
+              </div>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              <button
+                v-for="opt in CURSOR_PRESET_OPTIONS"
+                :key="opt.id"
+                type="button"
+                class="leon-mod-tile"
+                :class="{ 'is-active': studioStore.config.modular.cursorPreset === opt.id }"
+                :data-testid="`modular-cursor-${opt.id}`"
+                @click="selectCursorPreset(opt.id)"
+              >
+                <div class="flex items-center justify-between gap-1.5">
+                  <span class="font-semibold text-xs truncate">{{ $t(opt.nameKey) }}</span>
+                  <span class="leon-cursor-preview-dot" :class="`is-${opt.id}`" />
+                </div>
+                <div class="text-[11px] opacity-65 mt-0.5 line-clamp-2 leading-snug">
+                  {{ $t(opt.descKey) }}
+                </div>
+              </button>
+            </div>
+          </NCard>
+
+          <!-- 模块 3：字体排版模块 -->
+          <NCard size="small">
+            <div class="leon-mod-header">
+              <div class="leon-mod-title">
+                <SvgIcon icon="lucide:book-open" class="text-[15px] opacity-80" />
+                <span>{{ $t('apps.leonStudio.modular.fontTitle') }}</span>
+              </div>
+              <div class="leon-mod-desc">
+                {{ $t('apps.leonStudio.modular.fontDesc') }}
+              </div>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              <button
+                v-for="font in fontPresetList"
+                :key="font.id"
+                type="button"
+                class="leon-mod-tile"
+                :class="{ 'is-active': studioStore.config.modular.fontPreset === font.id }"
+                :data-testid="`modular-font-${font.id}`"
+                @click="selectFontPreset(font.id)"
+              >
+                <div
+                  class="text-sm font-semibold truncate"
+                  :style="{ fontFamily: font.fontFamily, letterSpacing: font.letterSpacing }"
+                >
+                  {{ font.sample }}
+                </div>
+                <div class="text-[11px] opacity-65 mt-1 truncate">
+                  {{ $t(font.nameKey) }}
+                </div>
+              </button>
+            </div>
+          </NCard>
+
+          <!-- 模块 4：图标模块（容器 · 形状 · 色彩滤镜） -->
+          <NCard size="small">
+            <div class="leon-mod-header">
+              <div class="leon-mod-title">
+                <SvgIcon icon="lucide:boxes" class="text-[15px] opacity-80" />
+                <span>{{ $t('apps.leonStudio.modular.iconTitle') }}</span>
+              </div>
+              <div class="leon-mod-desc">
+                {{ $t('apps.leonStudio.modular.iconDesc') }}
+              </div>
+            </div>
+
+            <div class="space-y-3">
+              <!-- 4.1 图标容器 -->
+              <div>
+                <div class="text-xs font-semibold mb-1.5 opacity-80">
+                  {{ $t('apps.leonStudio.modular.iconBadgeLabel') }}
+                </div>
+                <div class="flex flex-wrap gap-1.5">
+                  <button
+                    v-for="badge in iconBadgeOptions"
+                    :key="badge.id"
+                    type="button"
+                    class="leon-mod-chip"
+                    :class="{ 'is-active': (panelState.panelConfig.iconBadgeStyle || 'precision') === badge.id }"
+                    :disabled="!isEditable"
+                    @click="selectIconBadge(badge.id)"
+                  >
+                    {{ $t(badge.labelKey) }}
+                  </button>
+                </div>
+              </div>
+
+              <!-- 4.2 图标形状 -->
+              <div>
+                <div class="text-xs font-semibold mb-1.5 opacity-80">
+                  {{ $t('apps.leonStudio.modular.iconShapeLabel') }}
+                </div>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <button
+                    v-for="shape in ICON_SHAPE_OPTIONS"
+                    :key="shape.id"
+                    type="button"
+                    class="leon-mod-tile"
+                    :class="{ 'is-active': studioStore.config.modular.iconShape === shape.id }"
+                    :data-testid="`modular-shape-${shape.id}`"
+                    @click="selectIconShape(shape.id)"
+                  >
+                    <div class="flex items-center gap-2">
+                      <span class="leon-shape-glyph" :class="`is-${shape.id}`" />
+                      <span class="font-semibold text-xs truncate">{{ $t(shape.nameKey) }}</span>
+                    </div>
+                    <div class="text-[11px] opacity-65 mt-0.5 truncate">
+                      {{ $t(shape.descKey) }}
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              <!-- 4.3 图标色彩滤镜 -->
+              <div>
+                <div class="text-xs font-semibold mb-1.5 opacity-80">
+                  {{ $t('apps.leonStudio.modular.iconToneLabel') }}
+                </div>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <button
+                    v-for="tone in ICON_TONE_OPTIONS"
+                    :key="tone.id"
+                    type="button"
+                    class="leon-mod-tile"
+                    :class="{ 'is-active': studioStore.config.modular.iconToneFilter === tone.id }"
+                    :data-testid="`modular-tone-${tone.id}`"
+                    @click="selectIconTone(tone.id)"
+                  >
+                    <div class="font-semibold text-xs truncate">
+                      {{ $t(tone.nameKey) }}
+                    </div>
+                    <div class="text-[11px] opacity-65 mt-0.5 line-clamp-2 leading-snug">
+                      {{ $t(tone.descKey) }}
+                    </div>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </NCard>
+
+          <!-- 模块 5：标签 / 卡片材质模块 -->
+          <NCard size="small">
+            <div class="leon-mod-header">
+              <div class="leon-mod-title">
+                <SvgIcon icon="lucide:layout-grid" class="text-[15px] opacity-80" />
+                <span>{{ $t('apps.leonStudio.modular.cardSurfaceTitle') }}</span>
+              </div>
+              <div class="leon-mod-desc">
+                {{ $t('apps.leonStudio.modular.cardSurfaceDesc') }}
+              </div>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-5 gap-2">
+              <button
+                v-for="preset in presetList"
+                :key="`surface-${preset.id}`"
+                type="button"
+                class="leon-swatch-tile"
+                :class="{ 'is-active': panelState.panelConfig.cardSurface === preset.id }"
+                :disabled="!isEditable"
+                @click="applyCardSurfaceOnly(preset.id)"
+              >
+                <div
+                  class="leon-surface-swatch"
+                  :style="{
+                    background: preset.swatch.card,
+                    borderColor: preset.swatch.border,
+                    color: preset.swatch.text,
+                  }"
+                >
+                  <span class="w-2.5 h-2.5 rounded-full shrink-0" :style="{ background: preset.swatch.accent }" />
+                  <span class="text-[11px] font-semibold truncate">{{ $t(preset.nameKey) }}</span>
+                </div>
+              </button>
+            </div>
+            <div class="mt-3 flex items-center gap-3">
+              <span class="text-xs opacity-80 shrink-0">{{ $t('apps.leonStudio.modular.cardRadiusLabel') }}</span>
+              <NSlider
+                v-model:value="panelState.panelConfig.cardBorderRadius"
+                :min="0"
+                :max="24"
+                :step="1"
+                :disabled="!isEditable"
+                class="flex-1"
+                @dragend="savePanelStyleNow"
+              />
+              <span class="text-xs font-mono opacity-75 w-10 text-right">{{ panelState.panelConfig.cardBorderRadius ?? 14 }}px</span>
+            </div>
+          </NCard>
+
+          <!-- 模块 6：墙纸模块 -->
+          <NCard size="small">
+            <div class="leon-mod-header">
+              <div class="leon-mod-title">
+                <SvgIcon icon="lucide:wallpaper" class="text-[15px] opacity-80" />
+                <span>{{ $t('apps.leonStudio.modular.wallpaperTitle') }}</span>
+              </div>
+              <div class="leon-mod-desc">
+                {{ $t('apps.leonStudio.modular.wallpaperDesc') }}
+              </div>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-5 gap-2">
+              <button
+                v-for="preset in presetList"
+                :key="`wall-${preset.id}`"
+                type="button"
+                class="leon-swatch-tile"
+                :class="{ 'is-active': panelState.panelConfig.backgroundImageSrc === preset.wallpaper.backgroundImageSrc }"
+                :disabled="!isEditable"
+                @click="applyWallpaperOnly(preset.id)"
+              >
+                <div
+                  class="leon-wall-swatch"
+                  :style="{
+                    backgroundColor: preset.swatch.canvas,
+                    backgroundImage: `url(${preset.wallpaper.backgroundImageSrc})`,
+                  }"
+                >
+                  <span class="leon-wall-label">{{ $t(preset.nameKey) }}</span>
+                </div>
+              </button>
+            </div>
+            <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div class="flex items-center gap-2.5">
+                <span class="text-xs opacity-80 shrink-0">{{ $t('apps.leonStudio.modular.wallpaperBlurLabel') }}</span>
+                <NSlider
+                  v-model:value="panelState.panelConfig.backgroundBlur"
+                  :min="0"
+                  :max="20"
+                  :step="1"
+                  :disabled="!isEditable"
+                  class="flex-1"
+                  @dragend="savePanelStyleNow"
+                />
+                <span class="text-xs font-mono opacity-75 w-9 text-right">{{ panelState.panelConfig.backgroundBlur ?? 0 }}px</span>
+              </div>
+              <div class="flex items-center gap-2.5">
+                <span class="text-xs opacity-80 shrink-0">{{ $t('apps.leonStudio.modular.wallpaperMaskLabel') }}</span>
+                <NSlider
+                  v-model:value="panelState.panelConfig.backgroundMaskNumber"
+                  :min="0"
+                  :max="100"
+                  :step="5"
+                  :disabled="!isEditable"
+                  class="flex-1"
+                  @dragend="savePanelStyleNow"
+                />
+                <span class="text-xs font-mono opacity-75 w-9 text-right">{{ panelState.panelConfig.backgroundMaskNumber ?? 0 }}%</span>
+              </div>
+            </div>
+          </NCard>
+        </div>
+      </NTabPane>
+
       <!-- TAB 1: 主题包与布局 -->
       <NTabPane name="themes" :tab="$t('apps.leonStudio.tabThemes')">
         <NCard size="small" class="mb-3">
@@ -602,5 +1154,251 @@ function removeCustomSnippet(index: number) {
   padding: 6px 10px;
   border: 1.5px solid;
   max-width: 100%;
+}
+
+.leon-sandbox-shell {
+  position: relative;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.leon-sandbox-mask {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.leon-sandbox-inner {
+  position: relative;
+  z-index: 1;
+  padding: 14px 16px;
+}
+
+.leon-sandbox-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  backdrop-filter: blur(8px);
+}
+
+.leon-hover-demo-wrap {
+  display: block;
+}
+
+.leon-hover-demo-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1), border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.leon-demo-icon-inner {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.18s cubic-bezier(0.2, 0, 0, 1), filter 0.2s ease;
+}
+
+.leon-mod-header {
+  margin-bottom: 10px;
+}
+
+.leon-mod-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.leon-mod-desc {
+  font-size: 11px;
+  opacity: 0.68;
+  margin-top: 2px;
+}
+
+.leon-mod-tile {
+  text-align: left;
+  padding: 9px 11px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  background: rgba(148, 163, 184, 0.05);
+  transition: border-color 0.16s ease, background-color 0.16s ease, box-shadow 0.16s ease, transform 0.14s ease;
+  cursor: pointer;
+  width: 100%;
+}
+
+.leon-mod-tile:hover {
+  border-color: var(--leon-accent-color, #0ea5e9);
+  background: color-mix(in srgb, var(--leon-accent-color, #0ea5e9) 7%, transparent);
+}
+
+.leon-mod-tile.is-active {
+  border-color: var(--leon-accent-color, #0ea5e9);
+  background: color-mix(in srgb, var(--leon-accent-color, #0ea5e9) 12%, transparent);
+  box-shadow: 0 0 0 1px var(--leon-accent-color, #0ea5e9);
+}
+
+.leon-mod-chip {
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(148, 163, 184, 0.06);
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+.leon-mod-chip:hover:not(:disabled) {
+  border-color: var(--leon-accent-color, #0ea5e9);
+}
+
+.leon-mod-chip.is-active {
+  border-color: var(--leon-accent-color, #0ea5e9);
+  background: color-mix(in srgb, var(--leon-accent-color, #0ea5e9) 16%, transparent);
+  font-weight: 600;
+}
+
+.leon-mod-chip:disabled,
+.leon-swatch-tile:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.leon-shape-glyph {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  border: 1.5px solid currentColor;
+  opacity: 0.8;
+}
+
+.leon-shape-glyph.is-squircle {
+  border-radius: 4px;
+}
+
+.leon-shape-glyph.is-circle {
+  border-radius: 999px;
+}
+
+.leon-shape-glyph.is-sharp {
+  border-radius: 0;
+}
+
+.leon-shape-glyph.is-pill {
+  border-radius: 6px;
+}
+
+.leon-cursor-preview-dot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+
+.leon-cursor-preview-dot.is-system {
+  border-radius: 2px;
+  border: 1.5px solid currentColor;
+  opacity: 0.55;
+}
+
+.leon-cursor-preview-dot.is-precision-dot {
+  border-radius: 999px;
+  border: 1.5px solid var(--leon-accent-color, #0ea5e9);
+  box-shadow: inset 0 0 0 3px transparent, inset 0 0 0 5px var(--leon-accent-color, #0ea5e9);
+}
+
+.leon-cursor-preview-dot.is-spotlight-aura {
+  border-radius: 999px;
+  background: radial-gradient(circle, var(--leon-accent-color, #0ea5e9) 0%, transparent 72%);
+}
+
+.leon-cursor-preview-dot.is-neon-ring {
+  border-radius: 999px;
+  border: 2px solid var(--leon-accent-color, #0ea5e9);
+  box-shadow: 0 0 6px var(--leon-accent-color, #0ea5e9);
+}
+
+.leon-cursor-preview-dot.is-crosshair-tech {
+  position: relative;
+  border-radius: 999px;
+  border: 1.5px dashed var(--leon-accent-color, #0ea5e9);
+}
+
+.leon-cursor-preview-dot.is-minimal-arrow {
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 10px solid currentColor;
+  transform: rotate(-32deg);
+}
+
+.leon-swatch-tile {
+  padding: 0;
+  border-radius: 9px;
+  overflow: hidden;
+  border: 1.5px solid rgba(148, 163, 184, 0.25);
+  background: transparent;
+  cursor: pointer;
+  transition: border-color 0.16s ease, transform 0.14s ease, box-shadow 0.16s ease;
+  text-align: left;
+}
+
+.leon-swatch-tile:hover:not(:disabled) {
+  border-color: var(--leon-accent-color, #0ea5e9);
+  transform: translateY(-1px);
+}
+
+.leon-swatch-tile.is-active {
+  border-color: var(--leon-accent-color, #0ea5e9);
+  box-shadow: 0 0 0 1.5px var(--leon-accent-color, #0ea5e9);
+}
+
+.leon-surface-swatch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 8px;
+  border: 1px solid;
+  border-radius: 7px;
+  margin: 2px;
+}
+
+.leon-wall-swatch {
+  height: 48px;
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  align-items: flex-end;
+  padding: 4px 6px;
+}
+
+.leon-wall-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #ffffff;
+  background: rgba(9, 9, 11, 0.62);
+  padding: 1px 5px;
+  border-radius: 4px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>
