@@ -329,7 +329,7 @@ names = archive.namelist()
 if any(name.startswith("/") or ".." in name.split("/") for name in names):
     raise SystemExit("archive path escaped")
 manifest = json.loads(archive.read("manifest.json"))
-assert manifest["version"] == "0.3.0", manifest.get("version")
+assert manifest["version"] == "0.3.1", manifest.get("version")
 assert manifest["database"]["method"] == "sqlite-vacuum-into"
 assert manifest["database"]["integrity"] == "ok"
 assert manifest["database"]["included"] is True

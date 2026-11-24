@@ -23,7 +23,7 @@ func TestVersionFileFormat(t *testing.T) {
 	if code != 1 {
 		t.Fatalf("numeric version code = %d, want 1", code)
 	}
-	if parts[1] != "0.3.0" {
-		t.Fatalf("display version = %s, want 0.3.0", parts[1])
+	if parts[1] != "0.3.1" {
+		t.Fatalf("display version = %s, want 0.3.1", parts[1])
 	}
 }

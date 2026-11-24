@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import {
   CARD_HOVER_EFFECT_OPTIONS,
   CURSOR_PRESET_OPTIONS,
+  CURSOR_SVG_PREVIEWS,
   FONT_PRESETS,
   FONT_PRESET_IDS,
   ICON_SHAPE_OPTIONS,
@@ -13,6 +14,7 @@ import {
   computeCardPointerVars,
   defaultModularStyleConfig,
   needsPointerTracking,
+  normalizeCursorPresetId,
   normalizeModularStyleConfig,
 } from './modularStyle.ts'
 import { normalizeStudioConfig } from './studioConfig.ts'
@@ -46,7 +48,7 @@ function createMockDocument() {
   }
 }
 
-test('defaultModularStyleConfig and normalizeModularStyleConfig handle null, legacy, and invalid values safely', () => {
+test('defaultModularStyleConfig, normalizeModularStyleConfig, and legacy cursor migration handle all inputs safely', () => {
   const defaults = defaultModularStyleConfig()
   assert.deepEqual(normalizeModularStyleConfig(null), defaults)
   assert.deepEqual(normalizeModularStyleConfig({}), defaults)
@@ -58,24 +60,60 @@ test('defaultModularStyleConfig and normalizeModularStyleConfig handle null, leg
     cardHoverEffect: 'explode',
   }), defaults)
 
+  // Legacy v0.3.0 cursor IDs automatically migrate to zero-latency hardware SVG cursors
+  assert.equal(normalizeCursorPresetId('precision-dot'), 'minimal-arrow')
+  assert.equal(normalizeCursorPresetId('spotlight-aura'), 'frost-pointer')
+  assert.equal(normalizeCursorPresetId('neon-ring'), 'neon-cyber')
+
   const valid = normalizeModularStyleConfig({
     fontPreset: 'studio-mono',
     iconShape: 'circle',
     iconToneFilter: 'luminous',
-    cursorPreset: 'precision-dot',
+    cursorPreset: 'neon-cyber',
     cardHoverEffect: 'tilt-3d',
   })
   assert.deepEqual(valid, {
     fontPreset: 'studio-mono',
     iconShape: 'circle',
     iconToneFilter: 'luminous',
-    cursorPreset: 'precision-dot',
+    cursorPreset: 'neon-cyber',
     cardHoverEffect: 'tilt-3d',
   })
 
   // Legacy StudioConfig without modular field normalizes cleanly
   const studio = normalizeStudioConfig({ effects: { gridOverlay: true }, widgets: [] })
   assert.deepEqual(studio.modular, defaults)
+})
+
+test('all cursor presets expose inline SVG vector previews and CSS avoids cursor: none lag', () => {
+  for (const opt of CURSOR_PRESET_OPTIONS) {
+    assert.match(opt.previewSvgUri, /^data:image\/svg\+xml,/)
+    assert.equal(opt.previewSvgUri, CURSOR_SVG_PREVIEWS[opt.id])
+  }
+
+  const lessPath = fileURLToPath(new URL('../../styles/leon-panel.less', import.meta.url))
+  const less = readFileSync(lessPath, 'utf8')
+  assert.doesNotMatch(less, /cursor:\s*none/)
+  for (const id of ['minimal-arrow', 'frost-pointer', 'neon-cyber', 'bauhaus-pop', 'crosshair-tech'])
+    assert.match(less, new RegExp(`\\[data-leon-cursor='${id}'\\]`))
+})
+
+test('Style Studio pins the live preview dock above an independent scroll pane and eliminates duplicate tabs with Layout & Desktop', () => {
+  const stylePath = fileURLToPath(new URL('../../components/apps/Style/index.vue', import.meta.url))
+  const studioPath = fileURLToPath(new URL('../../components/apps/LeonStudio/index.vue', import.meta.url))
+  const style = readFileSync(stylePath, 'utf8')
+  const studio = readFileSync(studioPath, 'utf8')
+
+  assert.match(style, /class="leon-pinned-dock"/)
+  assert.match(style, /class="leon-visual-scroll"/)
+  assert.doesNotMatch(style, /NTabs/)
+  assert.match(style, /CARD_HOVER_EFFECT_OPTIONS/)
+  assert.match(style, /CURSOR_PRESET_OPTIONS/)
+
+  // LeonStudio focuses strictly on layout, header toggles, widgets, and custom code without duplicating theme/modular pickers
+  assert.doesNotMatch(studio, /APPEARANCE_PRESETS/)
+  assert.doesNotMatch(studio, /CARD_HOVER_EFFECT_OPTIONS/)
+  assert.match(studio, /layout-mode-select/)
 })
 
 test('computeCardPointerVars maps center, corners, clamps out-of-bounds coordinates, and guards zero dimensions', () => {
@@ -118,14 +156,14 @@ test('applyModularStyleToDocument applies CSS vars and attributes and respects s
     fontPreset: 'editorial-serif',
     iconShape: 'sharp',
     iconToneFilter: 'soft-mono',
-    cursorPreset: 'neon-ring',
+    cursorPreset: 'frost-pointer',
     cardHoverEffect: 'border-glow',
   }, {}, normal.doc)
 
   assert.equal(normal.attrs.get('data-leon-font'), 'editorial-serif')
   assert.equal(normal.attrs.get('data-leon-icon-shape'), 'sharp')
   assert.equal(normal.attrs.get('data-leon-icon-tone'), 'soft-mono')
-  assert.equal(normal.attrs.get('data-leon-cursor'), 'neon-ring')
+  assert.equal(normal.attrs.get('data-leon-cursor'), 'frost-pointer')
   assert.equal(normal.attrs.get('data-leon-hover-fx'), 'border-glow')
   assert.equal(normal.styles.get('--leon-font-sans'), FONT_PRESETS['editorial-serif'].fontFamily)
 
@@ -134,7 +172,7 @@ test('applyModularStyleToDocument applies CSS vars and attributes and respects s
     fontPreset: 'studio-mono',
     iconShape: 'pill',
     iconToneFilter: 'high-contrast',
-    cursorPreset: 'precision-dot',
+    cursorPreset: 'minimal-arrow',
     cardHoverEffect: 'tilt-3d',
   }, { reduceMotion: true }, reduced.doc)
   assert.equal(reduced.attrs.get('data-leon-font'), 'studio-mono')
@@ -162,10 +200,17 @@ test('every modular style i18n key exists in both zh-CN.json and en-US.json', ()
   const en = JSON.parse(readFileSync(enPath, 'utf8')) as Record<string, unknown>
 
   const keys: string[] = [
-    'apps.leonStudio.tabModular',
+    'apps.leonStudio.appName',
+    'apps.leonStudio.tabLayout',
     'apps.leonStudio.modular.sandboxTitle',
     'apps.leonStudio.modular.sandboxHint',
     'apps.leonStudio.modular.resetModular',
+    'apps.leonStudio.modular.navPresets',
+    'apps.leonStudio.modular.navWallpaper',
+    'apps.leonStudio.modular.navCard',
+    'apps.leonStudio.modular.navIcon',
+    'apps.leonStudio.modular.navFontCursor',
+    'apps.leonStudio.modular.navHoverFx',
     ...FONT_PRESET_IDS.map(id => FONT_PRESETS[id].nameKey),
     ...ICON_SHAPE_OPTIONS.flatMap(opt => [opt.nameKey, opt.descKey]),
     ...ICON_TONE_OPTIONS.flatMap(opt => [opt.nameKey, opt.descKey]),
