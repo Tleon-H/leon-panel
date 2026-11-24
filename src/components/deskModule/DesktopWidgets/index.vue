@@ -222,19 +222,19 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 1px 6px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-family: var(--leon-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   font-size: 11px;
-  font-weight: 800;
-  background: var(--leon-accent-color, #ff4f00);
-  color: #ffffff;
+  font-weight: 700;
+  background: color-mix(in srgb, var(--leon-accent-color, #0ea5e9) 18%, transparent);
+  color: var(--leon-accent-color, #0ea5e9);
 }
 
 .leon-widget-title {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -244,18 +244,21 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
-  border: 1px solid var(--leon-card-border, rgba(148, 163, 184, 0.35));
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--leon-card-border, rgba(148, 163, 184, 0.25));
+  border-radius: 7px;
   background: transparent;
   color: inherit;
   cursor: pointer;
   font-size: 13px;
+  transition: border-color 0.14s ease, color 0.14s ease, background-color 0.14s ease;
 }
 
 .leon-widget-icon-btn:hover {
-  border-color: var(--leon-accent-color, #ff4f00);
-  color: var(--leon-accent-color, #ff4f00);
+  border-color: var(--leon-accent-color, #0ea5e9);
+  color: var(--leon-accent-color, #0ea5e9);
+  background: color-mix(in srgb, var(--leon-accent-color, #0ea5e9) 10%, transparent);
 }
 
 .leon-widget-clock {
@@ -265,9 +268,9 @@ onBeforeUnmount(() => {
 }
 
 .leon-widget-clock-time {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--leon-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   font-size: 30px;
-  font-weight: 800;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
   letter-spacing: -0.02em;
@@ -277,9 +280,9 @@ onBeforeUnmount(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--leon-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   font-size: 12px;
-  color: var(--leon-card-text-secondary, #52525b);
+  color: var(--leon-card-text-secondary, #94a3b8);
 }
 
 .leon-widget-clock-bars {
@@ -290,35 +293,40 @@ onBeforeUnmount(() => {
 }
 
 .leon-widget-clock-seg {
-  height: 6px;
-  background: var(--leon-card-border, rgba(148, 163, 184, 0.3));
+  height: 5px;
+  border-radius: 999px;
+  background: var(--leon-card-border, rgba(148, 163, 184, 0.24));
+  transition: background-color 0.2s ease;
 }
 
 .leon-widget-clock-seg.is-on {
-  background: var(--leon-accent-color, #ff4f00);
+  background: var(--leon-accent-color, #0ea5e9);
 }
 
 .leon-widget-memo-input {
   width: 100%;
   resize: vertical;
   min-height: 92px;
-  padding: 6px 8px;
-  border: 1px solid var(--leon-card-border, rgba(148, 163, 184, 0.25));
+  padding: 8px 10px;
+  border: 1px solid var(--leon-card-border, rgba(148, 163, 184, 0.22));
+  border-radius: 8px;
   background: transparent;
   color: inherit;
   font-family: inherit;
   font-size: 13px;
-  line-height: 1.5;
+  line-height: 1.55;
   outline: none;
+  transition: border-color 0.14s ease;
 }
 
 .leon-widget-memo-input:focus {
-  border-color: var(--leon-accent-color, #ff4f00);
+  border-color: var(--leon-accent-color, #0ea5e9);
 }
 
 .leon-widget-iframe {
   width: 100%;
-  border: 1px solid var(--leon-card-border, rgba(148, 163, 184, 0.25));
+  border: 1px solid var(--leon-card-border, rgba(148, 163, 184, 0.22));
+  border-radius: 8px;
   background: transparent;
 }
 
@@ -326,6 +334,6 @@ onBeforeUnmount(() => {
   padding: 18px 8px;
   text-align: center;
   font-size: 12px;
-  color: var(--leon-card-text-secondary, #52525b);
+  color: var(--leon-card-text-secondary, #94a3b8);
 }
 </style>

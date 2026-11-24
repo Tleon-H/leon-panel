@@ -24,13 +24,13 @@ onMounted(() => {
   <div class="py-6 px-4">
     <div class="flex flex-col items-center justify-center text-center">
       <div class="about-logo-frame mb-4">
-        <img :src="srcSvglogo" width="88" height="88" alt="Leon Panel">
+        <img :src="srcSvglogo" width="84" height="84" alt="Leon Panel" class="block rounded-[14px]">
       </div>
-      <div class="text-2xl font-extrabold tracking-tight uppercase">
+      <div class="text-2xl font-bold tracking-tight">
         {{ $t('common.appName') }}
       </div>
-      <div class="mt-1 font-mono text-sm opacity-80">
-        <span class="font-bold">v{{ versionName }}</span>
+      <div class="mt-1 font-mono text-sm opacity-75">
+        <span class="font-semibold">v{{ versionName }}</span>
       </div>
       <p class="mt-3 max-w-[520px] px-4 text-center text-sm leading-6 opacity-85">
         {{ $t('apps.about.description') }}
@@ -38,11 +38,11 @@ onMounted(() => {
       <div class="mt-4 flex flex-wrap items-center justify-center gap-4 text-sm font-mono">
         <div>
           {{ $t('apps.about.repository') }}
-          <a href="https://github.com/Tleon-H/leon-panel" target="_blank" class="link">Tleon-H/leon-panel</a>
+          <a href="https://github.com/Tleon-H/leon-panel" target="_blank" rel="noopener noreferrer" class="link">Tleon-H/leon-panel</a>
         </div>
         <div>
           {{ $t('apps.about.license') }}
-          <a href="https://github.com/Tleon-H/leon-panel/blob/master/LICENSE" target="_blank" class="link">MIT</a>
+          <a href="https://github.com/Tleon-H/leon-panel/blob/master/LICENSE" target="_blank" rel="noopener noreferrer" class="link">MIT</a>
         </div>
       </div>
     </div>
@@ -58,15 +58,16 @@ onMounted(() => {
 <style scoped>
 .about-logo-frame {
   padding: 10px;
-  border: 1.5px solid var(--leon-ui-border, #18181b);
-  background: var(--leon-ui-canvas, #f4f1ea);
-  box-shadow: 4px 4px 0 0 var(--leon-ui-border, #18181b);
+  border: 1px solid var(--leon-ui-border, rgba(148, 163, 184, 0.25));
+  border-radius: var(--leon-ui-modal-radius, 16px);
+  background: var(--leon-ui-canvas, #f4f4f1);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.12);
 }
 </style>
 
 <style>
 .link {
-  color: var(--leon-ui-primary, #2563eb);
+  color: var(--leon-ui-primary, #0ea5e9);
   text-decoration: underline;
   text-underline-offset: 3px;
 }
