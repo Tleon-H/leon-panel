@@ -20,7 +20,7 @@ const ms = useMessage()
 const loading = ref(false)
 const languageValue = ref<Language>(appStore.language)
 const savedAccounts = ref<AccountSession[]>(loadAccountSessions())
-const appVersion = import.meta.env.VITE_APP_VERSION || '0.1.0'
+const appVersion = import.meta.env.VITE_APP_VERSION || '0.2.0'
 
 const form = ref<Login.LoginReqest>({
   username: '',
