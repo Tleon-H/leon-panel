@@ -10,7 +10,7 @@ A minimalist flat-geometric navigation panel for servers, NAS devices, and brows
 
 </div>
 
-- 当前版本：`0.2.0`
+- 当前版本：`0.3.0`
 - 代码仓库：[Tleon-H/leon-panel](https://github.com/Tleon-H/leon-panel)
 - 开源协议：[MIT](./LICENSE)
 - 兼容性：**100% 兼容**旧版迁移配置、数据库结构、`docker-compose.yml` 挂载以及 `/custom/index.css` & `/custom/index.js`
