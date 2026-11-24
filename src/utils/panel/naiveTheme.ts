@@ -4,6 +4,7 @@ import {
   type CardSurfacePresetId,
   contrastRatio,
   isFlatGeometricSurface,
+  isPrecisionSurface,
   parseCssColor,
 } from './appearance'
 
@@ -76,24 +77,29 @@ export function buildNaiveThemeBundle(
 
   const isBauhaus = surface === 'bauhaus-grid'
   const isFlat = isFlatGeometricSurface(surface)
-  const radius = isBauhaus ? '0px' : isFlat ? '4px' : '6px'
-  const modalRadius = isBauhaus ? '0px' : isFlat ? '4px' : '8px'
+  const isPrecision = isPrecisionSurface(surface)
+  const radius = isBauhaus ? '0px' : isFlat ? '4px' : isPrecision ? '8px' : '6px'
+  const modalRadius = isBauhaus ? '0px' : isFlat ? '4px' : isPrecision ? '14px' : '8px'
 
   const canvas = isDark
-    ? '#09090b'
+    ? isPrecision ? '#0b0d11' : '#09090b'
     : isBauhaus
       ? '#f4f1ea'
-      : '#f5f5f3'
-  const cardBg = isDark ? '#121215' : '#ffffff'
-  const popoverBg = isDark ? '#16161a' : '#ffffff'
+      : isPrecision
+        ? '#f4f4f1'
+        : '#f5f5f3'
+  const cardBg = isDark ? (isPrecision ? '#14171f' : '#121215') : '#ffffff'
+  const popoverBg = isDark ? (isPrecision ? '#191d27' : '#16161a') : '#ffffff'
   const borderColor = isDark
-    ? '#27272a'
+    ? (isPrecision ? '#262b38' : '#27272a')
     : isBauhaus
       ? '#18181b'
-      : '#d4d4d8'
-  const dividerColor = isDark ? '#27272a' : '#e4e4e7'
-  const textBase = isDark ? '#fafafa' : '#09090b'
-  const textMuted = isDark ? '#a1a1aa' : '#52525b'
+      : isPrecision
+        ? '#e2e8f0'
+        : '#d4d4d8'
+  const dividerColor = isDark ? (isPrecision ? '#222733' : '#27272a') : '#e4e4e7'
+  const textBase = isDark ? '#f8fafc' : '#0f172a'
+  const textMuted = isDark ? '#94a3b8' : '#52525b'
 
   const overrides: GlobalThemeOverrides = {
     common: {

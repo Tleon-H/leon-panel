@@ -34,7 +34,11 @@
     "1400": "参数格式错误"
   },
   "appLauncher": {
-    "title": "系统应用"
+    "title": "系统应用",
+    "sectionAccount": "账号",
+    "sectionAppearance": "外观与工作台",
+    "sectionResources": "内容与资源",
+    "sectionSystem": "系统管理"
   },
   "apps": {
     "about": {
@@ -117,6 +121,7 @@
       "cardRadius": "卡片圆角",
       "cardAccentColor": "强调与焦点色",
       "iconBadgeStyle": "图标容器样式",
+      "iconBadgePrecision": "精密超椭圆托盘",
       "iconBadgeDefault": "经典默认",
       "iconBadgeBauhaus": "包豪斯几何框",
       "iconBadgeGlass": "海蓝玻璃框",
@@ -140,6 +145,14 @@
         "previewBannerTip": "退出预览将恢复原样，不会保存修改。",
         "selectAtLeastOne": "请至少勾选一项要应用的设置",
         "applied": "已应用「{name}」所选外观（{scopes}）",
+        "obsidianSlate": {
+          "name": "黑曜精密（推荐）",
+          "desc": "深炭黑低噪画布、1px 顶部微光分层卡片与统一超椭圆托盘，凸显应用图标"
+        },
+        "alabasterPaper": {
+          "name": "云母素白",
+          "desc": "温润暖白纸感画布、轻盈漫反射阴影与高清晰排版层级"
+        },
         "bauhausGrid": {
           "name": "包豪斯网格",
           "desc": "暖米网格画布、绝对直角黑框与信号橙几何强调"

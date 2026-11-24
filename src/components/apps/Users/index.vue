@@ -70,7 +70,7 @@ const createColumns = ({
             default() {
               return h(
                 SvgIcon, {
-                  icon: 'mingcute:more-1-fill',
+                  icon: 'lucide:more-horizontal',
                 },
               )
             },

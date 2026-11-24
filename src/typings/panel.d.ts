@@ -32,6 +32,8 @@ declare namespace Panel {
     }
 
     type AppearancePresetId =
+        | 'obsidian-slate'
+        | 'alabaster-paper'
         | 'bauhaus-grid'
         | 'swiss-paper'
         | 'mono-ink'
@@ -41,7 +43,7 @@ declare namespace Panel {
         | 'mist-paper'
         | 'midnight-graphite'
     type CardSurfacePresetId = 'default' | AppearancePresetId
-    type IconBadgeStyleId = 'default' | 'bauhaus' | 'glass' | 'soft' | 'outline'
+    type IconBadgeStyleId = 'default' | 'precision' | 'bauhaus' | 'glass' | 'soft' | 'outline'
     type PanelLayoutMode = 'standard' | 'compact' | 'dock'
     type WallpaperTone = 'dark' | 'light'
     type CloudConfigLoadState = 'idle' | 'loading' | 'ready' | 'error'

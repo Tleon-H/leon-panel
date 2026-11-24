@@ -700,6 +700,7 @@ function handleAddItem(itemIconGroupId?: number) {
       `leon-layout-${activePanelConfig.layoutMode || 'standard'}`,
       {
         'leon-flat-geometric': homepageTheme.card.isFlatGeometric,
+        'leon-precision-surface': homepageTheme.card.isPrecisionSurface,
         'leon-fx-grid-overlay': studioStore.config.effects.gridOverlay,
         'leon-fx-no-hard-shadow': !studioStore.config.effects.hardShadowHover,
         'leon-fx-reduce-motion': studioStore.config.effects.reduceMotion,
@@ -764,20 +765,18 @@ function handleAddItem(itemIconGroupId?: number) {
         <!-- 头 -->
         <div class="mx-[auto] w-[80%] leon-home-header">
           <div class="flex mx-[auto] items-center justify-center gap-3 leon-chrome-text">
-            <div class="logo flex items-center gap-3">
+            <div class="logo flex items-center gap-2.5">
               <img
-                v-if="homepageTheme.card.isFlatGeometric"
+                v-if="homepageTheme.card.isFlatGeometric || homepageTheme.card.isPrecisionSurface"
                 :src="brandLogoSvg"
                 alt="Leon Panel"
                 class="leon-header-emblem"
               >
-              <span class="text-2xl md:text-5xl font-extrabold tracking-tight text-shadow">
+              <span class="text-2xl md:text-4xl font-bold tracking-tight text-shadow">
                 {{ activePanelConfig.logoText }}
               </span>
             </div>
-            <div class="divider leon-header-divider text-base lg:text-2xl mx-[6px]" aria-hidden="true">
-              |
-            </div>
+            <span class="divider leon-header-divider leon-header-sep" aria-hidden="true" />
             <div class="text-shadow">
               <Clock :hide-second="!activePanelConfig.clockShowSecond" />
             </div>
@@ -788,7 +787,7 @@ function handleAddItem(itemIconGroupId?: number) {
           >
             {{ studioStore.config.effects.clockGreeting }}
           </div>
-          <div v-if="activePanelConfig.searchBoxShow" class="flex flex-col mt-[20px] mx-auto sm:w-full lg:w-[80%]">
+          <div v-if="activePanelConfig.searchBoxShow" class="flex flex-col mt-[20px] mx-auto sm:w-full lg:w-[76%]">
             <SearchBox
               :background="homepageTheme.searchBackground"
               :text-color="homepageTheme.searchTextColor"
@@ -848,24 +847,41 @@ function handleAddItem(itemIconGroupId?: number) {
               @mouseleave="handleSetHoverStatus(itemGroupIndex, false)"
             >
               <!-- 分组标题 -->
-              <div class="leon-chrome-text text-xl font-extrabold mb-[20px] ml-[4px] flex items-center gap-2">
+              <div class="leon-group-header leon-chrome-text">
                 <span v-if="homepageTheme.card.isFlatGeometric" class="leon-group-index" aria-hidden="true">
                   {{ String(itemGroupIndex + 1).padStart(2, '0') }}
                 </span>
-                <span class="group-title text-shadow">
+                <span class="group-title text-[15px] font-semibold tracking-tight text-shadow">
                   {{ itemGroup.title }}
                 </span>
+                <span class="leon-group-count" aria-hidden="true">
+                  {{ itemGroup.items?.length || 0 }}
+                </span>
+                <span class="leon-group-rule" aria-hidden="true" />
                 <div
                   v-if="authStore.visitMode === VisitMode.VISIT_MODE_LOGIN"
-                  class="group-buttons leon-hover-actions ml-2 flex"
-                  :class="itemGroup.hoverStatus ? 'is-open' : ''"
+                  class="group-buttons leon-hover-actions flex items-center gap-1"
+                  :class="itemGroup.hoverStatus || itemGroup.sortStatus ? 'is-open' : ''"
                 >
-                  <span class="mr-2 cursor-pointer" :title="t('common.add')" @click="handleAddItem(itemGroup.id)">
-                    <SvgIcon class="leon-chrome-text font-xl" icon="typcn:plus" />
-                  </span>
-                  <span class="mr-2 cursor-pointer " :title="t('common.sort')" @click="handleSetSortStatus(itemGroupIndex, !itemGroup.sortStatus)">
-                    <SvgIcon class="leon-chrome-text font-xl" icon="ri:drag-drop-line" />
-                  </span>
+                  <button
+                    type="button"
+                    class="leon-group-action-btn"
+                    :title="t('common.add')"
+                    :aria-label="t('common.add')"
+                    @click="handleAddItem(itemGroup.id)"
+                  >
+                    <SvgIcon icon="lucide:plus" />
+                  </button>
+                  <button
+                    type="button"
+                    class="leon-group-action-btn"
+                    :class="{ 'is-active': itemGroup.sortStatus }"
+                    :title="t('common.sort')"
+                    :aria-label="t('common.sort')"
+                    @click="handleSetSortStatus(itemGroupIndex, !itemGroup.sortStatus)"
+                  >
+                    <SvgIcon icon="lucide:grip-vertical" />
+                  </button>
                 </div>
               </div>
 
@@ -904,7 +920,7 @@ function handleAddItem(itemIconGroupId?: number) {
                     <div v-if="itemGroup.items.length === 0" class="not-drag">
                       <AppIcon
                         :class="itemGroup.sortStatus ? 'cursor-move' : 'cursor-pointer'"
-                        :item-info="{ icon: { itemType: 3, text: 'subway:add' }, title: t('common.add'), url: '', openMethod: 0 }"
+                        :item-info="{ icon: { itemType: 3, text: 'lucide:plus' }, title: t('common.add'), url: '', openMethod: 0 }"
                         :icon-text-color="activePanelConfig.iconTextColor"
                         :icon-text-info-hide-description="activePanelConfig.iconTextInfoHideDescription || false"
                         :icon-text-icon-hide-title="activePanelConfig.iconTextIconHideTitle || false"
@@ -952,7 +968,7 @@ function handleAddItem(itemIconGroupId?: number) {
                     <div v-if="itemGroup.items.length === 0" class="not-drag">
                       <AppIcon
                         class="cursor-pointer"
-                        :item-info="{ icon: { itemType: 3, text: 'subway:add' }, title: $t('common.add'), url: '', openMethod: 0 }"
+                        :item-info="{ icon: { itemType: 3, text: 'lucide:plus' }, title: $t('common.add'), url: '', openMethod: 0 }"
                         :icon-text-color="activePanelConfig.iconTextColor"
                         :icon-text-info-hide-description="!activePanelConfig.iconTextInfoHideDescription"
                         :icon-text-icon-hide-title="activePanelConfig.iconTextIconHideTitle || false"
@@ -969,7 +985,7 @@ function handleAddItem(itemIconGroupId?: number) {
                 <div>
                   <NButton :color="homepageTheme.controlBackground" :text-color="homepageTheme.controlTextColor" class="leon-control-btn" @click="handleSaveSort(itemGroup)">
                     <template #icon>
-                      <SvgIcon class="font-xl" icon="material-symbols:save" />
+                      <SvgIcon class="font-xl" icon="lucide:check" />
                     </template>
                     <div>
                       {{ $t('common.saveSort') }}
@@ -1101,7 +1117,7 @@ function handleAddItem(itemIconGroupId?: number) {
           @click="handleChangeNetwork(PanelStateNetworkModeEnum.wan)"
         >
           <template #icon>
-            <SvgIcon class="font-xl" icon="material-symbols:lan-outline-rounded" />
+            <SvgIcon class="text-[18px]" icon="lucide:network" />
           </template>
         </NButton>
 
@@ -1114,7 +1130,7 @@ function handleAddItem(itemIconGroupId?: number) {
           @click="handleChangeNetwork(PanelStateNetworkModeEnum.lan)"
         >
           <template #icon>
-            <SvgIcon class="font-xl" icon="mdi:wan" />
+            <SvgIcon class="text-[18px]" icon="lucide:globe" />
           </template>
         </NButton>
 
@@ -1128,7 +1144,7 @@ function handleAddItem(itemIconGroupId?: number) {
           @click="settingModalShow = !settingModalShow"
         >
           <template #icon>
-            <SvgIcon class="font-xl" icon="majesticons-applications" />
+            <SvgIcon class="text-[18px]" icon="lucide:layout-grid" />
           </template>
         </NButton>
 
@@ -1141,13 +1157,12 @@ function handleAddItem(itemIconGroupId?: number) {
           @click="router.push('/login')"
         >
           <template #icon>
-            <SvgIcon class="font-xl" icon="material-symbols:account-circle" />
+            <SvgIcon class="text-[18px]" icon="lucide:user" />
           </template>
         </NButton>
       </NButtonGroup>
 
       <AppStarter v-model:visible="appStarterVisible" :initial-app="settingInitialApp" />
-      <!-- <Setting v-model:visible="settingModalShow" /> -->
     </div>
 
     <NBackTop
@@ -1160,7 +1175,7 @@ function handleAddItem(itemIconGroupId?: number) {
       <div class="leon-floating-dock">
         <NButton :color="homepageTheme.controlBackground" :text-color="homepageTheme.controlTextColor" class="leon-control-btn">
           <template #icon>
-            <SvgIcon class="font-xl" icon="icon-park-outline:to-top" />
+            <SvgIcon class="text-[18px]" icon="lucide:arrow-up" />
           </template>
         </NButton>
       </div>

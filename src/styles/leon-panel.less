@@ -149,22 +149,35 @@
 .leon-themed-card {
   border: var(--leon-card-border-width, 1px) solid var(--leon-card-border, transparent);
   box-shadow: var(--leon-card-shadow, none);
+  transition: transform 0.16s cubic-bezier(0.2, 0, 0, 1), border-color 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease;
 }
 
 .leon-themed-card:hover {
   border-color: var(--leon-card-hover-border, var(--leon-card-border, transparent));
   box-shadow: var(--leon-card-hover-shadow, 0 0 20px 10px rgba(0, 0, 0, 0.2));
-  transform: translateY(-1px);
+  transform: translateY(-2px);
 }
 
 .leon-themed-small-tile {
   border: var(--leon-card-border-width, 1px) solid var(--leon-card-border, transparent);
   box-shadow: var(--leon-card-shadow, none);
+  transition: transform 0.16s cubic-bezier(0.2, 0, 0, 1), border-color 0.16s ease, box-shadow 0.16s ease;
 }
 
 .leon-themed-small-tile:hover {
   border-color: var(--leon-card-hover-border, var(--leon-card-border, transparent));
   box-shadow: var(--leon-card-hover-shadow, 0 0 20px 10px rgba(0, 0, 0, 0.2));
+  transform: translateY(-2px);
+}
+
+.leon-themed-card .item-icon,
+.leon-themed-small-tile .item-icon {
+  transition: transform 0.18s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.leon-themed-card:hover .item-icon,
+.leon-themed-small-tile:hover .item-icon {
+  transform: scale(1.04);
 }
 
 .leon-card-corner {
@@ -193,10 +206,94 @@
   transform: translate(-2px, -2px);
 }
 
+.leon-header-emblem {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
 .leon-flat-geometric .leon-header-emblem {
   width: 44px;
   height: 44px;
+  border-radius: 0;
   flex-shrink: 0;
+}
+
+.leon-header-sep {
+  display: inline-block;
+  width: 1px;
+  height: 26px;
+  margin: 0 8px;
+  background: currentColor;
+  opacity: 0.22;
+  flex-shrink: 0;
+}
+
+.leon-flat-geometric .leon-header-sep {
+  width: 2px;
+  background: var(--leon-accent-color, #ff4f00);
+  opacity: 0.85;
+}
+
+.leon-group-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding-left: 2px;
+}
+
+.leon-group-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-family: var(--leon-font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--leon-chrome-muted, rgba(241, 245, 249, 0.72));
+  background: rgba(148, 163, 184, 0.14);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.leon-group-rule {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(148, 163, 184, 0.22) 0%, rgba(148, 163, 184, 0.04) 85%, transparent 100%);
+  min-width: 16px;
+}
+
+.leon-group-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--leon-chrome-muted, #cbd5e1);
+  font-size: 15px;
+  cursor: pointer;
+  transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+
+.leon-group-action-btn:hover,
+.leon-group-action-btn.is-active {
+  background: var(--leon-control-bg, rgba(255, 255, 255, 0.08));
+  border-color: var(--leon-control-border, rgba(255, 255, 255, 0.14));
+  color: var(--leon-chrome-text, #ffffff);
+}
+
+.leon-group-action-btn:focus-visible {
+  outline: 2px solid var(--leon-accent-color, #0ea5e9);
+  outline-offset: 2px;
 }
 
 .leon-flat-geometric .leon-group-index {
@@ -204,7 +301,7 @@
   align-items: center;
   justify-content: center;
   padding: 2px 7px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--leon-font-mono);
   font-size: 11px;
   font-weight: 800;
   line-height: 1.3;
@@ -219,14 +316,28 @@
 }
 
 .leon-icon-badge {
-  width: 54px;
-  height: 54px;
+  width: 50px;
+  height: 50px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 14px;
+  border-radius: 12px;
   border: 1px solid transparent;
   transition: background-color 0.16s ease, border-color 0.16s ease;
+}
+
+.leon-icon-badge-precision {
+  width: 48px;
+  height: 48px;
+  border-radius: 11px;
+  border: 1px solid var(--leon-icon-badge-border, rgba(255, 255, 255, 0.08));
+  background: var(--leon-icon-badge-bg, #1d222e);
+}
+
+.app-icon-small-icon.leon-icon-badge-precision {
+  width: 70px;
+  height: 70px;
+  border-radius: var(--leon-card-radius, 12px);
 }
 
 .leon-icon-badge-bauhaus {
@@ -270,16 +381,31 @@
 }
 
 .leon-floating-dock {
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.24);
+}
+
+.leon-precision-surface .leon-floating-dock {
+  border-radius: 12px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
+}
+
+.leon-tone-light.leon-precision-surface .leon-floating-dock {
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.10);
 }
 
 .leon-flat-geometric .leon-floating-dock {
+  border-radius: var(--leon-card-radius, 0px);
   box-shadow: 3px 3px 0 0 var(--leon-control-border, #18181b);
 }
 
 .leon-control-btn {
   border: var(--leon-card-border-width, 1px) solid var(--leon-control-border, rgba(255, 255, 255, 0.16)) !important;
   backdrop-filter: blur(var(--leon-card-blur, 8px));
+}
+
+.leon-precision-surface .leon-control-btn {
+  backdrop-filter: none;
 }
 
 .leon-flat-geometric .leon-control-btn {
@@ -316,8 +442,17 @@
 }
 
 .leon-card-no-shadow .app-icon-info-text-box-title,
-.leon-card-no-shadow .app-icon-info-text-box-description {
-  text-shadow: none;
+.leon-card-no-shadow .app-icon-info-text-box-description,
+.leon-precision-surface .app-icon-info-text-box-title,
+.leon-precision-surface .app-icon-info-text-box-description,
+.leon-precision-surface .text-shadow,
+.leon-precision-surface .group-title,
+.leon-precision-surface .app-icon-text-shadow,
+.leon-precision-surface .app-icon-small-title,
+.leon-precision-surface .item-card-small-title,
+.leon-precision-surface .leon-search-empty,
+.leon-precision-surface .leon-search-hint {
+  text-shadow: none !important;
 }
 
 .leon-tone-light .text-shadow,

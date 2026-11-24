@@ -151,7 +151,7 @@ onMounted(() => {
                     </NButton>
                     <NButton size="tiny" tertiary :title="$t('apps.uploadsFileManager.copyLink')" @click="copyImageUrl(item.src)">
                       <template #icon>
-                        <SvgIcon icon="ion-copy" />
+                        <SvgIcon icon="lucide:copy" />
                       </template>
                     </NButton>
                   </NButtonGroup>

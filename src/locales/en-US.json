@@ -117,6 +117,7 @@
       "cardRadius": "Card corner radius",
       "cardAccentColor": "Accent and focus color",
       "iconBadgeStyle": "Icon badge style",
+      "iconBadgePrecision": "Precision squircle tray",
       "iconBadgeDefault": "Classic default",
       "iconBadgeBauhaus": "Bauhaus geometric frame",
       "iconBadgeGlass": "Ocean glass frame",
@@ -140,6 +141,14 @@
         "previewBannerTip": "Exiting preview restores your previous appearance without saving.",
         "selectAtLeastOne": "Select at least one item to apply",
         "applied": "Applied \"{name}\" ({scopes})",
+        "obsidianSlate": {
+          "name": "Obsidian Slate",
+          "desc": "Deep obsidian canvas, 1px specular layered cards, and precision squircle icon trays"
+        },
+        "alabasterPaper": {
+          "name": "Alabaster Paper",
+          "desc": "Warm alabaster canvas, crisp ambient elevation, and balanced typographic hierarchy"
+        },
         "bauhausGrid": {
           "name": "Bauhaus Grid",
           "desc": "Warm paper grid canvas, sharp ink frames, and signal-orange geometry"
@@ -428,7 +437,8 @@
     "iconLoadFailed": "Icon failed to load. Showing text instead.",
     "geticonFail": "Failed to get icon",
     "iconGroup": "Group",
-    "inputIconName": "Enter icon name",
+    "inputIconName": "Enter icon name (e.g. lucide:server or Iconify name)",
+    "searchBuiltinIcons": "Search built-in offline Homelab icons (Docker, NAS, Media...)",
     "inputIconUrlOrUpload": "Enter icon URL or upload",
     "lanUrl": "LAN URL",
     "lanUrlInputPlaceholder": "http(s):// (LAN mode, will redirect to this address)",

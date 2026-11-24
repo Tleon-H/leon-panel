@@ -20,7 +20,7 @@ const ms = useMessage()
 const loading = ref(false)
 const languageValue = ref<Language>(appStore.language)
 const savedAccounts = ref<AccountSession[]>(loadAccountSessions())
-const appVersion = import.meta.env.VITE_APP_VERSION || '0.1.0'
+const appVersion = import.meta.env.VITE_APP_VERSION || '0.2.0'
 
 const form = ref<Login.LoginReqest>({
   username: '',
@@ -85,25 +85,28 @@ onMounted(() => {
 <template>
   <div class="login-container">
     <div class="login-shell">
-      <!-- Bauhaus Geometric Brand Poster Column -->
+      <!-- Precision Brand Identity Column -->
       <div class="login-poster">
         <div class="login-poster-top">
           <div class="login-logo-box">
-            <img :src="brandLogoSvg" width="48" height="48" :alt="$t('common.appName')">
+            <img :src="brandLogoSvg" width="44" height="44" :alt="$t('common.appName')" class="block rounded-[10px]">
           </div>
           <span class="login-version-chip">v{{ appVersion }}</span>
         </div>
 
-        <div class="login-geo-art" aria-hidden="true">
-          <svg viewBox="0 0 200 104" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect x="0" y="0" width="44" height="44" fill="#2563EB" />
-            <circle cx="78" cy="22" r="22" fill="#FF4F00" />
-            <polygon points="112,44 138,0 164,44" fill="#EAB308" />
-            <rect x="0" y="56" width="100" height="16" fill="currentColor" />
-            <rect x="112" y="56" width="88" height="16" fill="currentColor" fill-opacity="0.22" />
-            <rect x="0" y="84" width="200" height="4" fill="currentColor" fill-opacity="0.32" />
-            <rect x="0" y="84" width="56" height="4" fill="#FF4F00" />
-          </svg>
+        <div class="login-poster-features" aria-hidden="true">
+          <div class="login-metric-pill">
+            <SvgIcon icon="lucide:server" class="text-[14px]" />
+            <span>Homelab &amp; NAS</span>
+          </div>
+          <div class="login-metric-pill">
+            <SvgIcon icon="lucide:container" class="text-[14px]" />
+            <span>Self-Hosted Services</span>
+          </div>
+          <div class="login-metric-pill">
+            <SvgIcon icon="lucide:network" class="text-[14px]" />
+            <span>LAN / WAN Dual Mode</span>
+          </div>
         </div>
 
         <div class="login-poster-footer">
@@ -111,12 +114,12 @@ onMounted(() => {
             {{ $t('common.appName') }}
           </h1>
           <p class="login-brand-sub">
-            HOMELAB // GEOMETRIC NAVIGATOR
+            PRECISION HOMELAB NAVIGATOR
           </p>
         </div>
       </div>
 
-      <!-- Flat Architectural Form Column -->
+      <!-- Precision Form Column -->
       <div class="login-form-pane">
         <div class="login-topbar">
           <div class="login-section-tag">
@@ -124,7 +127,7 @@ onMounted(() => {
             <span>{{ $t('login.loginButton') }}</span>
           </div>
           <div class="flex items-center gap-2">
-            <SvgIcon icon="ion-language" style="width: 18px; height: 18px;" />
+            <SvgIcon icon="lucide:languages" class="w-[16px] h-[16px] opacity-70" />
             <div class="min-w-[104px]">
               <NSelect v-model:value="languageValue" size="small" :options="languageOptions" @update-value="handleChangeLanuage" />
             </div>
@@ -154,7 +157,7 @@ onMounted(() => {
           <NFormItem :show-label="false">
             <NInput v-model:value="form.username" size="large" :placeholder="$t('login.usernamePlaceholder')">
               <template #prefix>
-                <SvgIcon icon="ph:user-bold" />
+                <SvgIcon icon="lucide:user" class="text-[16px] opacity-65" />
               </template>
             </NInput>
           </NFormItem>
@@ -162,7 +165,7 @@ onMounted(() => {
           <NFormItem :show-label="false">
             <NInput v-model:value="form.password" size="large" type="password" show-password-on="click" :placeholder="$t('login.passwordPlaceholder')">
               <template #prefix>
-                <SvgIcon icon="mdi:password-outline" />
+                <SvgIcon icon="lucide:lock" class="text-[16px] opacity-65" />
               </template>
             </NInput>
           </NFormItem>
@@ -175,7 +178,7 @@ onMounted(() => {
         </NForm>
 
         <div class="login-footer">
-          <a href="https://github.com/Tleon-H/leon-panel" target="_blank" class="login-repo-link">
+          <a href="https://github.com/Tleon-H/leon-panel" target="_blank" rel="noopener noreferrer" class="login-repo-link">
             {{ $t('common.appName') }} · GitHub
           </a>
         </div>
@@ -191,22 +194,19 @@ onMounted(() => {
   display: flex;
   justify-content: center;
   align-items: center;
-  background-color: var(--leon-ui-canvas, #f4f1ea);
-  background-image:
-    linear-gradient(to right, rgba(9, 9, 11, 0.06) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(9, 9, 11, 0.06) 1px, transparent 1px);
-  background-size: 32px 32px;
+  background-color: var(--leon-ui-canvas, #f4f4f1);
+  background-image: radial-gradient(ellipse 72% 55% at 50% 0%, rgba(14, 165, 233, 0.08), transparent 70%);
 }
 
 .login-shell {
   width: 100%;
   max-width: 780px;
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
+  grid-template-columns: 284px minmax(0, 1fr);
   background: var(--leon-ui-surface, #ffffff);
-  border: 2px solid #09090b;
-  border-radius: var(--leon-ui-modal-radius, 0px);
-  box-shadow: 6px 6px 0 0 #09090b;
+  border: 1px solid var(--leon-ui-border, rgba(15, 23, 42, 0.1));
+  border-radius: 16px;
+  box-shadow: 0 20px 48px rgba(15, 23, 42, 0.1), 0 2px 6px rgba(15, 23, 42, 0.05);
   overflow: hidden;
 }
 
@@ -215,51 +215,69 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  background: #09090b;
-  color: #fafafa;
-  border-right: 2px solid #09090b;
+  background: linear-gradient(160deg, #11151e 0%, #0b0d11 100%);
+  color: #f8fafc;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .login-poster-top {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
 }
 
 .login-logo-box {
-  padding: 6px;
-  background: #f4f1ea;
-  border: 1.5px solid #fafafa;
+  padding: 4px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .login-version-chip {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--leon-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   font-size: 11px;
-  font-weight: 700;
-  padding: 2px 8px;
-  border: 1px solid rgba(250, 250, 250, 0.4);
-  letter-spacing: 0.06em;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #cbd5e1;
+  letter-spacing: 0.04em;
 }
 
-.login-geo-art {
+.login-poster-features {
   margin: 28px 0;
-  color: #fafafa;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.login-metric-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  color: #cbd5e1;
+  font-size: 12.5px;
+  font-weight: 500;
 }
 
 .login-brand-name {
   margin: 0;
-  font-size: 24px;
-  font-weight: 900;
+  font-size: 22px;
+  font-weight: 700;
   letter-spacing: -0.02em;
-  text-transform: uppercase;
 }
 
 .login-brand-sub {
   margin: 6px 0 0;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--leon-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   font-size: 11px;
   letter-spacing: 0.08em;
-  color: #a1a1aa;
+  color: #94a3b8;
 }
 
 .login-form-pane {
@@ -275,24 +293,23 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   padding-bottom: 14px;
-  border-bottom: 1px solid var(--leon-ui-border, #e4e4e7);
+  border-bottom: 1px solid var(--leon-ui-border, #e2e8f0);
 }
 
 .login-section-tag {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .login-tag-dot {
-  width: 8px;
-  height: 8px;
-  background: var(--leon-ui-primary, #ff4f00);
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--leon-ui-primary, #0ea5e9);
 }
 
 .saved-accounts {
@@ -301,7 +318,7 @@ onMounted(() => {
 
 .saved-accounts-label {
   font-size: 12px;
-  color: #52525b;
+  color: #64748b;
   margin-bottom: 8px;
 }
 
@@ -313,22 +330,22 @@ onMounted(() => {
 
 .login-footer {
   padding-top: 12px;
-  border-top: 1px solid var(--leon-ui-border, #e4e4e7);
+  border-top: 1px solid var(--leon-ui-border, #e2e8f0);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--leon-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   font-size: 12px;
 }
 
 .login-repo-link {
-  color: #52525b;
+  color: #64748b;
   text-decoration: none;
   transition: color 0.15s ease;
 }
 
 .login-repo-link:hover {
-  color: var(--leon-ui-primary, #ff4f00);
+  color: var(--leon-ui-primary, #0ea5e9);
 }
 
 @media (max-width: 720px) {
@@ -340,10 +357,10 @@ onMounted(() => {
   .login-poster {
     padding: 20px;
     border-right: none;
-    border-bottom: 2px solid #09090b;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   }
 
-  .login-geo-art {
+  .login-poster-features {
     display: none;
   }
 
@@ -359,24 +376,23 @@ onMounted(() => {
 
 <style>
 .dark .login-container {
-  background-color: #09090b;
-  background-image:
-    linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-color: #0b0d11;
+  background-image: radial-gradient(ellipse 72% 55% at 50% 0%, rgba(14, 165, 233, 0.12), transparent 70%);
 }
 
 .dark .login-shell {
-  border-color: #27272a;
-  box-shadow: 6px 6px 0 0 var(--leon-ui-primary, #ff4f00);
+  background: #14171f;
+  border-color: rgba(255, 255, 255, 0.09);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.56), inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 .dark .login-poster {
-  background: #121215;
-  border-color: #27272a;
+  background: linear-gradient(160deg, #0f131b 0%, #090b10 100%);
+  border-color: rgba(255, 255, 255, 0.08);
 }
 
 .dark .saved-accounts-label,
 .dark .login-repo-link {
-  color: #a1a1aa;
+  color: #94a3b8;
 }
 </style>

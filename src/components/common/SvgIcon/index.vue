@@ -44,9 +44,12 @@ export default defineComponent({
 
 <style scoped>
   .svg-icon {
+    display: inline-block;
     width: 1em;
     height: 1em;
+    vertical-align: -0.125em;
     fill: currentColor;
     overflow: hidden;
+    flex-shrink: 0;
   }
 </style>

@@ -7,6 +7,7 @@ import OwnGallery from '@/components/apps/OwnGallery/index.vue'
 import PublicGallery from '@/components/apps/PublicGallery/index.vue'
 import { useAuthStore } from '@/store'
 import { apiRespErrMsg } from '@/utils/request/apiMessage'
+import { type HomelabIconPreset, filterHomelabPresets } from '@/utils/icon/localIcons'
 
 const props = defineProps<{
   itemIcon: Panel.ItemIcon | null
@@ -17,34 +18,25 @@ const emit = defineEmits<{
 const authStore = useAuthStore()
 const showPublicIcons = ref(false)
 const showOwnIcons = ref(false)
+const presetKeyword = ref('')
 
-// 默认图标背景色（内置包豪斯纯平几何色板）
+// 默认图标背景色（精密中性 + 高对比品牌色板）
 const defautSwatchesBackground = [
   '#00000000',
-  '#09090B',
+  '#18181B',
+  '#334155',
+  '#0284C7',
+  '#2563EB',
+  '#0F766E',
+  '#059669',
+  '#D97706',
+  '#EA580C',
+  '#E11D48',
   '#F4F1EA',
   '#FFFFFF',
-  '#FF4F00',
-  '#2563EB',
-  '#EAB308',
-  '#00C2A8',
 ]
 
-// 常用自托管与几何单色扁平图标快捷预设
-const bauhausIconPresets = [
-  { label: 'Docker', icon: 'simple-icons:docker', bg: '#2563EB' },
-  { label: 'Proxmox', icon: 'simple-icons:proxmox', bg: '#FF4F00' },
-  { label: 'Jellyfin', icon: 'simple-icons:jellyfin', bg: '#09090B' },
-  { label: 'Synology', icon: 'simple-icons:synology', bg: '#2563EB' },
-  { label: 'Immich', icon: 'simple-icons:immich', bg: '#FF4F00' },
-  { label: 'AdGuard', icon: 'simple-icons:adguard', bg: '#00C2A8' },
-  { label: 'Nginx', icon: 'simple-icons:nginx', bg: '#09090B' },
-  { label: 'Gitea', icon: 'simple-icons:gitea', bg: '#00C2A8' },
-  { label: 'Home', icon: 'simple-icons:homeassistant', bg: '#2563EB' },
-  { label: 'Server', icon: 'lucide:server', bg: '#09090B' },
-  { label: 'Disk', icon: 'lucide:hard-drive', bg: '#EAB308' },
-  { label: 'Terminal', icon: 'lucide:terminal', bg: '#09090B' },
-]
+const filteredPresets = computed(() => filterHomelabPresets(presetKeyword.value))
 
 const initData: Panel.ItemIcon = {
   itemType: 2,
@@ -66,7 +58,6 @@ const itemIconInfo = computed({
 })
 
 function handleIconTypeRadioChange(type: number) {
-  // checkedValueRef.value = type
   itemIconInfo.value.itemType = type
   handleChange()
 }
@@ -75,7 +66,7 @@ function handleChange() {
   emit('update:itemIcon', itemIconInfo.value || null)
 }
 
-function applyBauhausPreset(preset: { icon: string; bg: string }) {
+function applyHomelabPreset(preset: HomelabIconPreset) {
   itemIconInfo.value.itemType = 3
   itemIconInfo.value.text = preset.icon
   itemIconInfo.value.backgroundColor = preset.bg
@@ -102,7 +93,6 @@ const handleUploadFinish = ({
   }
   else {
     apiRespErrMsg(res)
-    // ms.error(`${t('common.uploadFail')}:${res.msg}`)
   }
 
   return file
@@ -125,7 +115,7 @@ function useOwnIcon(src: string) {
   <div>
     <div class="mb-[10px]">
       <NRadio
-        :checked="itemIconInfo.itemType === 1 "
+        :checked="itemIconInfo.itemType === 1"
         :value="1"
         name="iconType"
         @change="handleIconTypeRadioChange(1)"
@@ -155,39 +145,51 @@ function useOwnIcon(src: string) {
     <div class="min-h-[100px]">
       <div class="flex">
         <div>
-          <div class="border bg-slate-200 overflow-hidden transparent-grid" style="border-radius: var(--leon-ui-radius, 4px);">
+          <div class="border bg-slate-200 overflow-hidden transparent-grid" style="border-radius: var(--leon-ui-radius, 10px);">
             <ItemIcon :item-icon="itemIconInfo" />
           </div>
         </div>
         <!-- 文字 -->
         <div class="ml-[20px] flex-1 min-w-0">
-          <!-- <NImage :src="model.icon" preview-disabled /> -->
           <div v-if="itemIconInfo.itemType === 1">
             <NInput v-model:value="itemIconInfo.text" class="mb-[5px]" size="small" type="text" @input="handleChange" />
           </div>
 
           <div v-if="itemIconInfo.itemType === 3">
             <div>
-              <NInput v-model:value="itemIconInfo.text" class="mb-[5px]" size="small" type="text" :placeholder="$t('iconItem.inputIconName')" @input="handleChange" />
+              <NInput v-model:value="itemIconInfo.text" class="mb-[6px]" size="small" type="text" :placeholder="$t('iconItem.inputIconName')" @input="handleChange" />
 
-              <div class="flex flex-wrap gap-1.5 my-2">
+              <NInput
+                v-model:value="presetKeyword"
+                size="tiny"
+                clearable
+                class="mb-[6px]"
+                :placeholder="$t('iconItem.searchBuiltinIcons')"
+              >
+                <template #prefix>
+                  <SvgIcon icon="lucide:search" class="text-xs opacity-60" />
+                </template>
+              </NInput>
+
+              <div class="leon-icon-preset-grid my-1.5">
                 <button
-                  v-for="preset in bauhausIconPresets"
-                  :key="preset.icon"
+                  v-for="preset in filteredPresets"
+                  :key="preset.id"
                   type="button"
-                  class="inline-flex items-center gap-1 px-2 py-1 text-xs border cursor-pointer transition-colors"
-                  style="border-color: var(--leon-ui-border, #d4d4d8); border-radius: var(--leon-ui-radius, 2px);"
-                  :title="preset.icon"
-                  @click="applyBauhausPreset(preset)"
+                  class="leon-icon-preset-btn"
+                  :class="{ 'is-selected': itemIconInfo.text === preset.icon && itemIconInfo.backgroundColor === preset.bg }"
+                  :title="`${preset.label} (${preset.icon})`"
+                  @click="applyHomelabPreset(preset)"
                 >
-                  <span class="w-2.5 h-2.5 inline-block shrink-0" :style="{ backgroundColor: preset.bg }" />
-                  <SvgIcon :icon="preset.icon" class="text-sm" />
-                  <span>{{ preset.label }}</span>
+                  <span class="leon-icon-preset-swatch" :style="{ backgroundColor: preset.bg }">
+                    <SvgIcon :icon="preset.icon" class="text-[13px] text-white" />
+                  </span>
+                  <span class="leon-icon-preset-label">{{ preset.label }}</span>
                 </button>
               </div>
 
               <NButton quaternary type="info" size="small">
-                <a target="_blank" href="https://icon-sets.iconify.design/">{{ $t('iconItem.onlineIconLibrary') }}</a>
+                <a target="_blank" rel="noopener noreferrer" href="https://icon-sets.iconify.design/">{{ $t('iconItem.onlineIconLibrary') }}</a>
               </NButton>
             </div>
           </div>
@@ -253,9 +255,56 @@ function useOwnIcon(src: string) {
 
 <style scoped>
 .transparent-grid {
-    background-image: linear-gradient(45deg, #fff 25%, transparent 25%, transparent 75%, #fff 75%),
-                      linear-gradient(45deg, #fff 25%, transparent 25%, transparent 75%, #fff 75%);
-    background-size: 16px 16px;
-    background-position: 0 0, 8px 8px;
+  background-image: linear-gradient(45deg, #fff 25%, transparent 25%, transparent 75%, #fff 75%),
+                    linear-gradient(45deg, #fff 25%, transparent 25%, transparent 75%, #fff 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 8px 8px;
+}
+
+.leon-icon-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 6px;
+  max-height: 156px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.leon-icon-preset-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 4px 7px;
+  border: 1px solid var(--leon-ui-border, #d4d4d8);
+  border-radius: var(--leon-ui-radius, 6px);
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.14s ease, background-color 0.14s ease;
+}
+
+.leon-icon-preset-btn:hover,
+.leon-icon-preset-btn.is-selected {
+  border-color: var(--leon-ui-primary, #0ea5e9);
+  background: color-mix(in srgb, var(--leon-ui-primary, #0ea5e9) 10%, transparent);
+}
+
+.leon-icon-preset-swatch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  flex-shrink: 0;
+}
+
+.leon-icon-preset-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

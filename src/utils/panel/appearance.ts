@@ -1,4 +1,6 @@
 export type AppearancePresetId =
+  | 'obsidian-slate'
+  | 'alabaster-paper'
   | 'bauhaus-grid'
   | 'swiss-paper'
   | 'mono-ink'
@@ -8,7 +10,7 @@ export type AppearancePresetId =
   | 'mist-paper'
   | 'midnight-graphite'
 export type CardSurfacePresetId = 'default' | AppearancePresetId
-export type IconBadgeStyleId = 'default' | 'bauhaus' | 'glass' | 'soft' | 'outline'
+export type IconBadgeStyleId = 'default' | 'precision' | 'bauhaus' | 'glass' | 'soft' | 'outline'
 export type PanelLayoutMode = 'standard' | 'compact' | 'dock'
 export type WallpaperTone = 'dark' | 'light'
 
@@ -104,6 +106,7 @@ export interface CardSurfaceTokens {
   secondaryTextColor: string
   isLightCard: boolean
   isFlatGeometric?: boolean
+  isPrecisionSurface?: boolean
 }
 
 export interface HomepageThemeResolution {
@@ -142,6 +145,8 @@ export const DEFAULT_APPEARANCE_SCOPES: AppearancePresetScopes = {
 }
 
 export const APPEARANCE_PRESET_IDS: readonly AppearancePresetId[] = [
+  'obsidian-slate',
+  'alabaster-paper',
   'bauhaus-grid',
   'swiss-paper',
   'mono-ink',
@@ -153,6 +158,74 @@ export const APPEARANCE_PRESET_IDS: readonly AppearancePresetId[] = [
 ]
 
 export const APPEARANCE_PRESETS: Record<AppearancePresetId, AppearancePresetDefinition> = {
+  'obsidian-slate': {
+    id: 'obsidian-slate',
+    nameKey: 'apps.baseSettings.presets.obsidianSlate.name',
+    descKey: 'apps.baseSettings.presets.obsidianSlate.desc',
+    swatch: {
+      canvas: '#0b0d11',
+      card: '#14171f',
+      border: 'rgba(255, 255, 255, 0.10)',
+      text: '#f8fafc',
+      accent: '#0ea5e9',
+    },
+    wallpaper: {
+      backgroundImageSrc: '/assets/wallpapers/obsidian-slate.svg',
+      backgroundBlur: 0,
+      backgroundMaskNumber: 0,
+      wallpaperTone: 'dark',
+    },
+    cardStyle: {
+      cardSurface: 'obsidian-slate',
+      cardBackgroundColor: '#14171f',
+      cardBorderColor: 'rgba(255, 255, 255, 0.09)',
+      cardBlur: 0,
+      cardBorderRadius: 12,
+      cardAccentColor: '#0ea5e9',
+    },
+    iconStyle: {
+      iconStyle: 0,
+      iconBadgeStyle: 'precision',
+      iconTextColor: '#f8fafc',
+      iconTextInfoHideDescription: false,
+      iconTextIconHideTitle: false,
+      iconMonochrome: false,
+    },
+  },
+  'alabaster-paper': {
+    id: 'alabaster-paper',
+    nameKey: 'apps.baseSettings.presets.alabasterPaper.name',
+    descKey: 'apps.baseSettings.presets.alabasterPaper.desc',
+    swatch: {
+      canvas: '#f4f4f1',
+      card: '#ffffff',
+      border: 'rgba(15, 23, 42, 0.09)',
+      text: '#0f172a',
+      accent: '#0284c7',
+    },
+    wallpaper: {
+      backgroundImageSrc: '/assets/wallpapers/alabaster-paper.svg',
+      backgroundBlur: 0,
+      backgroundMaskNumber: 0,
+      wallpaperTone: 'light',
+    },
+    cardStyle: {
+      cardSurface: 'alabaster-paper',
+      cardBackgroundColor: '#ffffff',
+      cardBorderColor: 'rgba(15, 23, 42, 0.09)',
+      cardBlur: 0,
+      cardBorderRadius: 12,
+      cardAccentColor: '#0284c7',
+    },
+    iconStyle: {
+      iconStyle: 0,
+      iconBadgeStyle: 'precision',
+      iconTextColor: '#0f172a',
+      iconTextInfoHideDescription: false,
+      iconTextIconHideTitle: false,
+      iconMonochrome: false,
+    },
+  },
   'bauhaus-grid': {
     id: 'bauhaus-grid',
     nameKey: 'apps.baseSettings.presets.bauhausGrid.name',
@@ -440,6 +513,38 @@ const SURFACE_DEFAULTS: Record<CardSurfacePresetId, CardSurfaceTokens> = {
     secondaryTextColor: 'rgba(255, 255, 255, 0.86)',
     isLightCard: false,
   },
+  'obsidian-slate': {
+    surface: 'obsidian-slate',
+    backgroundColor: '#14171f',
+    borderColor: 'rgba(255, 255, 255, 0.09)',
+    borderWidth: '1px',
+    blur: 0,
+    borderRadius: 12,
+    accentColor: '#0ea5e9',
+    shadow: '0 1px 2px rgba(0, 0, 0, 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.06)',
+    hoverShadow: '0 8px 24px rgba(0, 0, 0, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.12)',
+    hoverBorderColor: 'rgba(255, 255, 255, 0.20)',
+    defaultTextColor: '#f8fafc',
+    secondaryTextColor: '#94a3b8',
+    isLightCard: false,
+    isPrecisionSurface: true,
+  },
+  'alabaster-paper': {
+    surface: 'alabaster-paper',
+    backgroundColor: '#ffffff',
+    borderColor: 'rgba(15, 23, 42, 0.09)',
+    borderWidth: '1px',
+    blur: 0,
+    borderRadius: 12,
+    accentColor: '#0284c7',
+    shadow: '0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 12px rgba(15, 23, 42, 0.03)',
+    hoverShadow: '0 6px 20px rgba(15, 23, 42, 0.08), 0 1px 3px rgba(15, 23, 42, 0.05)',
+    hoverBorderColor: 'rgba(15, 23, 42, 0.18)',
+    defaultTextColor: '#0f172a',
+    secondaryTextColor: '#475569',
+    isLightCard: true,
+    isPrecisionSurface: true,
+  },
   'bauhaus-grid': {
     surface: 'bauhaus-grid',
     backgroundColor: '#ffffff',
@@ -568,7 +673,9 @@ const SURFACE_DEFAULTS: Record<CardSurfacePresetId, CardSurfaceTokens> = {
 }
 
 export function isAppearancePresetId(value: unknown): value is AppearancePresetId {
-  return value === 'bauhaus-grid'
+  return value === 'obsidian-slate'
+    || value === 'alabaster-paper'
+    || value === 'bauhaus-grid'
     || value === 'swiss-paper'
     || value === 'mono-ink'
     || value === 'blueprint-slate'
@@ -576,6 +683,10 @@ export function isAppearancePresetId(value: unknown): value is AppearancePresetI
     || value === 'ocean-glass'
     || value === 'mist-paper'
     || value === 'midnight-graphite'
+}
+
+export function isPrecisionSurface(surface?: CardSurfacePresetId | null): boolean {
+  return surface === 'obsidian-slate' || surface === 'alabaster-paper'
 }
 
 export function isFlatGeometricSurface(surface?: CardSurfacePresetId | null): boolean {
@@ -595,7 +706,7 @@ export function isCardSurfacePresetId(value: unknown): value is CardSurfacePrese
 }
 
 export function isIconBadgeStyleId(value: unknown): value is IconBadgeStyleId {
-  return value === 'default' || value === 'bauhaus' || value === 'glass' || value === 'soft' || value === 'outline'
+  return value === 'default' || value === 'precision' || value === 'bauhaus' || value === 'glass' || value === 'soft' || value === 'outline'
 }
 
 export function isWallpaperTone(value: unknown): value is WallpaperTone {
@@ -891,23 +1002,28 @@ export function resolveHomepageThemeVars(rawConfig: AppearancePanelConfig): Home
   const effectiveTone = config.wallpaperTone ?? inferWallpaperToneFromSrc(config.backgroundImageSrc)
   const isLightCanvas = effectiveTone === 'light'
   const isFlat = isFlatGeometricSurface(surface)
+  const isPrecision = isPrecisionSurface(surface)
   const canvasFallback = isLightCanvas
-    ? surface === 'bauhaus-grid'
-      ? '#f4f1ea'
-      : surface === 'swiss-paper'
-        ? '#f5f5f3'
-        : surface === 'nordic-stone'
-          ? '#eceef0'
-          : '#eef2f5'
-    : surface === 'mono-ink'
-      ? '#09090b'
-      : surface === 'blueprint-slate'
-        ? '#0c1220'
-        : surface === 'ocean-glass'
-          ? '#071b34'
-          : surface === 'midnight-graphite'
-            ? '#0a0d14'
-            : '#363636'
+    ? surface === 'alabaster-paper'
+      ? '#f4f4f1'
+      : surface === 'bauhaus-grid'
+        ? '#f4f1ea'
+        : surface === 'swiss-paper'
+          ? '#f5f5f3'
+          : surface === 'nordic-stone'
+            ? '#eceef0'
+            : '#eef2f5'
+    : surface === 'obsidian-slate'
+      ? '#0b0d11'
+      : surface === 'mono-ink'
+        ? '#09090b'
+        : surface === 'blueprint-slate'
+          ? '#0c1220'
+          : surface === 'ocean-glass'
+            ? '#071b34'
+            : surface === 'midnight-graphite'
+              ? '#0a0d14'
+              : '#363636'
 
   const backgroundColor = config.cardBackgroundColor || base.backgroundColor
   const borderColor = config.cardBorderColor || base.borderColor
@@ -927,96 +1043,116 @@ export function resolveHomepageThemeVars(rawConfig: AppearancePanelConfig): Home
     shadow: base.shadow,
     hoverShadow: base.hoverShadow,
     hoverBorderColor: base.hoverBorderColor,
-    defaultTextColor: isLightCard ? '#1e293b' : '#f8fafc',
-    secondaryTextColor: isLightCard ? '#475569' : 'rgba(226, 232, 240, 0.86)',
+    defaultTextColor: isLightCard ? '#0f172a' : '#f8fafc',
+    secondaryTextColor: isLightCard ? '#475569' : '#94a3b8',
     isLightCard,
     isFlatGeometric: isFlat,
+    isPrecisionSurface: isPrecision,
   }
 
   const chromeTextColor = isLightCanvas ? '#0f172a' : '#ffffff'
-  const chromeMutedColor = isLightCanvas ? '#475569' : 'rgba(241, 245, 249, 0.85)'
-  const chromeTextShadow = (isLightCanvas || isFlat) ? 'none' : '0 2px 16px rgba(0, 0, 0, 0.55)'
-  const smallTitleShadow = (isLightCanvas || isFlat) ? 'none' : '0 1px 3px rgba(0, 0, 0, 0.88)'
+  const chromeMutedColor = isLightCanvas ? '#475569' : '#94a3b8'
+  const chromeTextShadow = (isLightCanvas || isFlat || isPrecision) ? 'none' : '0 2px 16px rgba(0, 0, 0, 0.55)'
+  const smallTitleShadow = (isLightCanvas || isFlat || isPrecision) ? 'none' : '0 1px 3px rgba(0, 0, 0, 0.88)'
 
-  const searchBackground = (surface === 'bauhaus-grid' || surface === 'swiss-paper' || surface === 'nordic-stone')
+  const searchBackground = (surface === 'alabaster-paper' || surface === 'bauhaus-grid' || surface === 'swiss-paper' || surface === 'nordic-stone')
     ? '#ffffff'
-    : surface === 'mono-ink'
-      ? '#121215'
-      : surface === 'blueprint-slate'
-        ? '#11192b'
-        : isLightCard
-          ? 'rgba(255, 252, 246, 0.94)'
-          : surface === 'ocean-glass'
-            ? 'rgba(15, 42, 74, 0.62)'
-            : surface === 'midnight-graphite'
-              ? 'rgba(17, 21, 28, 0.90)'
-              : isLightCanvas
-                ? 'rgba(255, 252, 246, 0.90)'
-                : LEGACY_DEFAULT_CARD_BG
+    : surface === 'obsidian-slate'
+      ? '#14171f'
+      : surface === 'mono-ink'
+        ? '#121215'
+        : surface === 'blueprint-slate'
+          ? '#11192b'
+          : isLightCard
+            ? 'rgba(255, 252, 246, 0.94)'
+            : surface === 'ocean-glass'
+              ? 'rgba(15, 42, 74, 0.62)'
+              : surface === 'midnight-graphite'
+                ? 'rgba(17, 21, 28, 0.90)'
+                : isLightCanvas
+                  ? 'rgba(255, 252, 246, 0.90)'
+                  : LEGACY_DEFAULT_CARD_BG
 
   const searchIsLight = isLightColor(searchBackground, canvasFallback)
   const searchTextColor = searchIsLight ? '#0f172a' : '#f8fafc'
-  const searchBorderColor = surface === 'bauhaus-grid'
-    ? '#18181b'
-    : surface === 'swiss-paper'
-      ? '#d4d4d8'
-      : surface === 'nordic-stone'
-        ? '#cbd5e1'
-        : surface === 'mono-ink'
-          ? '#27272a'
-          : surface === 'blueprint-slate'
-            ? '#23314b'
-            : searchIsLight
-              ? 'rgba(148, 163, 184, 0.52)'
-              : surface === 'midnight-graphite'
-                ? 'rgba(56, 189, 248, 0.34)'
-                : surface === 'ocean-glass'
-                  ? 'rgba(147, 197, 253, 0.36)'
-                  : 'rgba(255, 255, 255, 0.42)'
-  const searchPlaceholderColor = searchIsLight ? '#64748b' : 'rgba(241, 245, 249, 0.78)'
+  const searchBorderColor = surface === 'obsidian-slate'
+    ? 'rgba(255, 255, 255, 0.11)'
+    : surface === 'alabaster-paper'
+      ? 'rgba(15, 23, 42, 0.12)'
+      : surface === 'bauhaus-grid'
+        ? '#18181b'
+        : surface === 'swiss-paper'
+          ? '#d4d4d8'
+          : surface === 'nordic-stone'
+            ? '#cbd5e1'
+            : surface === 'mono-ink'
+              ? '#27272a'
+              : surface === 'blueprint-slate'
+                ? '#23314b'
+                : searchIsLight
+                  ? 'rgba(148, 163, 184, 0.52)'
+                  : surface === 'midnight-graphite'
+                    ? 'rgba(56, 189, 248, 0.34)'
+                    : surface === 'ocean-glass'
+                      ? 'rgba(147, 197, 253, 0.36)'
+                      : 'rgba(255, 255, 255, 0.42)'
+  const searchPlaceholderColor = searchIsLight ? '#64748b' : '#94a3b8'
 
-  const controlBackground = (surface === 'bauhaus-grid' || surface === 'swiss-paper' || surface === 'nordic-stone')
+  const controlBackground = (surface === 'alabaster-paper' || surface === 'bauhaus-grid' || surface === 'swiss-paper' || surface === 'nordic-stone')
     ? '#ffffff'
-    : surface === 'mono-ink'
-      ? '#121215'
-      : surface === 'blueprint-slate'
-        ? '#11192b'
-        : isLightCanvas
-          ? 'rgba(255, 252, 246, 0.92)'
-          : surface === 'ocean-glass'
-            ? 'rgba(15, 42, 74, 0.72)'
-            : surface === 'midnight-graphite'
-              ? 'rgba(17, 21, 28, 0.88)'
-              : LEGACY_DEFAULT_CARD_BG
-  const controlTextColor = isLightColor(controlBackground, canvasFallback) ? '#09090b' : '#ffffff'
-  const controlBorderColor = surface === 'bauhaus-grid'
-    ? '#18181b'
-    : surface === 'swiss-paper'
-      ? '#d4d4d8'
-      : surface === 'nordic-stone'
-        ? '#cbd5e1'
-        : surface === 'mono-ink'
-          ? '#27272a'
-          : surface === 'blueprint-slate'
-            ? '#23314b'
-            : isLightCanvas
-              ? 'rgba(148, 163, 184, 0.46)'
+    : surface === 'obsidian-slate'
+      ? '#14171f'
+      : surface === 'mono-ink'
+        ? '#121215'
+        : surface === 'blueprint-slate'
+          ? '#11192b'
+          : isLightCanvas
+            ? 'rgba(255, 252, 246, 0.92)'
+            : surface === 'ocean-glass'
+              ? 'rgba(15, 42, 74, 0.72)'
               : surface === 'midnight-graphite'
-                ? 'rgba(56, 189, 248, 0.32)'
-                : surface === 'ocean-glass'
-                  ? 'rgba(147, 197, 253, 0.32)'
-                  : 'rgba(255, 255, 255, 0.16)'
+                ? 'rgba(17, 21, 28, 0.88)'
+                : LEGACY_DEFAULT_CARD_BG
+  const controlTextColor = isLightColor(controlBackground, canvasFallback) ? '#09090b' : '#f8fafc'
+  const controlBorderColor = surface === 'obsidian-slate'
+    ? 'rgba(255, 255, 255, 0.11)'
+    : surface === 'alabaster-paper'
+      ? 'rgba(15, 23, 42, 0.11)'
+      : surface === 'bauhaus-grid'
+        ? '#18181b'
+        : surface === 'swiss-paper'
+          ? '#d4d4d8'
+          : surface === 'nordic-stone'
+            ? '#cbd5e1'
+            : surface === 'mono-ink'
+              ? '#27272a'
+              : surface === 'blueprint-slate'
+                ? '#23314b'
+                : isLightCanvas
+                  ? 'rgba(148, 163, 184, 0.46)'
+                  : surface === 'midnight-graphite'
+                    ? 'rgba(56, 189, 248, 0.32)'
+                    : surface === 'ocean-glass'
+                      ? 'rgba(147, 197, 253, 0.32)'
+                      : 'rgba(255, 255, 255, 0.16)'
 
   const iconBadgeStyle = config.iconBadgeStyle ?? 'default'
   const iconBadgeBackground = isLightCard
-    ? surface === 'swiss-paper'
-      ? '#f4f4f5'
-      : surface === 'nordic-stone'
-        ? '#eef0f2'
-        : '#f4f1ea'
-    : surface === 'mono-ink'
-      ? '#27272a'
-      : '#1e293b'
+    ? surface === 'alabaster-paper'
+      ? '#f1f3f5'
+      : surface === 'swiss-paper'
+        ? '#f4f4f5'
+        : surface === 'nordic-stone'
+          ? '#eef0f2'
+          : '#f4f1ea'
+    : surface === 'obsidian-slate'
+      ? '#1d222e'
+      : surface === 'mono-ink'
+        ? '#27272a'
+        : '#1e293b'
+  const iconBadgeBorder = isLightCard
+    ? 'rgba(15, 23, 42, 0.08)'
+    : 'rgba(255, 255, 255, 0.08)'
   const searchBadgeBackground = searchIsLight ? '#f4f4f5' : '#1e293b'
 
   const cssVars: Record<string, string> = {
@@ -1037,6 +1173,7 @@ export function resolveHomepageThemeVars(rawConfig: AppearancePanelConfig): Home
     '--leon-card-text-secondary': card.secondaryTextColor,
     '--leon-accent-color': card.accentColor,
     '--leon-icon-badge-bg': iconBadgeBackground,
+    '--leon-icon-badge-border': iconBadgeBorder,
     '--leon-search-bg': searchBackground,
     '--leon-search-text': searchTextColor,
     '--leon-search-border': searchBorderColor,
@@ -1085,6 +1222,7 @@ function resolveBadgeOverlayBackground(
   baseBackground: string,
 ): string {
   switch (badgeStyle) {
+    case 'precision':
     case 'bauhaus':
       return bauhausBackground
     case 'glass':

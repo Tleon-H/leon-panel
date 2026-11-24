@@ -22,7 +22,7 @@ const sortStatus = ref(false)
 
 const defaultMNodal = {
   title: '',
-  icon: 'material-symbols:folder-outline',
+  icon: 'lucide:folder-kanban',
   sort: 9999,
 }
 
@@ -163,7 +163,7 @@ onMounted(() => {
             <div class="flex" :class="sortStatus ? 'cursor-move' : ''">
               <div class="flex items-center">
                 <span class="mr-[10px]">
-                  <SvgIcon class="text-[20px]" icon="material-symbols:ad-group-outline-rounded" />
+                  <SvgIcon class="text-[20px]" icon="lucide:folder-kanban" />
                   <!-- <SvgIcon class="text-[20px]" :icon="item.icon" /> -->
                 </span>
                 <span>
@@ -174,14 +174,14 @@ onMounted(() => {
                 <span>
                   <NButton strong secondary type="success" size="small" @click="handleEditGroup(item)">
                     <template #icon>
-                      <SvgIcon icon="basil:edit-solid" />
+                      <SvgIcon icon="lucide:pencil" />
                     </template>
                   </NButton>
                 </span>
                 <span class="ml-[10px]">
                   <NButton strong secondary type="error" size="small" class="ml-[10px]" @click="handleDelete(item)">
                     <template #icon>
-                      <SvgIcon icon="material-symbols:delete" />
+                      <SvgIcon icon="lucide:trash-2" />
                     </template>
                   </NButton>
                 </span>

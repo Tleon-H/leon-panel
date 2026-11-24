@@ -202,7 +202,7 @@ function handleChangeTheme(value: Theme) {
     <NCard style="border-radius:10px" class="mt-[10px]" size="small">
       <NButton size="small" text type="error" @click="handleLogout">
         <template #icon>
-          <SvgIcon icon="tabler:logout" />
+          <SvgIcon icon="lucide:log-out" />
         </template>
         {{ $t('settingUserInfo.logout') }}
       </NButton>

@@ -264,7 +264,7 @@ async function handleStartImport() {
         >
           <NButton type="info" size="large" :loading="uploadLoading">
             <template #icon>
-              <SvgIcon icon="fa6:solid-file-import" />
+              <SvgIcon icon="lucide:file-down" />
             </template>
             {{ $t('apps.exportImport.import') }}
           </NButton>
@@ -273,7 +273,7 @@ async function handleStartImport() {
       <div class="m-[10px]">
         <NButton type="info" size="large" @click="exportRoundModalShow = !exportRoundModalShow">
           <template #icon>
-            <SvgIcon icon="fa6:solid-file-export" />
+            <SvgIcon icon="lucide:file-up" />
           </template>
           {{ $t('apps.exportImport.export') }}
         </NButton>

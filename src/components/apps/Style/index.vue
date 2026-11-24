@@ -56,6 +56,10 @@ const iconTypeOptions = [
 
 const iconBadgeStyleOptions = [
   {
+    label: t('apps.baseSettings.iconBadgePrecision'),
+    value: 'precision',
+  },
+  {
     label: t('apps.baseSettings.iconBadgeDefault'),
     value: 'default',
   },
@@ -78,6 +82,14 @@ const iconBadgeStyleOptions = [
 ]
 
 const cardSurfaceOptions = [
+  {
+    label: t('apps.baseSettings.presets.obsidianSlate.name'),
+    value: 'obsidian-slate',
+  },
+  {
+    label: t('apps.baseSettings.presets.alabasterPaper.name'),
+    value: 'alabaster-paper',
+  },
   {
     label: t('apps.baseSettings.cardSurfaceDefault'),
     value: 'default',

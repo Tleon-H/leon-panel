@@ -11,7 +11,7 @@
             <div class="w-[25px]">
                 <span v-if="item.children" class="cursor-pointer">
                     <!-- 收起展开：'rotate-90' :'rotate-0' -->
-                    <SvgIcon width="18" height="18" class="list-expand" :class="item.extand?'rotate-90':'rotate-0'" icon="ic:round-play-arrow" />
+                    <SvgIcon width="18" height="18" class="list-expand" :class="item.extand?'rotate-90':'rotate-0'" icon="lucide:chevron-right" />
                 </span>
             </div>
 
@@ -19,7 +19,7 @@
                 {{ item.name }}
                 <!-- <NDropdown trigger="click" :options="item.isTop === 1 ? unSetTopOptions : setTopOptions" size="small"
                 @select="(key: string) => handleClick(key, item.id)">
-                <SvgIcon icon="ri:more-fill" />
+                <SvgIcon icon="lucide:more-horizontal" />
             </NDropdown> -->
 
             </span>
