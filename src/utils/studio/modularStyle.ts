@@ -20,11 +20,11 @@ export type IconToneFilterId =
 
 export type CursorPresetId =
   | 'system'
-  | 'precision-dot'
-  | 'crosshair-tech'
-  | 'spotlight-aura'
   | 'minimal-arrow'
-  | 'neon-ring'
+  | 'frost-pointer'
+  | 'neon-cyber'
+  | 'bauhaus-pop'
+  | 'crosshair-tech'
 
 export type CardHoverEffectId =
   | 'lift'
@@ -59,6 +59,10 @@ export interface ModularOptionDefinition<T extends string> {
   descKey: string
 }
 
+export interface CursorOptionDefinition extends ModularOptionDefinition<CursorPresetId> {
+  previewSvgUri: string
+}
+
 export const FONT_PRESET_IDS: readonly FontPresetId[] = [
   'modern-sans',
   'geometric-tech',
@@ -84,12 +88,18 @@ export const ICON_TONE_FILTER_IDS: readonly IconToneFilterId[] = [
 
 export const CURSOR_PRESET_IDS: readonly CursorPresetId[] = [
   'system',
-  'precision-dot',
-  'spotlight-aura',
-  'neon-ring',
-  'crosshair-tech',
   'minimal-arrow',
+  'frost-pointer',
+  'neon-cyber',
+  'bauhaus-pop',
+  'crosshair-tech',
 ]
+
+const LEGACY_CURSOR_MIGRATION: Record<string, CursorPresetId> = {
+  'precision-dot': 'minimal-arrow',
+  'spotlight-aura': 'frost-pointer',
+  'neon-ring': 'neon-cyber',
+}
 
 export const CARD_HOVER_EFFECT_IDS: readonly CardHoverEffectId[] = [
   'spotlight',
@@ -167,13 +177,22 @@ export const ICON_TONE_OPTIONS: readonly ModularOptionDefinition<IconToneFilterI
   { id: 'luminous', nameKey: 'apps.leonStudio.modular.iconTones.luminous', descKey: 'apps.leonStudio.modular.iconTones.luminousDesc' },
 ]
 
-export const CURSOR_PRESET_OPTIONS: readonly ModularOptionDefinition<CursorPresetId>[] = [
-  { id: 'system', nameKey: 'apps.leonStudio.modular.cursors.system', descKey: 'apps.leonStudio.modular.cursors.systemDesc' },
-  { id: 'precision-dot', nameKey: 'apps.leonStudio.modular.cursors.precisionDot', descKey: 'apps.leonStudio.modular.cursors.precisionDotDesc' },
-  { id: 'spotlight-aura', nameKey: 'apps.leonStudio.modular.cursors.spotlightAura', descKey: 'apps.leonStudio.modular.cursors.spotlightAuraDesc' },
-  { id: 'neon-ring', nameKey: 'apps.leonStudio.modular.cursors.neonRing', descKey: 'apps.leonStudio.modular.cursors.neonRingDesc' },
-  { id: 'crosshair-tech', nameKey: 'apps.leonStudio.modular.cursors.crosshairTech', descKey: 'apps.leonStudio.modular.cursors.crosshairTechDesc' },
-  { id: 'minimal-arrow', nameKey: 'apps.leonStudio.modular.cursors.minimalArrow', descKey: 'apps.leonStudio.modular.cursors.minimalArrowDesc' },
+export const CURSOR_SVG_PREVIEWS: Record<CursorPresetId, string> = {
+  'system': 'data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2724%27 height=%2724%27 viewBox=%270 0 24 24%27 fill=%27none%27%3E%3Cpath d=%27M5 3.2L17.6 13.8H11.6L14.2 19.6L11.6 20.7L9 14.8L5 18.4V3.2Z%27 fill=%27%2364748b%27 stroke=%27%23ffffff%27 stroke-width=%271.4%27 stroke-linejoin=%27round%27/%3E%3C/svg%3E',
+  'minimal-arrow': 'data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2724%27 height=%2724%27 viewBox=%270 0 24 24%27 fill=%27none%27%3E%3Cpath d=%27M3.5 2.5L19 11.4L11.4 13.2L8.4 20.2L3.5 2.5Z%27 fill=%27%230b0d11%27 stroke=%27%23f8fafc%27 stroke-width=%271.6%27 stroke-linejoin=%27round%27/%3E%3Ccircle cx=%276.6%27 cy=%276.6%27 r=%271.2%27 fill=%27%2338bdf8%27/%3E%3C/svg%3E',
+  'frost-pointer': 'data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2724%27 height=%2724%27 viewBox=%270 0 24 24%27 fill=%27none%27%3E%3Cpath d=%27M4 2.8L18.8 11.6L11.6 13.5L8.6 20.4L4 2.8Z%27 fill=%27%23ffffff%27 stroke=%27%230f172a%27 stroke-width=%271.6%27 stroke-linejoin=%27round%27/%3E%3C/svg%3E',
+  'neon-cyber': 'data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2724%27 height=%2724%27 viewBox=%270 0 24 24%27 fill=%27none%27%3E%3Cpath d=%27M3.2 2.4L19.6 10.6L12.2 12.8L9.6 20.4L3.2 2.4Z%27 fill=%27%23090d16%27 stroke=%27%2322d3ee%27 stroke-width=%271.7%27 stroke-linejoin=%27round%27/%3E%3Cpath d=%27M5.5 5.6L11.5 11.5%27 stroke=%27%23818cf8%27 stroke-width=%271.4%27 stroke-linecap=%27round%27/%3E%3C/svg%3E',
+  'bauhaus-pop': 'data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2724%27 height=%2724%27 viewBox=%270 0 24 24%27 fill=%27none%27%3E%3Cpath d=%27M3.5 2.5L19.5 11L11.8 13.4L9 20.5L3.5 2.5Z%27 fill=%27%23ff4f00%27 stroke=%27%2309090b%27 stroke-width=%271.8%27 stroke-linejoin=%27miter%27/%3E%3C/svg%3E',
+  'crosshair-tech': 'data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2724%27 height=%2724%27 viewBox=%270 0 24 24%27 fill=%27none%27%3E%3Ccircle cx=%2712%27 cy=%2712%27 r=%275%27 stroke=%27%230ea5e9%27 stroke-width=%271.6%27/%3E%3Cpath d=%27M12 2.5v5M12 16.5v5M2.5 12h5M16.5 12h5%27 stroke=%27%230ea5e9%27 stroke-width=%271.6%27 stroke-linecap=%27round%27/%3E%3C/svg%3E',
+}
+
+export const CURSOR_PRESET_OPTIONS: readonly CursorOptionDefinition[] = [
+  { id: 'system', nameKey: 'apps.leonStudio.modular.cursors.system', descKey: 'apps.leonStudio.modular.cursors.systemDesc', previewSvgUri: CURSOR_SVG_PREVIEWS.system },
+  { id: 'minimal-arrow', nameKey: 'apps.leonStudio.modular.cursors.minimalArrow', descKey: 'apps.leonStudio.modular.cursors.minimalArrowDesc', previewSvgUri: CURSOR_SVG_PREVIEWS['minimal-arrow'] },
+  { id: 'frost-pointer', nameKey: 'apps.leonStudio.modular.cursors.frostPointer', descKey: 'apps.leonStudio.modular.cursors.frostPointerDesc', previewSvgUri: CURSOR_SVG_PREVIEWS['frost-pointer'] },
+  { id: 'neon-cyber', nameKey: 'apps.leonStudio.modular.cursors.neonCyber', descKey: 'apps.leonStudio.modular.cursors.neonCyberDesc', previewSvgUri: CURSOR_SVG_PREVIEWS['neon-cyber'] },
+  { id: 'bauhaus-pop', nameKey: 'apps.leonStudio.modular.cursors.bauhausPop', descKey: 'apps.leonStudio.modular.cursors.bauhausPopDesc', previewSvgUri: CURSOR_SVG_PREVIEWS['bauhaus-pop'] },
+  { id: 'crosshair-tech', nameKey: 'apps.leonStudio.modular.cursors.crosshairTech', descKey: 'apps.leonStudio.modular.cursors.crosshairTechDesc', previewSvgUri: CURSOR_SVG_PREVIEWS['crosshair-tech'] },
 ]
 
 export const CARD_HOVER_EFFECT_OPTIONS: readonly ModularOptionDefinition<CardHoverEffectId>[] = [
@@ -203,6 +222,14 @@ export function isCursorPresetId(value: unknown): value is CursorPresetId {
   return typeof value === 'string' && (CURSOR_PRESET_IDS as readonly string[]).includes(value)
 }
 
+export function normalizeCursorPresetId(value: unknown): CursorPresetId {
+  if (isCursorPresetId(value))
+    return value
+  if (typeof value === 'string' && value in LEGACY_CURSOR_MIGRATION)
+    return LEGACY_CURSOR_MIGRATION[value]
+  return 'system'
+}
+
 export function isCardHoverEffectId(value: unknown): value is CardHoverEffectId {
   return typeof value === 'string' && (CARD_HOVER_EFFECT_IDS as readonly string[]).includes(value)
 }
@@ -226,7 +253,7 @@ export function normalizeModularStyleConfig(raw: unknown): StudioModularStyleCon
     fontPreset: isFontPresetId(obj.fontPreset) ? obj.fontPreset : defaults.fontPreset,
     iconShape: isIconShapeId(obj.iconShape) ? obj.iconShape : defaults.iconShape,
     iconToneFilter: isIconToneFilterId(obj.iconToneFilter) ? obj.iconToneFilter : defaults.iconToneFilter,
-    cursorPreset: isCursorPresetId(obj.cursorPreset) ? obj.cursorPreset : defaults.cursorPreset,
+    cursorPreset: normalizeCursorPresetId(obj.cursorPreset),
     cardHoverEffect: isCardHoverEffectId(obj.cardHoverEffect) ? obj.cardHoverEffect : defaults.cardHoverEffect,
   }
 }

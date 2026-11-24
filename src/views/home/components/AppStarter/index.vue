@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, provide, ref, watch } from 'vue'
 import { NLayout, NLayoutContent, NLayoutSider } from 'naive-ui'
 import { useAuthStore } from '@/store'
 import { AppLoader, RoundCardModal, SvgIcon } from '@/components/common'
@@ -29,6 +29,10 @@ const isSmallScreen = ref(false)
 const defaultTitle = t('appLauncher.title')
 const title = ref('')
 const height = ref('min(72vh, 620px)')
+
+provide('leonSwitchStarterApp', (target: string) => {
+  componentName.value = target
+})
 
 watch(
   () => [props.visible, props.initialApp] as const,
@@ -60,7 +64,7 @@ const apps = ref<App[]>([
   {
     name: t('apps.leonStudio.appName'),
     componentName: 'LeonStudio',
-    icon: 'lucide:sparkles',
+    icon: 'lucide:layout-grid',
     section: 'appearance',
   },
   {

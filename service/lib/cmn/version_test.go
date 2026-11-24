@@ -4,7 +4,7 @@ import "testing"
 
 func TestSysVersionInfoTrimsTheVersionFileNewline(t *testing.T) {
 	info := GetSysVersionInfo()
-	if info.Version_code != 1 || info.Version != "0.3.0" {
+	if info.Version_code != 1 || info.Version != "0.3.1" {
 		t.Fatalf("version = %d %q", info.Version_code, info.Version)
 	}
 }

@@ -979,29 +979,122 @@
   filter: drop-shadow(0 4px 12px color-mix(in srgb, var(--leon-accent-color, #0ea5e9) 46%, transparent));
 }
 
-/* Native Zero-Latency SVG Custom Cursors (fine pointer desktop only) */
+/* Native Zero-Latency OS Hardware SVG Cursors (fine pointer desktop only — 0ms lag) */
 @media (hover: hover) and (pointer: fine) {
-  [data-leon-cursor='precision-dot'],
-  [data-leon-cursor='precision-dot'] body,
-  [data-leon-cursor='precision-dot'] a,
-  [data-leon-cursor='precision-dot'] button,
-  [data-leon-cursor='precision-dot'] [role='link'],
-  [data-leon-cursor='neon-ring'],
-  [data-leon-cursor='neon-ring'] body,
-  [data-leon-cursor='neon-ring'] a,
-  [data-leon-cursor='neon-ring'] button,
-  [data-leon-cursor='neon-ring'] [role='link'] {
-    cursor: none !important;
-  }
-
-  [data-leon-cursor='crosshair-tech'],
-  [data-leon-cursor='crosshair-tech'] body {
-    cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none'%3E%3Ccircle cx='12' cy='12' r='4.5' stroke='%230ea5e9' stroke-width='1.5'/%3E%3Cpath d='M12 2v5M12 17v5M2 12h5M17 12h5' stroke='%230ea5e9' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E") 12 12, crosshair;
-  }
-
+  /* 1. minimal-arrow: Obsidian Blade */
   [data-leon-cursor='minimal-arrow'],
   [data-leon-cursor='minimal-arrow'] body {
-    cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 22 22' fill='none'%3E%3Cpath d='M3.5 2.5L17.5 11.2L10.8 12.6L8.2 19L3.5 2.5Z' fill='%2309090b' stroke='%23ffffff' stroke-width='1.6' stroke-linejoin='round'/%3E%3C/svg%3E") 3 2, auto;
+    cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M3.5 2.5L19 11.4L11.4 13.2L8.4 20.2L3.5 2.5Z' fill='%230b0d11' stroke='%23f8fafc' stroke-width='1.6' stroke-linejoin='round'/%3E%3C/svg%3E") 3 2, auto;
+  }
+
+  [data-leon-cursor='minimal-arrow'] a,
+  [data-leon-cursor='minimal-arrow'] button:not(:disabled),
+  [data-leon-cursor='minimal-arrow'] [role='button'],
+  [data-leon-cursor='minimal-arrow'] [role='link'],
+  [data-leon-cursor='minimal-arrow'] [class*='cursor-pointer'],
+  [data-leon-cursor='minimal-arrow'] .leon-card-item,
+  [data-leon-cursor='minimal-arrow'] .leon-hover-demo-card,
+  [data-leon-cursor='minimal-arrow'] .n-button:not(.n-button--disabled),
+  [data-leon-cursor='minimal-arrow'] .n-tabs-tab,
+  [data-leon-cursor='minimal-arrow'] .n-switch,
+  [data-leon-cursor='minimal-arrow'] .n-checkbox,
+  [data-leon-cursor='minimal-arrow'] .n-base-selection {
+    cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M3.5 2.5L19 11.4L11.4 13.2L8.4 20.2L3.5 2.5Z' fill='%230b0d11' stroke='%2338bdf8' stroke-width='1.8' stroke-linejoin='round'/%3E%3Ccircle cx='7.2' cy='7.4' r='1.5' fill='%2338bdf8'/%3E%3C/svg%3E") 3 2, pointer !important;
+  }
+
+  /* 2. frost-pointer: Alabaster Feather */
+  [data-leon-cursor='frost-pointer'],
+  [data-leon-cursor='frost-pointer'] body {
+    cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M4 2.8L18.8 11.6L11.6 13.5L8.6 20.4L4 2.8Z' fill='%23ffffff' stroke='%230f172a' stroke-width='1.6' stroke-linejoin='round'/%3E%3C/svg%3E") 4 3, auto;
+  }
+
+  [data-leon-cursor='frost-pointer'] a,
+  [data-leon-cursor='frost-pointer'] button:not(:disabled),
+  [data-leon-cursor='frost-pointer'] [role='button'],
+  [data-leon-cursor='frost-pointer'] [role='link'],
+  [data-leon-cursor='frost-pointer'] [class*='cursor-pointer'],
+  [data-leon-cursor='frost-pointer'] .leon-card-item,
+  [data-leon-cursor='frost-pointer'] .leon-hover-demo-card,
+  [data-leon-cursor='frost-pointer'] .n-button:not(.n-button--disabled),
+  [data-leon-cursor='frost-pointer'] .n-tabs-tab,
+  [data-leon-cursor='frost-pointer'] .n-switch,
+  [data-leon-cursor='frost-pointer'] .n-checkbox,
+  [data-leon-cursor='frost-pointer'] .n-base-selection {
+    cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M4 2.8L18.8 11.6L11.6 13.5L8.6 20.4L4 2.8Z' fill='%23ffffff' stroke='%230284c7' stroke-width='1.8' stroke-linejoin='round'/%3E%3Ccircle cx='7.6' cy='7.8' r='1.6' fill='%230284c7'/%3E%3C/svg%3E") 4 3, pointer !important;
+  }
+
+  /* 3. neon-cyber: Cyber Halberd */
+  [data-leon-cursor='neon-cyber'],
+  [data-leon-cursor='neon-cyber'] body {
+    cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M3.2 2.4L19.6 10.6L12.2 12.8L9.6 20.4L3.2 2.4Z' fill='%23090d16' stroke='%2322d3ee' stroke-width='1.7' stroke-linejoin='round'/%3E%3Cpath d='M5.5 5.6L11.5 11.5' stroke='%23818cf8' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E") 3 2, auto;
+  }
+
+  [data-leon-cursor='neon-cyber'] a,
+  [data-leon-cursor='neon-cyber'] button:not(:disabled),
+  [data-leon-cursor='neon-cyber'] [role='button'],
+  [data-leon-cursor='neon-cyber'] [role='link'],
+  [data-leon-cursor='neon-cyber'] [class*='cursor-pointer'],
+  [data-leon-cursor='neon-cyber'] .leon-card-item,
+  [data-leon-cursor='neon-cyber'] .leon-hover-demo-card,
+  [data-leon-cursor='neon-cyber'] .n-button:not(.n-button--disabled),
+  [data-leon-cursor='neon-cyber'] .n-tabs-tab,
+  [data-leon-cursor='neon-cyber'] .n-switch,
+  [data-leon-cursor='neon-cyber'] .n-checkbox,
+  [data-leon-cursor='neon-cyber'] .n-base-selection {
+    cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M3.2 2.4L19.6 10.6L12.2 12.8L9.6 20.4L3.2 2.4Z' fill='%23090d16' stroke='%23e879f9' stroke-width='1.8' stroke-linejoin='round'/%3E%3Cpath d='M5.5 5.6L11.8 11.8' stroke='%2322d3ee' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E") 3 2, pointer !important;
+  }
+
+  /* 4. bauhaus-pop: Bauhaus Geo */
+  [data-leon-cursor='bauhaus-pop'],
+  [data-leon-cursor='bauhaus-pop'] body {
+    cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M3.5 2.5L19.5 11L11.8 13.4L9 20.5L3.5 2.5Z' fill='%23ff4f00' stroke='%2309090b' stroke-width='1.8' stroke-linejoin='miter'/%3E%3C/svg%3E") 3 2, auto;
+  }
+
+  [data-leon-cursor='bauhaus-pop'] a,
+  [data-leon-cursor='bauhaus-pop'] button:not(:disabled),
+  [data-leon-cursor='bauhaus-pop'] [role='button'],
+  [data-leon-cursor='bauhaus-pop'] [role='link'],
+  [data-leon-cursor='bauhaus-pop'] [class*='cursor-pointer'],
+  [data-leon-cursor='bauhaus-pop'] .leon-card-item,
+  [data-leon-cursor='bauhaus-pop'] .leon-hover-demo-card,
+  [data-leon-cursor='bauhaus-pop'] .n-button:not(.n-button--disabled),
+  [data-leon-cursor='bauhaus-pop'] .n-tabs-tab,
+  [data-leon-cursor='bauhaus-pop'] .n-switch,
+  [data-leon-cursor='bauhaus-pop'] .n-checkbox,
+  [data-leon-cursor='bauhaus-pop'] .n-base-selection {
+    cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M3.5 2.5L19.5 11L11.8 13.4L9 20.5L3.5 2.5Z' fill='%23facc15' stroke='%2309090b' stroke-width='1.8' stroke-linejoin='miter'/%3E%3C/svg%3E") 3 2, pointer !important;
+  }
+
+  /* 5. crosshair-tech: Telemetry Crosshair */
+  [data-leon-cursor='crosshair-tech'],
+  [data-leon-cursor='crosshair-tech'] body {
+    cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none'%3E%3Ccircle cx='12' cy='12' r='5' stroke='%230ea5e9' stroke-width='1.5'/%3E%3Cpath d='M12 2.5v5M12 16.5v5M2.5 12h5M16.5 12h5' stroke='%230ea5e9' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E") 12 12, crosshair;
+  }
+
+  [data-leon-cursor='crosshair-tech'] a,
+  [data-leon-cursor='crosshair-tech'] button:not(:disabled),
+  [data-leon-cursor='crosshair-tech'] [role='button'],
+  [data-leon-cursor='crosshair-tech'] [role='link'],
+  [data-leon-cursor='crosshair-tech'] [class*='cursor-pointer'],
+  [data-leon-cursor='crosshair-tech'] .leon-card-item,
+  [data-leon-cursor='crosshair-tech'] .leon-hover-demo-card,
+  [data-leon-cursor='crosshair-tech'] .n-button:not(.n-button--disabled),
+  [data-leon-cursor='crosshair-tech'] .n-tabs-tab,
+  [data-leon-cursor='crosshair-tech'] .n-switch,
+  [data-leon-cursor='crosshair-tech'] .n-checkbox,
+  [data-leon-cursor='crosshair-tech'] .n-base-selection {
+    cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none'%3E%3Crect x='7.2' y='7.2' width='9.6' height='9.6' transform='rotate(45 12 12)' stroke='%2338bdf8' stroke-width='1.6'/%3E%3Cpath d='M12 2v4.5M12 17.5V22M2 12h4.5M17.5 12H22' stroke='%2338bdf8' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E") 12 12, pointer !important;
+  }
+
+  /* Keep text I-beam on inputs and move cursor on drag items */
+  [data-leon-cursor] input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  [data-leon-cursor] textarea,
+  [data-leon-cursor] [contenteditable='true'] {
+    cursor: text !important;
+  }
+
+  [data-leon-cursor] .cursor-move {
+    cursor: move !important;
   }
 }
 
