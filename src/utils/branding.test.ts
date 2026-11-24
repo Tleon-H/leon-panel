@@ -23,8 +23,8 @@ function pngDimensions(buf: Buffer): { width: number; height: number } {
   }
 }
 
-test('the visible product branding is standalone Leon Panel 0.2.0', () => {
-  assert.equal(source('service/assets/version').trim(), '1|0.2.0')
+test('the visible product branding is standalone Leon Panel 0.3.0', () => {
+  assert.equal(source('service/assets/version').trim(), '1|0.3.0')
 
   const html = source('index.html')
   assert.match(html, /<title>Leon Panel<\/title>/)
@@ -63,7 +63,7 @@ test('the visible product branding is standalone Leon Panel 0.2.0', () => {
 
   const readme = source('README.md')
   assert.match(readme, /^# Leon Panel/m)
-  assert.match(readme, /0\.2\.0/)
+  assert.match(readme, /0\.3\.0/)
   assert.match(readme, /\[MIT\]\(\.\/LICENSE\)/)
   assert.match(readme, /https:\/\/github\.com\/Tleon-H\/leon-panel/)
   assert.doesNotMatch(readme, /sun-panel|hslr-s|红烧猎人|star-history|hub\.docker\.com|enianteam\.com|qq_group|donate/i)
@@ -105,7 +105,7 @@ test('brand SVG, PNG, PWA, ICO assets and router routes use Leon Panel identity 
 
 test('release tags match the package version and validation never modifies env files', () => {
   const pkg = JSON.parse(source('package.json'))
-  assert.equal(pkg.version, '0.2.0')
+  assert.equal(pkg.version, '0.3.0')
   const before = source('.env')
   const script = join(root, 'scripts/check-version.cjs')
   const tag = pkg.version

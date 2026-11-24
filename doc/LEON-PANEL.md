@@ -1,6 +1,6 @@
 # Leon Panel 技术与运维说明
 
-当前版本：`0.2.0`（内部结构版本码 `1`）。仓库为 [Tleon-H/leon-panel](https://github.com/Tleon-H/leon-panel)，采用 [MIT License](../LICENSE)。
+当前版本：`0.3.0`（内部结构版本码 `1`）。仓库为 [Tleon-H/leon-panel](https://github.com/Tleon-H/leon-panel)，采用 [MIT License](../LICENSE)。
 
 ## 功能实现细节
 
