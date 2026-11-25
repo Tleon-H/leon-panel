@@ -109,6 +109,12 @@ export function computeDynamicVectorSize(containerSize: number): number {
   return Math.max(16, Math.round(safe * 0.56))
 }
 
+export type IconImageFit = 'cover' | 'contain'
+
+export function resolveIconImageFit(fit?: string | null): IconImageFit {
+  return fit === 'contain' ? 'contain' : 'cover'
+}
+
 export function computeDynamicImagePadding(containerSize: number): number {
   const safe = (Number.isFinite(containerSize) && containerSize > 0) ? containerSize : 70
   if (safe <= 36)
@@ -116,6 +122,10 @@ export function computeDynamicImagePadding(containerSize: number): number {
   if (safe <= 52)
     return 6
   return 10
+}
+
+export function computeIconImagePadding(containerSize: number, fit?: string | null): number {
+  return resolveIconImageFit(fit) === 'contain' ? computeDynamicImagePadding(containerSize) : 0
 }
 
 // Curated harmonious, muted-yet-distinct tones for monogram fallbacks (WCAG AA compliant with white ink)

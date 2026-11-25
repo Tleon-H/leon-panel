@@ -29,6 +29,7 @@ declare namespace Panel {
         text ?: string
         // bgColor ?: string
         backgroundColor ?: string
+        imageFit ?: 'cover' | 'contain'
     }
 
     type AppearancePresetId =
