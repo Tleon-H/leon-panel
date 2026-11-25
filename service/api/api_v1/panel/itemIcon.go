@@ -3,18 +3,15 @@ package panel
 import (
 	"encoding/json"
 	"fmt"
-	"net/url"
-	"os"
-	"path"
-	"strings"
 	"leon-panel/api/api_v1/common/apiData/commonApiStructs"
 	"leon-panel/api/api_v1/common/apiData/panelApiStructs"
 	"leon-panel/api/api_v1/common/apiReturn"
 	"leon-panel/api/api_v1/common/base"
 	"leon-panel/global"
-	"leon-panel/lib/cmn"
 	"leon-panel/lib/siteFavicon"
 	"leon-panel/models"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -163,7 +160,7 @@ func (a *ItemIcon) Deletes(c *gin.Context) {
 	apiReturn.Success(c)
 }
 
-// 保存排序
+// 保存排序（同时支持桌面编辑模式下的跨分组拖拽归属更新）
 func (a *ItemIcon) SaveSort(c *gin.Context) {
 	req := panelApiStructs.ItemIconSaveSortRequest{}
 
@@ -174,10 +171,25 @@ func (a *ItemIcon) SaveSort(c *gin.Context) {
 
 	userInfo, _ := base.GetCurrentUserInfo(c)
 
+	var targetGroup models.ItemIconGroup
+	if err := global.Db.Where("id = ? AND user_id = ?", req.ItemIconGroupId, userInfo.ID).First(&targetGroup).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			apiReturn.ErrorDataNotFound(c)
+			return
+		}
+		apiReturn.ErrorDatabase(c, err.Error())
+		return
+	}
+
 	transactionErr := global.Db.Transaction(func(tx *gorm.DB) error {
 		// 在事务中执行一些 db 操作（从这里开始，您应该使用 'tx' 而不是 'db'）
 		for _, v := range req.SortItems {
-			if err := tx.Model(&models.ItemIcon{}).Where("user_id=? AND id=? AND item_icon_group_id=?", userInfo.ID, v.Id, req.ItemIconGroupId).Update("sort", v.Sort).Error; err != nil {
+			if err := tx.Model(&models.ItemIcon{}).
+				Where("user_id=? AND id=?", userInfo.ID, v.Id).
+				Updates(map[string]interface{}{
+					"sort":               v.Sort,
+					"item_icon_group_id": req.ItemIconGroupId,
+				}).Error; err != nil {
 				// 返回任何错误都会回滚事务
 				return err
 			}
@@ -197,76 +209,47 @@ func (a *ItemIcon) SaveSort(c *gin.Context) {
 
 // 支持获取并直接下载对方网站图标到服务器
 func (a *ItemIcon) GetSiteFavicon(c *gin.Context) {
-	userInfo, _ := base.GetCurrentUserInfo(c)
+	userInfo, ok := base.GetCurrentUserInfo(c)
+	if !ok || userInfo.ID == 0 {
+		apiReturn.ErrorByCode(c, 1000)
+		return
+	}
 	req := panelApiStructs.ItemIconGetSiteFaviconReq{}
 
 	if err := c.ShouldBindBodyWith(&req, binding.JSON); err != nil {
 		apiReturn.ErrorParamFomat(c, err.Error())
 		return
 	}
-	resp := panelApiStructs.ItemIconGetSiteFaviconResp{}
-	fullUrl := ""
-	if iconUrl, err := siteFavicon.GetOneFaviconURL(req.Url); err != nil {
-		apiReturn.Error(c, "acquisition failed: get ico error:"+err.Error())
-		return
-	} else {
-		fullUrl = iconUrl
-	}
 
-	parsedURL, err := url.Parse(req.Url)
+	configUpload := "./uploads"
+	if global.Config != nil {
+		if configured := strings.TrimSpace(global.Config.GetValueString("base", "source_path")); configured != "" {
+			configUpload = configured
+		}
+	}
+	now := time.Now()
+	saveDir := fmt.Sprintf("%s/%d/%d/%d", strings.TrimRight(configUpload, "/"), now.Year(), now.Month(), now.Day())
+
+	saved, err := siteFavicon.FetchAndSaveBestFavicon(req.Url, saveDir, 2*1024*1024)
 	if err != nil {
-		apiReturn.Error(c, "acquisition failed:"+err.Error())
+		apiReturn.Error(c, err.Error())
 		return
-	}
-
-	protocol := parsedURL.Scheme
-	global.Logger.Debug("protocol:", protocol)
-	global.Logger.Debug("fullUrl:", fullUrl)
-
-	// 如果URL以双斜杠（//）开头，则使用当前页面协议
-	if strings.HasPrefix(fullUrl, "//") {
-		fullUrl = protocol + "://" + fullUrl[2:]
-	} else if !strings.HasPrefix(fullUrl, "http://") && !strings.HasPrefix(fullUrl, "https://") {
-		// 如果URL既不以http://开头也不以https://开头，则默认为http协议
-		fullUrl = "http://" + fullUrl
-	}
-	global.Logger.Debug("fullUrl:", fullUrl)
-	// 去除图标的get参数
-	{
-		parsedIcoURL, err := url.Parse(fullUrl)
-		if err != nil {
-			apiReturn.Error(c, "acquisition failed: parsed ico URL :"+err.Error())
-			return
-		}
-		fullUrl = parsedIcoURL.Scheme + "://" + parsedIcoURL.Host + parsedIcoURL.Path
-	}
-	global.Logger.Debug("fullUrl:", fullUrl)
-
-	// 生成保存目录
-	configUpload := global.Config.GetValueString("base", "source_path")
-	savePath := fmt.Sprintf("%s/%d/%d/%d/", configUpload, time.Now().Year(), time.Now().Month(), time.Now().Day())
-	isExist, _ := cmn.PathExists(savePath)
-	if !isExist {
-		os.MkdirAll(savePath, os.ModePerm)
-	}
-
-	// 下载
-	var imgInfo *os.File
-	{
-		var err error
-		if imgInfo, err = siteFavicon.DownloadImage(fullUrl, savePath, 1024*1024); err != nil {
-			apiReturn.Error(c, "acquisition failed: download"+err.Error())
-			return
-		}
 	}
 
 	// 保存到数据库
-	ext := path.Ext(fullUrl)
 	mFile := models.File{}
-	if _, err := mFile.AddFile(userInfo.ID, parsedURL.Host, ext, imgInfo.Name(), models.FileCategoryIcon); err != nil {
+	if _, err := mFile.AddFile(userInfo.ID, saved.Host, saved.Ext, saved.FilePath, models.FileCategoryIcon); err != nil {
+		_ = os.Remove(saved.FilePath)
 		apiReturn.ErrorDatabase(c, err.Error())
 		return
 	}
-	resp.IconUrl = imgInfo.Name()[1:]
+
+	iconURL := strings.TrimPrefix(saved.FilePath, ".")
+	if !strings.HasPrefix(iconURL, "/") {
+		iconURL = "/" + iconURL
+	}
+	resp := panelApiStructs.ItemIconGetSiteFaviconResp{
+		IconUrl: iconURL,
+	}
 	apiReturn.SuccessData(c, resp)
 }

@@ -11,6 +11,8 @@ interface Props {
   visible: boolean
   itemInfo: Panel.Info | null
   itemGroupId?: number
+  draftMode?: boolean
+  draftGroups?: Array<{ label: string; value: number }>
 }
 
 const props = defineProps<Props>()
@@ -35,6 +37,7 @@ const restoreDefault: Panel.Info = {
 interface Emit {
   (e: 'update:visible', visible: boolean): void
   (e: 'done', item: Panel.Info): void// 创建完成
+  (e: 'draftSave', item: Panel.Info): void
 }
 
 const model = ref<Panel.Info>(props.itemInfo ? { ...props.itemInfo } : { ...restoreDefault })
@@ -84,6 +87,14 @@ const show = computed({
 })
 
 async function editApi() {
+  if (props.draftMode) {
+    const draftCopy = JSON.parse(JSON.stringify(model.value)) as Panel.Info
+    show.value = false
+    model.value = { ...restoreDefault }
+    emit('draftSave', draftCopy)
+    return
+  }
+
   submitLoading.value = true
   try {
     const { code, data, msg } = await edit<Panel.ItemInfo>(model.value)
@@ -112,36 +123,54 @@ const handleValidateButtonClick = (e: MouseEvent) => {
 }
 
 async function getIconByUrl(url: string, loadingIndex: number) {
+  const trimmed = (url || '').trim()
+  if (!trimmed)
+    return
   getIconLoading.value[loadingIndex] = true
   try {
-    const { code, data } = await getSiteFavicon<{ iconUrl: string }>(url)
-    if (code === 0) {
+    const { code, data, msg } = await getSiteFavicon<{ iconUrl: string }>(trimmed)
+    if (code === 0 && data?.iconUrl) {
       model.value.icon = {
+        ...(model.value.icon || {}),
         itemType: 2,
         src: data.iconUrl,
       }
+      ms.success(t('common.success'))
     }
     else {
-      ms.error(t('iconItem.geticonFail'))
+      ms.error(msg ? `${t('iconItem.geticonFail')}：${msg}` : t('iconItem.geticonFail'))
     }
   }
-  catch (error) {
+  catch {
     ms.error(t('iconItem.geticonFail'))
   }
-  getIconLoading.value[loadingIndex] = false
+  finally {
+    getIconLoading.value[loadingIndex] = false
+  }
 }
 
 watch(() => props.visible, (newValue) => {
   if (newValue === true) {
-    model.value = props.itemInfo ? { ...props.itemInfo } : { ...restoreDefault }
+    model.value = props.itemInfo ? JSON.parse(JSON.stringify(props.itemInfo)) : { ...restoreDefault }
     if (props.itemGroupId)
       model.value.itemIconGroupId = props.itemGroupId
+    getGroupListOptions()
   }
-
-  getGroupListOptions()
 })
 
 function getGroupListOptions() {
+  if (props.draftMode && Array.isArray(props.draftGroups)) {
+    itemIconGroupOptions.value = props.draftGroups.map(g => ({
+      label: g.label,
+      value: g.value,
+    }))
+    if (!model.value.itemIconGroupId && itemIconGroupOptions.value.length > 0) {
+      model.value.itemIconGroupId = itemIconGroupOptions.value[0].value
+      restoreDefault.itemIconGroupId = itemIconGroupOptions.value[0].value
+    }
+    return
+  }
+
   getGroupList<Common.ListResponse<Panel.ItemIconGroup[]>>().then(({ data, code, msg }) => {
     if (code === 0) {
       itemIconGroupOptions.value = []
@@ -178,7 +207,7 @@ function getGroupListOptions() {
           </NGridItem>
           <NGridItem span="2 500:1">
             <NFormItem path="title" :label="$t('common.title')">
-              <NInput v-model:value="model.title" type="text" show-count :maxlength="20" />
+              <NInput v-model:value="model.title" type="text" show-count :maxlength="20" data-testid="edit-item-title-input" />
             </NFormItem>
           </NGridItem>
         </NGrid>
@@ -189,16 +218,16 @@ function getGroupListOptions() {
         <NFormItem path="url" :label="$t('iconItem.url')">
           <!-- <NSelect :style="{ width: '100px' }" :options="urlProtocolOptions" /> -->
           <NInputGroup>
-            <NInput v-model:value="model.url" type="text" :maxlength="1000" placeholder="http(s)://" />
-            <NButton :disabled="!model.url" :loading="getIconLoading[0]" @click="getIconByUrl(model.url, 0)">
+            <NInput v-model:value="model.url" type="text" :maxlength="1000" placeholder="http(s)://" data-testid="edit-item-url-input" />
+            <NButton :disabled="!model.url" :loading="getIconLoading[0]" data-testid="edit-item-get-icon-btn" @click="getIconByUrl(model.url, 0)">
               {{ $t('iconItem.getIcon') }}
             </NButton>
           </NInputGroup>
         </NFormItem>
         <NFormItem path="lanUrl" :label="$t('iconItem.lanUrl')">
           <NInputGroup>
-            <NInput v-model:value="model.lanUrl" type="text" :maxlength="1000" :placeholder="$t('iconItem.lanUrlInputPlaceholder')" />
-            <NButton :disabled="!model.lanUrl" :loading="getIconLoading[1]" @click="getIconByUrl(model.lanUrl || '', 1)">
+            <NInput v-model:value="model.lanUrl" type="text" :maxlength="1000" :placeholder="$t('iconItem.lanUrlInputPlaceholder')" data-testid="edit-item-lan-url-input" />
+            <NButton :disabled="!model.lanUrl" :loading="getIconLoading[1]" data-testid="edit-item-lan-get-icon-btn" @click="getIconByUrl(model.lanUrl || '', 1)">
               {{ $t('iconItem.getIcon') }}
             </NButton>
           </NInputGroup>
@@ -213,7 +242,7 @@ function getGroupListOptions() {
     </div>
 
     <template #footer>
-      <NButton type="success" :loading="submitLoading" style="float: right;" @click="handleValidateButtonClick">
+      <NButton type="success" :loading="submitLoading" style="float: right;" data-testid="edit-item-save-btn" @click="handleValidateButtonClick">
         {{ $t('common.save') }}
       </NButton>
     </template>

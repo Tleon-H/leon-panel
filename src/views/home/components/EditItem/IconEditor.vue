@@ -228,7 +228,10 @@ function useOwnIcon(src: string) {
               <NButton size="small" data-testid="open-own-icons" @click="showOwnIcons = true">
                 {{ $t('apps.ownGallery.open') }}
               </NButton>
-              <NButton size="small" data-testid="open-public-icons" @click="showPublicIcons = true">
+              <NButton size="small" type="primary" secondary data-testid="open-public-icons" @click="showPublicIcons = true">
+                <template #icon>
+                  <SvgIcon icon="lucide:sparkles" />
+                </template>
                 {{ $t('apps.publicGallery.open') }}
               </NButton>
             </div>
@@ -242,10 +245,10 @@ function useOwnIcon(src: string) {
               <span class="font-medium">{{ $t('iconItem.imageFitContain') }}</span>
               <span class="opacity-65">{{ $t('iconItem.imageFitContainTip') }}</span>
             </div>
-            <NModal v-model:show="showOwnIcons" preset="card" :title="$t('apps.ownGallery.title')" style="width: min(720px, 96vw);">
+            <NModal v-model:show="showOwnIcons" preset="card" :title="$t('apps.ownGallery.title')" style="width: min(760px, 96vw);">
               <OwnGallery selectable @select="useOwnIcon" />
             </NModal>
-            <NModal v-model:show="showPublicIcons" preset="card" :title="$t('apps.publicGallery.appName')" style="width: min(720px, 96vw);">
+            <NModal v-model:show="showPublicIcons" preset="card" :title="$t('apps.publicGallery.appName')" style="width: min(860px, 96vw);">
               <PublicGallery locked-category="icon" selectable @select="usePublicIcon" />
             </NModal>
           </div>

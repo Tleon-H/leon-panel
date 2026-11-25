@@ -28,3 +28,40 @@ export function saveSort<T>(sortItems: Common.SortItemRequest[]) {
     data: { sortItems },
   })
 }
+
+export interface DesktopLayoutItemPayload {
+  id: number
+  tempId?: string
+  icon: Panel.ItemIcon | null
+  title: string
+  url: string
+  lanUrl?: string
+  description?: string
+  openMethod: number
+  sort: number
+}
+
+export interface DesktopLayoutGroupPayload {
+  id: number
+  tempId?: string
+  title: string
+  icon?: string
+  description?: string
+  iconStyle?: number | null
+  sort: number
+  items: DesktopLayoutItemPayload[]
+}
+
+export interface DesktopLayoutSavePayload {
+  groups: DesktopLayoutGroupPayload[]
+  deletedGroupIds: number[]
+  deletedItemIds: number[]
+  studioConfig?: Record<string, unknown> | null
+}
+
+export function saveDesktopLayout<T>(data: DesktopLayoutSavePayload) {
+  return post<T>({
+    url: '/panel/itemIconGroup/saveDesktopLayout',
+    data,
+  })
+}
