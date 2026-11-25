@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { VueDraggable } from 'vue-draggable-plus'
-import { NBackTop, NButton, NButtonGroup, NCheckbox, NDropdown, NModal, NSkeleton, NSpin, useDialog, useMessage } from 'naive-ui'
+import { NBackTop, NButton, NButtonGroup, NCheckbox, NDropdown, NInput, NModal, NSelect, NSkeleton, NSpin, useDialog, useMessage } from 'naive-ui'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { AppIcon, AppStarter, EditItem } from './components'
 import { Clock, DesktopWidgets, SearchBox, SystemMonitor } from '@/components/deskModule'
 import { ItemIcon, SvgIcon } from '@/components/common'
 import { deletes, getListByGroupId, saveSort } from '@/api/panel/itemIcon'
-import { getList as getGroupList } from '@/api/panel/itemIconGroup'
+import { getList as getGroupList, saveDesktopLayout } from '@/api/panel/itemIconGroup'
 import { acceptLoadedIcons, filterIconGroups, moveMatchIndex } from '@/utils/search/filterIcons'
 
 import { setTitle, updateLocalUserInfo } from '@/utils/cmn'
@@ -16,7 +16,21 @@ import { VisitMode } from '@/enums/auth'
 import { router } from '@/router'
 import { t } from '@/locales'
 import { contentMaxWidth } from '@/utils/panel/maxWidth'
-import { resolveGroupIconStyle } from '@/utils/panel/groupIconStyle'
+import {
+  groupIconStyleControlValue,
+  groupIconStyleFollow,
+  groupIconStyleSelectOptions,
+  normalizeGroupIconStyle,
+  resolveGroupIconStyle,
+} from '@/utils/panel/groupIconStyle'
+import {
+  type DesktopLayoutSnapshot,
+  buildDesktopLayoutSavePayload,
+  createDesktopLayoutSnapshot,
+  diffDesktopLayoutChanges,
+  moveArrayItem,
+  syncGroupOwnership,
+} from '@/utils/panel/desktopEdit'
 import { APPEARANCE_PRESETS, APPEARANCE_PRESET_IDS, DEFAULT_APPEARANCE_SCOPES, hasSelectedScope, resolveHomepageThemeVars } from '@/utils/panel/appearance'
 import type { AppearancePresetId, AppearancePresetScopes } from '@/utils/panel/appearance'
 import { contextMenuEntries, contextNewTabFeatures, resolveContextMenuChoice } from '@/utils/panel/contextMenu'
@@ -68,6 +82,12 @@ const currentAddItenIconGroupId = ref<number | undefined>()
 
 const settingModalShow = ref(false)
 const settingInitialApp = ref<string | undefined>(undefined)
+
+const desktopEditMode = ref(false)
+const desktopEditSaving = ref(false)
+const desktopEditSnapshot = ref<DesktopLayoutSnapshot<ItemGroup, ItemCard> | null>(null)
+const longPressTriggered = ref(false)
+const groupModalShow = ref(false)
 
 const items = ref<ItemGroup[]>([])
 let listState: HomeListState<ItemGroup> = createHomeListState(homeListIdentity(authStore.token))
@@ -184,6 +204,18 @@ function handlePreviewKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape' && panelState.isPreviewingAppearance) {
     event.preventDefault()
     handlePreviewCancel()
+    return
+  }
+  if (
+    event.key === 'Escape'
+    && desktopEditMode.value
+    && !editItemInfoShow.value
+    && !groupModalShow.value
+    && !settingModalShow.value
+    && !windowShow.value
+  ) {
+    event.preventDefault()
+    cancelDesktopEditMode()
   }
 }
 
@@ -231,7 +263,11 @@ function openChosenAddress(method: 1 | 2 | 3, href: string, title?: string) {
 }
 
 function handleItemClick(itemGroupIndex: number, item: Panel.ItemInfo) {
-  if (items.value[itemGroupIndex] && items.value[itemGroupIndex].sortStatus) {
+  if (longPressTriggered.value) {
+    longPressTriggered.value = false
+    return
+  }
+  if (desktopEditMode.value || (items.value[itemGroupIndex] && items.value[itemGroupIndex].sortStatus)) {
     handleEditItem(item)
     return
   }
@@ -271,6 +307,7 @@ function commitHomeList(next: HomeListState<ItemGroup>) {
   const presented = next.items.map(group => ({
     ...group,
     hoverStatus: group.hoverStatus ?? false,
+    sortStatus: desktopEditMode.value ? true : (group.sortStatus ?? false),
   }))
   const stored = { ...next, items: presented }
   items.value = presented
@@ -591,6 +628,8 @@ watch(settingModalShow, (visible) => {
 watch(() => homeListIdentity(authStore.token), (identity, previous) => {
   if (identity === previous || listState.disposed)
     return
+  desktopEditMode.value = false
+  desktopEditSnapshot.value = null
   panelState.cancelAppearancePreview()
   panelState.resetPanelConfig()
   studioStore.resetRuntimeState()
@@ -625,6 +664,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  cancelCardLongPress()
   window.removeEventListener('keydown', handlePreviewKeydown)
   panelState.cancelAppearancePreview()
   listState = disposeHomeList(listState)
@@ -690,6 +730,336 @@ function handleAddItem(itemIconGroupId?: number) {
   if (itemIconGroupId)
     currentAddItenIconGroupId.value = itemIconGroupId
 }
+
+// ==================== 全局桌面编辑模式（纯草稿态 + 单事务原子提交） ====================
+let longPressTimer: ReturnType<typeof setTimeout> | null = null
+let longPressOriginX = 0
+let longPressOriginY = 0
+let nextDraftTempId = -1
+
+const groupModalSaving = ref(false)
+const groupModalModel = ref<Panel.ItemIconGroup>({
+  title: '',
+  icon: 'lucide:folder-kanban',
+  sort: 9999,
+})
+const groupModalStyle = ref<string | number>(groupIconStyleFollow)
+const groupStyleOptions = computed(() => groupIconStyleSelectOptions(key => t(key)))
+const draftGroupSelectOptions = computed(() =>
+  items.value
+    .filter((group): group is ItemGroup & { id: number } => typeof group.id === 'number')
+    .map(group => ({
+      label: group.title || '',
+      value: group.id,
+    })),
+)
+
+const desktopEditDiff = computed(() =>
+  desktopEditMode.value
+    ? diffDesktopLayoutChanges(desktopEditSnapshot.value, items.value, studioStore.config.widgets)
+    : {
+        groupsReordered: false,
+        groupMetaChanged: false,
+        deletedGroupIds: [],
+        deletedItemIds: [],
+        groupSortItems: [],
+        dirtyItemGroups: [],
+        movedItems: [],
+        widgetsChanged: false,
+        hasChanges: false,
+        changeCount: 0,
+      },
+)
+
+const draggableGroups = computed<ItemGroup[]>({
+  get: () => filterItems.value,
+  set: (next) => {
+    if (searchActive.value)
+      return
+    items.value = next
+    filterItems.value = next
+  },
+})
+
+function cancelCardLongPress() {
+  if (longPressTimer) {
+    clearTimeout(longPressTimer)
+    longPressTimer = null
+  }
+}
+
+function handleCardLongPressStart(event: PointerEvent) {
+  if (
+    desktopEditMode.value
+    || panelState.isPreviewingAppearance
+    || authStore.visitMode !== VisitMode.VISIT_MODE_LOGIN
+    || event.button > 0
+  )
+    return
+  cancelCardLongPress()
+  longPressOriginX = event.clientX
+  longPressOriginY = event.clientY
+  longPressTimer = setTimeout(() => {
+    longPressTimer = null
+    longPressTriggered.value = true
+    enterDesktopEditMode()
+    setTimeout(() => {
+      longPressTriggered.value = false
+    }, 350)
+  }, 550)
+}
+
+function handleCardLongPressMove(event: PointerEvent) {
+  if (!longPressTimer)
+    return
+  if (Math.hypot(event.clientX - longPressOriginX, event.clientY - longPressOriginY) > 8)
+    cancelCardLongPress()
+}
+
+function enterDesktopEditMode() {
+  if (authStore.visitMode !== VisitMode.VISIT_MODE_LOGIN || panelState.isPreviewingAppearance)
+    return
+  if (desktopEditMode.value)
+    return
+  if (searchKeyword.value) {
+    searchKeyword.value = ''
+    applySearchFilter()
+  }
+  desktopEditSnapshot.value = createDesktopLayoutSnapshot(items.value, studioStore.config.widgets)
+  desktopEditMode.value = true
+  for (const group of items.value)
+    group.sortStatus = true
+}
+
+function cancelDesktopEditMode() {
+  if (!desktopEditMode.value || desktopEditSaving.value)
+    return
+  const snap = desktopEditSnapshot.value
+  groupModalShow.value = false
+  editItemInfoShow.value = false
+  desktopEditMode.value = false
+  desktopEditSnapshot.value = null
+  if (snap) {
+    items.value = JSON.parse(JSON.stringify(snap.groups)).map((group: ItemGroup) => ({
+      ...group,
+      hoverStatus: false,
+      sortStatus: false,
+    }))
+    studioStore.config.widgets = JSON.parse(JSON.stringify(snap.widgets))
+    applySearchFilter()
+  }
+  else {
+    for (const group of items.value)
+      group.sortStatus = false
+  }
+}
+
+async function saveDesktopEditMode() {
+  if (!desktopEditMode.value || desktopEditSaving.value)
+    return
+  syncGroupOwnership(items.value)
+  const diff = diffDesktopLayoutChanges(desktopEditSnapshot.value, items.value, studioStore.config.widgets)
+  if (!diff.hasChanges) {
+    for (const group of items.value)
+      group.sortStatus = false
+    desktopEditMode.value = false
+    desktopEditSnapshot.value = null
+    ms.success(t('panelHome.editModeDone'))
+    return
+  }
+
+  const payload = buildDesktopLayoutSavePayload(desktopEditSnapshot.value, items.value, studioStore.config)
+  desktopEditSaving.value = true
+  try {
+    const res = await saveDesktopLayout(payload)
+    if (res.code !== 0) {
+      ms.error(`${t('common.saveFail')}: ${res.msg || ''}`)
+      return
+    }
+
+    for (const group of items.value)
+      group.sortStatus = false
+    desktopEditMode.value = false
+    desktopEditSnapshot.value = null
+    ms.success(t('panelHome.editModeSaved'))
+    getList()
+    if (diff.widgetsChanged)
+      studioStore.loadFromCloud()
+  }
+  catch {
+    ms.error(t('common.networkError'))
+  }
+  finally {
+    desktopEditSaving.value = false
+  }
+}
+
+function toggleDesktopEditMode() {
+  if (desktopEditMode.value)
+    saveDesktopEditMode()
+  else
+    enterDesktopEditMode()
+}
+
+function handleDesktopItemsDragChange() {
+  syncGroupOwnership(items.value)
+}
+
+function handleMoveGroupStep(index: number, delta: number) {
+  if (searchActive.value)
+    return
+  const next = moveArrayItem(items.value, index, delta)
+  items.value = next
+  filterItems.value = next
+}
+
+function openDesktopGroupModal(group?: ItemGroup) {
+  if (group) {
+    groupModalModel.value = {
+      id: group.id,
+      title: group.title,
+      icon: group.icon || 'lucide:folder-kanban',
+      sort: group.sort,
+      iconStyle: group.iconStyle,
+    }
+    groupModalStyle.value = groupIconStyleControlValue(group.iconStyle)
+  }
+  else {
+    groupModalModel.value = {
+      title: '',
+      icon: 'lucide:folder-kanban',
+      sort: (items.value.length + 1) * 10,
+    }
+    groupModalStyle.value = groupIconStyleFollow
+  }
+  groupModalShow.value = true
+}
+
+function handleSaveDesktopGroupModal() {
+  const title = (groupModalModel.value.title || '').trim()
+  if (!title) {
+    ms.warning(t('form.required'))
+    return
+  }
+  const nextStyle = normalizeGroupIconStyle(groupModalStyle.value)
+  if (typeof groupModalModel.value.id === 'number' && groupModalModel.value.id !== 0) {
+    const target = items.value.find(g => g.id === groupModalModel.value.id)
+    if (target) {
+      target.title = title
+      target.iconStyle = nextStyle
+    }
+  }
+  else {
+    const tempId = nextDraftTempId--
+    const newGroup: ItemGroup = {
+      id: tempId,
+      title,
+      icon: groupModalModel.value.icon || 'lucide:folder-kanban',
+      iconStyle: nextStyle,
+      sort: items.value.length + 1,
+      sortStatus: true,
+      hoverStatus: false,
+      items: [],
+    }
+    items.value = [...items.value, newGroup]
+    filterItems.value = items.value
+  }
+  groupModalShow.value = false
+}
+
+function handleCycleGroupStyle(group: ItemGroup) {
+  const current = groupIconStyle(group)
+  const nextStyle = current === PanelPanelConfigStyleEnum.info
+    ? PanelPanelConfigStyleEnum.icon
+    : PanelPanelConfigStyleEnum.info
+  group.iconStyle = nextStyle
+}
+
+function handleQuickDeleteGroup(group: ItemGroup) {
+  if (typeof group.id !== 'number' || items.value.length <= 1)
+    return
+  const targetId = group.id
+  dialog.warning({
+    title: t('common.warning'),
+    content: t('apps.itemGroupManage.deleteWarnText', { name: group.title }),
+    positiveText: t('common.confirm'),
+    negativeText: t('common.cancel'),
+    onPositiveClick: () => {
+      if (items.value.length <= 1)
+        return
+      const next = items.value.filter(g => g.id !== targetId)
+      items.value = next
+      filterItems.value = next
+    },
+  })
+}
+
+function handleQuickDeleteItem(item: Panel.ItemInfo) {
+  if (typeof item.id !== 'number')
+    return
+  const targetId = item.id
+  dialog.warning({
+    title: t('common.warning'),
+    content: t('common.deleteConfirmByName', { name: item.title }),
+    positiveText: t('common.confirm'),
+    negativeText: t('common.cancel'),
+    onPositiveClick: () => {
+      for (const group of items.value) {
+        if (!Array.isArray(group.items))
+          continue
+        const idx = group.items.findIndex(entry => entry.id === targetId)
+        if (idx !== -1) {
+          group.items.splice(idx, 1)
+          break
+        }
+      }
+    },
+  })
+}
+
+function handleDraftItemSave(draft: Panel.Info) {
+  const targetGroupId = draft.itemIconGroupId ?? items.value[0]?.id
+  const targetGroup = items.value.find(g => g.id === targetGroupId) || items.value[0]
+  if (!targetGroup)
+    return
+  if (!Array.isArray(targetGroup.items))
+    targetGroup.items = []
+
+  if (typeof draft.id === 'number' && draft.id !== 0) {
+    let existingGroup: ItemGroup | undefined
+    let existingIndex = -1
+    for (const group of items.value) {
+      const idx = (group.items || []).findIndex(entry => entry.id === draft.id)
+      if (idx !== -1) {
+        existingGroup = group
+        existingIndex = idx
+        break
+      }
+    }
+    const updatedCard: ItemCard = {
+      ...(existingGroup?.items?.[existingIndex] || {}),
+      ...draft,
+      itemIconGroupId: targetGroup.id,
+    }
+    if (existingGroup && existingGroup.id === targetGroup.id && existingIndex !== -1) {
+      existingGroup.items!.splice(existingIndex, 1, updatedCard)
+    }
+    else {
+      if (existingGroup && existingIndex !== -1)
+        existingGroup.items!.splice(existingIndex, 1)
+      targetGroup.items.push(updatedCard)
+    }
+  }
+  else {
+    const newCard: ItemCard = {
+      ...draft,
+      id: nextDraftTempId--,
+      itemIconGroupId: targetGroup.id,
+      sort: targetGroup.items.length + 1,
+    }
+    targetGroup.items.push(newCard)
+  }
+}
 </script>
 
 <template>
@@ -706,6 +1076,7 @@ function handleAddItem(itemIconGroupId?: number) {
         'leon-fx-no-hard-shadow': !studioStore.config.effects.hardShadowHover,
         'leon-fx-reduce-motion': studioStore.config.effects.reduceMotion,
         'leon-preview-active': panelState.isPreviewingAppearance,
+        'leon-desktop-edit-active': desktopEditMode,
       },
     ]"
     :style="homepageTheme.cssVars"
@@ -713,6 +1084,7 @@ function handleAddItem(itemIconGroupId?: number) {
     :data-wallpaper-tone="homepageTheme.isLightCanvas ? 'light' : 'dark'"
     :data-layout-mode="activePanelConfig.layoutMode || 'standard'"
     :data-preview-preset="panelState.previewPresetId || ''"
+    :data-desktop-edit="desktopEditMode ? 'true' : 'false'"
   >
     <!-- /?safe=1 防锁死安全模式提示条 -->
     <div v-if="studioStore.safeMode" class="leon-safe-banner" role="status" data-testid="home-safe-mode-banner">
@@ -728,6 +1100,63 @@ function handleAddItem(itemIconGroupId?: number) {
         </button>
         <button type="button" class="leon-safe-btn is-primary" @click="exitSafeMode">
           {{ $t('apps.leonStudio.exitSafeMode') }}
+        </button>
+      </div>
+    </div>
+
+    <!-- 全局桌面编辑模式悬浮控制条 -->
+    <div
+      v-if="desktopEditMode"
+      class="leon-edit-mode-bar"
+      role="region"
+      aria-live="polite"
+      data-testid="desktop-edit-bar"
+    >
+      <div class="leon-edit-mode-info">
+        <span class="leon-edit-mode-dot" aria-hidden="true" />
+        <strong class="leon-edit-mode-title">{{ $t('panelHome.editModeTitle') }}</strong>
+        <span class="leon-edit-mode-tip">{{ $t('panelHome.editModeHint') }}</span>
+        <span v-if="desktopEditDiff.hasChanges" class="leon-edit-mode-badge">
+          {{ $t('panelHome.editModePendingChanges', { count: desktopEditDiff.changeCount }) }}
+        </span>
+      </div>
+      <div class="leon-edit-mode-actions">
+        <button
+          type="button"
+          class="leon-edit-bar-btn"
+          data-testid="desktop-edit-add-group"
+          @click="openDesktopGroupModal()"
+        >
+          <SvgIcon icon="lucide:folder-kanban" class="text-[13px]" />
+          <span>{{ $t('panelHome.editModeNewGroup') }}</span>
+        </button>
+        <button
+          type="button"
+          class="leon-edit-bar-btn"
+          data-testid="desktop-edit-add-item"
+          @click="handleAddItem(items[0]?.id)"
+        >
+          <SvgIcon icon="lucide:plus" class="text-[13px]" />
+          <span>{{ $t('panelHome.editModeNewItem') }}</span>
+        </button>
+        <button
+          type="button"
+          class="leon-edit-bar-btn is-secondary"
+          :disabled="desktopEditSaving"
+          data-testid="desktop-edit-cancel"
+          @click="cancelDesktopEditMode"
+        >
+          {{ $t('common.cancel') }}
+        </button>
+        <button
+          type="button"
+          class="leon-edit-bar-btn is-primary"
+          :disabled="desktopEditSaving"
+          data-testid="desktop-edit-save"
+          @click="saveDesktopEditMode"
+        >
+          <SvgIcon icon="lucide:check" class="text-[13px]" />
+          <span>{{ desktopEditSaving ? $t('panelHome.editModeSaving') : $t('panelHome.editModeSave') }}</span>
         </button>
       </div>
     </div>
@@ -756,6 +1185,7 @@ function handleAddItem(itemIconGroupId?: number) {
         class="p-2.5 mx-auto leon-home-content"
         :class="{
           'leon-home-content-dock-pad pb-[140px]': panelState.isPreviewingAppearance || activePanelConfig.layoutMode === 'dock',
+          'leon-home-content-edit-pad': desktopEditMode,
         }"
         :style="{
           marginTop: `${activePanelConfig.marginTop}%`,
@@ -807,7 +1237,7 @@ function handleAddItem(itemIconGroupId?: number) {
         <!-- 应用盒子 -->
         <div :style="{ marginLeft: `${activePanelConfig.marginX}px`, marginRight: `${activePanelConfig.marginX}px` }">
           <!-- Leon Studio 桌面小组件 -->
-          <DesktopWidgets />
+          <DesktopWidgets :edit-mode="desktopEditMode" />
 
           <!-- 系统监控状态 -->
           <div
@@ -839,166 +1269,324 @@ function handleAddItem(itemIconGroupId?: number) {
               {{ $t('common.noData') }}
             </p>
 
-            <!-- 组纵向排列 -->
-            <div
-              v-for="(itemGroup, itemGroupIndex) in filterItems" :key="itemGroupIndex"
-              class="item-list leon-section"
-              :class="itemGroup.sortStatus ? 'shadow-2xl border shadow-[0_0_30px_10px_rgba(0,0,0,0.3)]  p-[10px] rounded-2xl' : ''"
-              @mouseenter="handleSetHoverStatus(itemGroupIndex, true)"
-              @mouseleave="handleSetHoverStatus(itemGroupIndex, false)"
+            <!-- 组纵向排列（桌面编辑模式下支持拖拽重排分组顺序） -->
+            <VueDraggable
+              v-model="draggableGroups"
+              item-key="id"
+              handle=".leon-group-drag-handle"
+              :animation="260"
+              :disabled="!desktopEditMode || searchActive"
+              ghost-class="leon-group-drag-ghost"
             >
-              <!-- 分组标题 -->
-              <div class="leon-group-header leon-chrome-text">
-                <span v-if="homepageTheme.card.isFlatGeometric" class="leon-group-index" aria-hidden="true">
-                  {{ String(itemGroupIndex + 1).padStart(2, '0') }}
-                </span>
-                <span class="group-title text-[15px] font-semibold tracking-tight text-shadow">
-                  {{ itemGroup.title }}
-                </span>
-                <span class="leon-group-count" aria-hidden="true">
-                  {{ itemGroup.items?.length || 0 }}
-                </span>
-                <span class="leon-group-rule" aria-hidden="true" />
-                <div
-                  v-if="authStore.visitMode === VisitMode.VISIT_MODE_LOGIN"
-                  class="group-buttons leon-hover-actions flex items-center gap-1"
-                  :class="itemGroup.hoverStatus || itemGroup.sortStatus ? 'is-open' : ''"
-                >
+              <div
+                v-for="(itemGroup, itemGroupIndex) in draggableGroups"
+                :key="itemGroup.id || itemGroupIndex"
+                class="item-list leon-section"
+                :data-group-id="itemGroup.id"
+                :data-group-title="itemGroup.title"
+                :data-group-style="groupIconStyle(itemGroup)"
+                :class="[
+                  desktopEditMode
+                    ? 'leon-group-edit-frame'
+                    : (itemGroup.sortStatus ? 'shadow-2xl border shadow-[0_0_30px_10px_rgba(0,0,0,0.3)]  p-[10px] rounded-2xl' : ''),
+                ]"
+                @mouseenter="handleSetHoverStatus(itemGroupIndex, true)"
+                @mouseleave="handleSetHoverStatus(itemGroupIndex, false)"
+              >
+                <!-- 分组标题 -->
+                <div class="leon-group-header leon-chrome-text">
                   <button
+                    v-if="desktopEditMode && !searchActive"
                     type="button"
-                    class="leon-group-action-btn"
-                    :title="t('common.add')"
-                    :aria-label="t('common.add')"
-                    @click="handleAddItem(itemGroup.id)"
+                    class="leon-group-drag-handle"
+                    :title="$t('panelHome.editModeDragGroup')"
+                    :aria-label="$t('panelHome.editModeDragGroup')"
                   >
-                    <SvgIcon icon="lucide:plus" />
+                    <SvgIcon icon="lucide:grip-vertical" class="text-[14px]" />
                   </button>
-                  <button
-                    type="button"
-                    class="leon-group-action-btn"
-                    :class="{ 'is-active': itemGroup.sortStatus }"
-                    :title="t('common.sort')"
-                    :aria-label="t('common.sort')"
-                    @click="handleSetSortStatus(itemGroupIndex, !itemGroup.sortStatus)"
+                  <span v-if="homepageTheme.card.isFlatGeometric" class="leon-group-index" aria-hidden="true">
+                    {{ String(itemGroupIndex + 1).padStart(2, '0') }}
+                  </span>
+                  <span class="group-title text-[15px] font-semibold tracking-tight text-shadow">
+                    {{ itemGroup.title }}
+                  </span>
+                  <span class="leon-group-count" aria-hidden="true">
+                    {{ itemGroup.items?.length || 0 }}
+                  </span>
+                  <span class="leon-group-rule" aria-hidden="true" />
+                  <div
+                    v-if="authStore.visitMode === VisitMode.VISIT_MODE_LOGIN"
+                    class="group-buttons leon-hover-actions flex items-center gap-1"
+                    :class="desktopEditMode || itemGroup.hoverStatus || itemGroup.sortStatus ? 'is-open' : ''"
                   >
-                    <SvgIcon icon="lucide:grip-vertical" />
-                  </button>
-                </div>
-              </div>
-
-              <!-- 详情图标 -->
-              <div v-if="groupIconStyle(itemGroup) === PanelPanelConfigStyleEnum.info">
-                <div v-if="itemGroup.items">
-                  <VueDraggable
-                    v-model="itemGroup.items" item-key="sort" :animation="300"
-                    class="icon-info-box"
-                    filter=".not-drag"
-                    :disabled="!itemGroup.sortStatus"
-                  >
-                    <div
-                      v-for="item, index in itemGroup.items"
-                      :key="index"
-                      class="leon-card-item"
-                      role="link"
-                      tabindex="0"
-                      :aria-label="item.title"
-                      :title="item.description"
-                      :class="item === activeSearchItem ? 'leon-search-hit' : ''"
-                      @contextmenu="(e) => handleContextMenu(e, itemGroupIndex, item)"
-                      @keydown.enter.prevent="handleItemClick(itemGroupIndex, item)"
-                      @pointermove="(e) => applyCardPointerFx(e, studioStore.config.modular.cardHoverEffect, studioStore.config.effects.reduceMotion)"
-                      @pointerleave="resetCardPointerFx"
-                    >
-                      <AppIcon
-                        :class="itemGroup.sortStatus ? 'cursor-move' : 'cursor-pointer'"
-                        :item-info="item"
-                        :icon-text-color="activePanelConfig.iconTextColor"
-                        :icon-text-info-hide-description="activePanelConfig.iconTextInfoHideDescription || false"
-                        :icon-text-icon-hide-title="activePanelConfig.iconTextIconHideTitle || false"
-                        :style="0"
-                        @click="handleItemClick(itemGroupIndex, item)"
-                      />
-                    </div>
-
-                    <div v-if="itemGroup.items.length === 0" class="not-drag">
-                      <AppIcon
-                        :class="itemGroup.sortStatus ? 'cursor-move' : 'cursor-pointer'"
-                        :item-info="{ icon: { itemType: 3, text: 'lucide:plus' }, title: t('common.add'), url: '', openMethod: 0 }"
-                        :icon-text-color="activePanelConfig.iconTextColor"
-                        :icon-text-info-hide-description="activePanelConfig.iconTextInfoHideDescription || false"
-                        :icon-text-icon-hide-title="activePanelConfig.iconTextIconHideTitle || false"
-                        :style="0"
+                    <template v-if="desktopEditMode">
+                      <button
+                        type="button"
+                        class="leon-group-action-btn"
+                        :disabled="itemGroupIndex === 0"
+                        data-testid="desktop-edit-group-up"
+                        :title="$t('deskModule.searchBox.engineUp')"
+                        @click="handleMoveGroupStep(itemGroupIndex, -1)"
+                      >
+                        <SvgIcon icon="lucide:chevron-up" />
+                      </button>
+                      <button
+                        type="button"
+                        class="leon-group-action-btn"
+                        :disabled="itemGroupIndex === draggableGroups.length - 1"
+                        data-testid="desktop-edit-group-down"
+                        :title="$t('deskModule.searchBox.engineDown')"
+                        @click="handleMoveGroupStep(itemGroupIndex, 1)"
+                      >
+                        <SvgIcon icon="lucide:chevron-down" />
+                      </button>
+                      <button
+                        type="button"
+                        class="leon-group-style-pill"
+                        data-testid="desktop-edit-group-style"
+                        :title="$t('apps.itemGroupManage.cardStyle')"
+                        @click="handleCycleGroupStyle(itemGroup)"
+                      >
+                        {{ groupIconStyle(itemGroup) === PanelPanelConfigStyleEnum.info ? $t('apps.baseSettings.detailIcon') : $t('apps.baseSettings.smallIcon') }}
+                      </button>
+                      <button
+                        type="button"
+                        class="leon-group-action-btn"
+                        data-testid="desktop-edit-group-rename"
+                        :title="$t('common.edit')"
+                        :aria-label="$t('common.edit')"
+                        @click="openDesktopGroupModal(itemGroup)"
+                      >
+                        <SvgIcon icon="lucide:pencil" />
+                      </button>
+                      <button
+                        type="button"
+                        class="leon-group-action-btn"
+                        :title="t('common.add')"
+                        :aria-label="t('common.add')"
                         @click="handleAddItem(itemGroup.id)"
-                      />
-                    </div>
-                  </VueDraggable>
-                </div>
-              </div>
-
-              <!-- APP图标宫型盒子 -->
-              <div v-if="groupIconStyle(itemGroup) === PanelPanelConfigStyleEnum.icon">
-                <div v-if="itemGroup.items">
-                  <VueDraggable
-                    v-model="itemGroup.items" item-key="sort" :animation="300"
-                    class="icon-small-box"
-
-                    filter=".not-drag"
-                    :disabled="!itemGroup.sortStatus"
-                  >
-                    <div
-                      v-for="item, index in itemGroup.items"
-                      :key="index"
-                      class="leon-card-item"
-                      role="link"
-                      tabindex="0"
-                      :aria-label="item.title"
-                      :title="item.description"
-                      :class="item === activeSearchItem ? 'leon-search-hit' : ''"
-                      @contextmenu="(e) => handleContextMenu(e, itemGroupIndex, item)"
-                      @keydown.enter.prevent="handleItemClick(itemGroupIndex, item)"
-                      @pointermove="(e) => applyCardPointerFx(e, studioStore.config.modular.cardHoverEffect, studioStore.config.effects.reduceMotion)"
-                      @pointerleave="resetCardPointerFx"
-                    >
-                      <AppIcon
-                        :class="itemGroup.sortStatus ? 'cursor-move' : 'cursor-pointer'"
-                        :item-info="item"
-                        :icon-text-color="activePanelConfig.iconTextColor"
-                        :icon-text-info-hide-description="!activePanelConfig.iconTextInfoHideDescription"
-                        :icon-text-icon-hide-title="activePanelConfig.iconTextIconHideTitle || false"
-                        :style="1"
-                        @click="handleItemClick(itemGroupIndex, item)"
-                      />
-                    </div>
-
-                    <div v-if="itemGroup.items.length === 0" class="not-drag">
-                      <AppIcon
-                        class="cursor-pointer"
-                        :item-info="{ icon: { itemType: 3, text: 'lucide:plus' }, title: $t('common.add'), url: '', openMethod: 0 }"
-                        :icon-text-color="activePanelConfig.iconTextColor"
-                        :icon-text-info-hide-description="!activePanelConfig.iconTextInfoHideDescription"
-                        :icon-text-icon-hide-title="activePanelConfig.iconTextIconHideTitle || false"
-                        :style="1"
-                        @click="handleAddItem(itemGroup.id)"
-                      />
-                    </div>
-                  </vuedraggable>
-                </div>
-              </div>
-
-              <!-- 编辑栏 -->
-              <div v-if="itemGroup.sortStatus" class="flex mt-[10px]">
-                <div>
-                  <NButton :color="homepageTheme.controlBackground" :text-color="homepageTheme.controlTextColor" class="leon-control-btn" @click="handleSaveSort(itemGroup)">
-                    <template #icon>
-                      <SvgIcon class="font-xl" icon="lucide:check" />
+                      >
+                        <SvgIcon icon="lucide:plus" />
+                      </button>
+                      <button
+                        v-if="items.length > 1"
+                        type="button"
+                        class="leon-group-action-btn is-danger"
+                        data-testid="desktop-edit-group-delete"
+                        :title="$t('common.delete')"
+                        :aria-label="$t('common.delete')"
+                        @click="handleQuickDeleteGroup(itemGroup)"
+                      >
+                        <SvgIcon icon="lucide:trash-2" />
+                      </button>
                     </template>
-                    <div>
-                      {{ $t('common.saveSort') }}
-                    </div>
-                  </NButton>
+                    <template v-else>
+                      <button
+                        type="button"
+                        class="leon-group-action-btn"
+                        :title="t('common.add')"
+                        :aria-label="t('common.add')"
+                        @click="handleAddItem(itemGroup.id)"
+                      >
+                        <SvgIcon icon="lucide:plus" />
+                      </button>
+                      <button
+                        type="button"
+                        class="leon-group-action-btn"
+                        :class="{ 'is-active': itemGroup.sortStatus }"
+                        :title="t('common.sort')"
+                        :aria-label="t('common.sort')"
+                        @click="handleSetSortStatus(itemGroupIndex, !itemGroup.sortStatus)"
+                      >
+                        <SvgIcon icon="lucide:grip-vertical" />
+                      </button>
+                    </template>
+                  </div>
+                </div>
+
+                <!-- 详情图标 -->
+                <div v-if="groupIconStyle(itemGroup) === PanelPanelConfigStyleEnum.info">
+                  <div v-if="itemGroup.items">
+                    <VueDraggable
+                      v-model="itemGroup.items"
+                      item-key="id"
+                      :animation="260"
+                      class="icon-info-box"
+                      :class="{ 'leon-edit-drop-zone': desktopEditMode }"
+                      :group="desktopEditMode ? 'leon-desktop-items' : undefined"
+                      ghost-class="leon-drag-ghost"
+                      chosen-class="leon-drag-chosen"
+                      filter=".not-drag, .leon-card-edit-ctl"
+                      :prevent-on-filter="false"
+                      :disabled="!itemGroup.sortStatus"
+                      @change="handleDesktopItemsDragChange"
+                    >
+                      <div
+                        v-for="(item, index) in itemGroup.items"
+                        :key="item.id || index"
+                        class="leon-card-item"
+                        role="link"
+                        tabindex="0"
+                        :aria-label="item.title"
+                        :title="item.description"
+                        :class="[
+                          item === activeSearchItem ? 'leon-search-hit' : '',
+                          desktopEditMode ? 'leon-edit-card-shell' : '',
+                          desktopEditMode && index % 2 === 1 ? 'is-alt' : '',
+                        ]"
+                        @contextmenu="(e) => handleContextMenu(e, itemGroupIndex, item)"
+                        @keydown.enter.prevent="handleItemClick(itemGroupIndex, item)"
+                        @pointerdown="handleCardLongPressStart"
+                        @pointerup="cancelCardLongPress"
+                        @pointercancel="cancelCardLongPress"
+                        @pointermove="(e) => { handleCardLongPressMove(e); if (!desktopEditMode) applyCardPointerFx(e, studioStore.config.modular.cardHoverEffect, studioStore.config.effects.reduceMotion) }"
+                        @pointerleave="(e) => { cancelCardLongPress(); resetCardPointerFx(e) }"
+                      >
+                        <button
+                          v-if="desktopEditMode"
+                          type="button"
+                          class="leon-card-edit-ctl leon-card-del-badge"
+                          :title="$t('common.delete')"
+                          :aria-label="$t('common.delete')"
+                          @click.stop="handleQuickDeleteItem(item)"
+                        >
+                          <SvgIcon icon="lucide:x" class="text-[11px]" />
+                        </button>
+                        <button
+                          v-if="desktopEditMode"
+                          type="button"
+                          class="leon-card-edit-ctl leon-card-edit-badge"
+                          :title="$t('common.edit')"
+                          :aria-label="$t('common.edit')"
+                          @click.stop="handleEditItem(item)"
+                        >
+                          <SvgIcon icon="lucide:pencil" class="text-[10px]" />
+                        </button>
+                        <AppIcon
+                          :class="itemGroup.sortStatus ? 'cursor-move' : 'cursor-pointer'"
+                          :item-info="item"
+                          :icon-text-color="activePanelConfig.iconTextColor"
+                          :icon-text-info-hide-description="activePanelConfig.iconTextInfoHideDescription || false"
+                          :icon-text-icon-hide-title="activePanelConfig.iconTextIconHideTitle || false"
+                          :style="0"
+                          @click="handleItemClick(itemGroupIndex, item)"
+                        />
+                      </div>
+
+                      <div v-if="itemGroup.items.length === 0" class="not-drag">
+                        <AppIcon
+                          :class="itemGroup.sortStatus ? 'cursor-move' : 'cursor-pointer'"
+                          :item-info="{ icon: { itemType: 3, text: 'lucide:plus' }, title: desktopEditMode ? t('panelHome.editModeDropHere') : t('common.add'), url: '', openMethod: 0 }"
+                          :icon-text-color="activePanelConfig.iconTextColor"
+                          :icon-text-info-hide-description="activePanelConfig.iconTextInfoHideDescription || false"
+                          :icon-text-icon-hide-title="activePanelConfig.iconTextIconHideTitle || false"
+                          :style="0"
+                          @click="handleAddItem(itemGroup.id)"
+                        />
+                      </div>
+                    </VueDraggable>
+                  </div>
+                </div>
+
+                <!-- APP图标宫型盒子 -->
+                <div v-if="groupIconStyle(itemGroup) === PanelPanelConfigStyleEnum.icon">
+                  <div v-if="itemGroup.items">
+                    <VueDraggable
+                      v-model="itemGroup.items"
+                      item-key="id"
+                      :animation="260"
+                      class="icon-small-box"
+                      :class="{ 'leon-edit-drop-zone': desktopEditMode }"
+                      :group="desktopEditMode ? 'leon-desktop-items' : undefined"
+                      ghost-class="leon-drag-ghost"
+                      chosen-class="leon-drag-chosen"
+                      filter=".not-drag, .leon-card-edit-ctl"
+                      :prevent-on-filter="false"
+                      :disabled="!itemGroup.sortStatus"
+                      @change="handleDesktopItemsDragChange"
+                    >
+                      <div
+                        v-for="(item, index) in itemGroup.items"
+                        :key="item.id || index"
+                        class="leon-card-item"
+                        role="link"
+                        tabindex="0"
+                        :aria-label="item.title"
+                        :title="item.description"
+                        :class="[
+                          item === activeSearchItem ? 'leon-search-hit' : '',
+                          desktopEditMode ? 'leon-edit-card-shell is-small' : '',
+                          desktopEditMode && index % 2 === 1 ? 'is-alt' : '',
+                        ]"
+                        @contextmenu="(e) => handleContextMenu(e, itemGroupIndex, item)"
+                        @keydown.enter.prevent="handleItemClick(itemGroupIndex, item)"
+                        @pointerdown="handleCardLongPressStart"
+                        @pointerup="cancelCardLongPress"
+                        @pointercancel="cancelCardLongPress"
+                        @pointermove="(e) => { handleCardLongPressMove(e); if (!desktopEditMode) applyCardPointerFx(e, studioStore.config.modular.cardHoverEffect, studioStore.config.effects.reduceMotion) }"
+                        @pointerleave="(e) => { cancelCardLongPress(); resetCardPointerFx(e) }"
+                      >
+                        <button
+                          v-if="desktopEditMode"
+                          type="button"
+                          class="leon-card-edit-ctl leon-card-del-badge"
+                          :title="$t('common.delete')"
+                          :aria-label="$t('common.delete')"
+                          @click.stop="handleQuickDeleteItem(item)"
+                        >
+                          <SvgIcon icon="lucide:x" class="text-[11px]" />
+                        </button>
+                        <button
+                          v-if="desktopEditMode"
+                          type="button"
+                          class="leon-card-edit-ctl leon-card-edit-badge"
+                          :title="$t('common.edit')"
+                          :aria-label="$t('common.edit')"
+                          @click.stop="handleEditItem(item)"
+                        >
+                          <SvgIcon icon="lucide:pencil" class="text-[10px]" />
+                        </button>
+                        <AppIcon
+                          :class="itemGroup.sortStatus ? 'cursor-move' : 'cursor-pointer'"
+                          :item-info="item"
+                          :icon-text-color="activePanelConfig.iconTextColor"
+                          :icon-text-info-hide-description="!activePanelConfig.iconTextInfoHideDescription"
+                          :icon-text-icon-hide-title="activePanelConfig.iconTextIconHideTitle || false"
+                          :style="1"
+                          @click="handleItemClick(itemGroupIndex, item)"
+                        />
+                      </div>
+
+                      <div v-if="itemGroup.items.length === 0" class="not-drag">
+                        <AppIcon
+                          class="cursor-pointer"
+                          :item-info="{ icon: { itemType: 3, text: 'lucide:plus' }, title: desktopEditMode ? $t('panelHome.editModeDropHere') : $t('common.add'), url: '', openMethod: 0 }"
+                          :icon-text-color="activePanelConfig.iconTextColor"
+                          :icon-text-info-hide-description="!activePanelConfig.iconTextInfoHideDescription"
+                          :icon-text-icon-hide-title="activePanelConfig.iconTextIconHideTitle || false"
+                          :style="1"
+                          @click="handleAddItem(itemGroup.id)"
+                        />
+                      </div>
+                    </VueDraggable>
+                  </div>
+                </div>
+
+                <!-- 单分组快速排序保存栏（非全局编辑模式时显示） -->
+                <div v-if="itemGroup.sortStatus && !desktopEditMode" class="flex mt-[10px]">
+                  <div>
+                    <NButton :color="homepageTheme.controlBackground" :text-color="homepageTheme.controlTextColor" class="leon-control-btn" @click="handleSaveSort(itemGroup)">
+                      <template #icon>
+                        <SvgIcon class="font-xl" icon="lucide:check" />
+                      </template>
+                      <div>
+                        {{ $t('common.saveSort') }}
+                      </div>
+                    </NButton>
+                  </div>
                 </div>
               </div>
-            </div>
+            </VueDraggable>
           </div>
         </div>
         <div class="mt-5 footer" v-html="activePanelConfig.footerHtml" />
@@ -1139,6 +1727,21 @@ function handleAddItem(itemIconGroupId?: number) {
           </template>
         </NButton>
 
+        <!-- 一键进入 / 保存桌面布局编辑模式 -->
+        <NButton
+          v-if="authStore.visitMode === VisitMode.VISIT_MODE_LOGIN"
+          :color="desktopEditMode ? homepageTheme.card.accentColor : homepageTheme.controlBackground"
+          :text-color="desktopEditMode ? '#ffffff' : homepageTheme.controlTextColor"
+          class="leon-control-btn"
+          :title="desktopEditMode ? $t('panelHome.editModeSave') : $t('panelHome.editModeEnter')"
+          data-testid="home-toggle-edit-mode"
+          @click="toggleDesktopEditMode"
+        >
+          <template #icon>
+            <SvgIcon class="text-[18px]" :icon="desktopEditMode ? 'lucide:check' : 'lucide:pencil'" />
+          </template>
+        </NButton>
+
         <NButton
           v-if="authStore.visitMode === VisitMode.VISIT_MODE_LOGIN"
           :color="homepageTheme.controlBackground"
@@ -1186,7 +1789,56 @@ function handleAddItem(itemIconGroupId?: number) {
       </div>
     </NBackTop>
 
-    <EditItem v-model:visible="editItemInfoShow" :item-info="editItemInfoData" :item-group-id="currentAddItenIconGroupId" @done="handleEditSuccess" />
+    <EditItem
+      v-model:visible="editItemInfoShow"
+      :item-info="editItemInfoData"
+      :item-group-id="currentAddItenIconGroupId"
+      :draft-mode="desktopEditMode"
+      :draft-groups="draftGroupSelectOptions"
+      @done="handleEditSuccess"
+      @draft-save="handleDraftItemSave"
+    />
+
+    <!-- 桌面快速新建 / 编辑分组弹窗 -->
+    <NModal
+      v-model:show="groupModalShow"
+      preset="card"
+      size="small"
+      style="width: min(420px, 92vw); border-radius: 1rem;"
+      :title="groupModalModel.id ? $t('common.edit') : $t('panelHome.editModeNewGroup')"
+    >
+      <div class="flex flex-col gap-3">
+        <div>
+          <div class="text-xs opacity-75 mb-1">
+            {{ $t('apps.itemGroupManage.groupName') }}
+          </div>
+          <NInput
+            v-model:value="groupModalModel.title"
+            :maxlength="20"
+            show-count
+            data-testid="desktop-group-title-input"
+            :placeholder="$t('apps.itemGroupManage.groupName')"
+            @keydown.enter.prevent="handleSaveDesktopGroupModal"
+          />
+        </div>
+        <div>
+          <div class="text-xs opacity-75 mb-1">
+            {{ $t('apps.itemGroupManage.cardStyle') }}
+          </div>
+          <NSelect v-model:value="groupModalStyle" :options="groupStyleOptions" />
+        </div>
+      </div>
+      <template #footer>
+        <div class="flex justify-end gap-2">
+          <NButton size="small" @click="groupModalShow = false">
+            {{ $t('common.cancel') }}
+          </NButton>
+          <NButton size="small" type="primary" :loading="groupModalSaving" data-testid="desktop-group-modal-confirm" @click="handleSaveDesktopGroupModal">
+            {{ $t('common.confirm') }}
+          </NButton>
+        </div>
+      </template>
+    </NModal>
 
     <!-- 弹窗 -->
     <NModal

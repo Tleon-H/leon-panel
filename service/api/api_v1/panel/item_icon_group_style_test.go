@@ -281,6 +281,22 @@ func TestIncludeItemsReturnsOwnedStylesAndSortedCards(t *testing.T) {
 	assertStyledCards(t, afterEdit, "HOME", nil, []string{"相册", "路由"})
 	assertStyledCards(t, afterEdit, "未设置", float64(0), []string{"笔记"})
 	assertStyledCards(t, afterEdit, "常用网站", float64(1), []string{"百度"})
+
+	// Cross-group drag-and-drop: move "路由" from HOME into "常用网站" ahead of "百度"
+	baiduID := iconID(t, afterEdit, "常用网站", "百度")
+	moved := performGroup(t, (&ItemIcon{}).SaveSort, fmt.Sprintf(`{"itemIconGroupId":%d,"sortItems":[{"id":%d,"sort":1},{"id":%d,"sort":2}]}`, sites.ID, routeID, baiduID), 7)
+	if moved["code"] != float64(0) {
+		t.Fatalf("cross-group sort = %#v", moved)
+	}
+	afterMove := groupRows(t, performGroup(t, (&ItemIconGroup{}).GetList, `{"includeItems":true}`, 7))
+	assertStyledCards(t, afterMove, "HOME", nil, []string{"相册"})
+	assertStyledCards(t, afterMove, "常用网站", float64(1), []string{"路由", "百度"})
+
+	// Security: cannot move own icons into another user's group
+	foreignMove := performGroup(t, (&ItemIcon{}).SaveSort, fmt.Sprintf(`{"itemIconGroupId":%d,"sortItems":[{"id":%d,"sort":1}]}`, guest.ID, routeID), 7)
+	if foreignMove["code"] == float64(0) {
+		t.Fatalf("expected foreign group sort to be rejected, got %#v", foreignMove)
+	}
 }
 
 func groupRows(t *testing.T, payload map[string]interface{}) []map[string]interface{} {
