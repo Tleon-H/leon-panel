@@ -83,8 +83,9 @@ func (c *GoCacheStruct[T]) ItemCount() (int64, error) {
 }
 
 // Flush 删除当前已存在的所有key
-func (c *GoCacheStruct[T]) Flush() {
+func (c *GoCacheStruct[T]) Flush() error {
 	c.gocahce.Flush()
+	return nil
 }
 
 // func (c *GoCacheStruct[T]) encode(value T) ([]byte, error) {

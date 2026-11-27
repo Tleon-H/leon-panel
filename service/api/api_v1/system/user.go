@@ -59,7 +59,7 @@ func (a *UserApi) UpdateInfo(c *gin.Context) {
 		"head_image": params.HeadImage,
 		"name":       params.Name,
 	})
-	sessionguard.EvictUserToken(global.UserToken, userInfo.Token)
+	sessionguard.InvalidateTokenCache(global.UserToken, userInfo.Token)
 	if err != nil {
 		apiReturn.ErrorDatabase(c, err.Error())
 		return

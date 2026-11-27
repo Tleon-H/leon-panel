@@ -11,10 +11,12 @@ import (
 	"leon-panel/lib/sessionguard"
 	"leon-panel/models"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type UsersApi struct {
@@ -22,6 +24,8 @@ type UsersApi struct {
 
 var (
 	ErrUsersApiAtLeastKeepOne = errors.New("at least keep one")
+	errUsersApiNotFound       = errors.New("user not found")
+	errUsersApiUsernameExists = errors.New("username already exists")
 )
 
 type userCreateReq struct {
@@ -49,6 +53,96 @@ func validUserRole(role int) bool {
 
 func validUserStatus(status int) bool {
 	return status == 1 || status == 2 || status == 3
+}
+
+func isSQLiteLockErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "database is locked") || strings.Contains(msg, "sqlite_busy")
+}
+
+// lockActiveAdminsForUpdate locks all active administrator rows in deterministic ID order on row-locking
+// databases (e.g. MySQL InnoDB) so concurrent disable, demote, and delete transactions serialize before mutating.
+func lockActiveAdminsForUpdate(tx *gorm.DB) error {
+	var locked []models.User
+	return tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+		Select("id").
+		Where("role = ? AND status = ?", 1, 1).
+		Order("id ASC").
+		Find(&locked).Error
+}
+
+func verifyAtLeastOneActiveAdmin(tx *gorm.DB) error {
+	var activeAdminCount int64
+	if err := tx.Model(&models.User{}).
+		Where("role = ? AND status = ?", 1, 1).
+		Count(&activeAdminCount).Error; err != nil {
+		return err
+	}
+	if activeAdminCount == 0 {
+		return ErrUsersApiAtLeastKeepOne
+	}
+	return nil
+}
+
+// runActiveAdminProtectedTx executes an account mutation (disable, demote, or delete) under a
+// database-level write/row serialization boundary and guarantees at least one active administrator remains.
+//   - On SQLite, pins a single connection and starts BEGIN IMMEDIATE so concurrent connections serialize
+//     before reading instead of racing on DEFERRED lock upgrades.
+//   - On MySQL / row-locking engines, locks all active admin rows via SELECT ... FOR UPDATE before mutating
+//     so concurrent MVCC transactions cannot both observe each other's uncommitted admin rows.
+func runActiveAdminProtectedTx(db *gorm.DB, fn func(tx *gorm.DB) error) error {
+	if db.Dialector.Name() == "sqlite" {
+		return db.Connection(func(connDB *gorm.DB) error {
+			tx := connDB.Session(&gorm.Session{SkipDefaultTransaction: true})
+
+			var beginErr error
+			for attempt := 0; attempt < 20; attempt++ {
+				beginErr = tx.Exec("BEGIN IMMEDIATE").Error
+				if beginErr == nil {
+					break
+				}
+				if !isSQLiteLockErr(beginErr) {
+					return beginErr
+				}
+				time.Sleep(time.Duration(attempt+1) * 10 * time.Millisecond)
+			}
+			if beginErr != nil {
+				return beginErr
+			}
+
+			committed := false
+			defer func() {
+				if !committed {
+					_ = tx.Exec("ROLLBACK").Error
+				}
+			}()
+
+			if err := fn(tx); err != nil {
+				return err
+			}
+			if err := verifyAtLeastOneActiveAdmin(tx); err != nil {
+				return err
+			}
+			if err := tx.Exec("COMMIT").Error; err != nil {
+				return err
+			}
+			committed = true
+			return nil
+		})
+	}
+
+	return db.Transaction(func(tx *gorm.DB) error {
+		if err := lockActiveAdminsForUpdate(tx); err != nil {
+			return err
+		}
+		if err := fn(tx); err != nil {
+			return err
+		}
+		return verifyAtLeastOneActiveAdmin(tx)
+	})
 }
 
 func (a UsersApi) Create(c *gin.Context) {
@@ -101,36 +195,9 @@ func (a UsersApi) Create(c *gin.Context) {
 	apiReturn.SuccessData(c, gin.H{"id": userInfo.ID, "userId": userInfo.ID})
 }
 
-func (a UsersApi) Deletes(c *gin.Context) {
-	type UserIds struct {
-		UserIds []uint `json:"userIds"`
-	}
-	param := UserIds{}
-	if err := c.ShouldBindBodyWith(&param, binding.JSON); err != nil {
-		apiReturn.ErrorParamFomat(c, err.Error())
-		c.Abort()
-		return
-	}
-
-	uniqueIDs := make([]uint, 0, len(param.UserIds))
-	seen := make(map[uint]struct{}, len(param.UserIds))
-	for _, id := range param.UserIds {
-		if id == 0 {
-			continue
-		}
-		if _, dup := seen[id]; !dup {
-			seen[id] = struct{}{}
-			uniqueIDs = append(uniqueIDs, id)
-		}
-	}
-	if len(uniqueIDs) == 0 {
-		apiReturn.ErrorParamFomat(c, "userIds is required")
-		return
-	}
-
+func deleteUsersInProtectedTx(db *gorm.DB, uniqueIDs []uint) ([]string, error) {
 	var tokensToEvict []string
-
-	txErr := global.Db.Transaction(func(tx *gorm.DB) error {
+	err := runActiveAdminProtectedTx(db, func(tx *gorm.DB) error {
 		var targetUsers []models.User
 		if err := tx.Where("id IN ?", uniqueIDs).Find(&targetUsers).Error; err != nil {
 			return err
@@ -160,21 +227,42 @@ func (a UsersApi) Deletes(c *gin.Context) {
 		if err := tx.Model(&models.User{}).Where("id IN ?", uniqueIDs).Update("token", "").Error; err != nil {
 			return err
 		}
-		if err := tx.Delete(&models.User{}, uniqueIDs).Error; err != nil {
-			return err
-		}
-
-		// Ensure at least one active administrator remains.
-		var activeAdminCount int64
-		if err := tx.Model(&models.User{}).Where("role = ? AND status = ?", 1, 1).Count(&activeAdminCount).Error; err != nil {
-			return err
-		}
-		if activeAdminCount == 0 {
-			return ErrUsersApiAtLeastKeepOne
-		}
-
-		return nil
+		return tx.Delete(&models.User{}, uniqueIDs).Error
 	})
+	if err != nil {
+		return nil, err
+	}
+	return tokensToEvict, nil
+}
+
+func (a UsersApi) Deletes(c *gin.Context) {
+	type UserIds struct {
+		UserIds []uint `json:"userIds"`
+	}
+	param := UserIds{}
+	if err := c.ShouldBindBodyWith(&param, binding.JSON); err != nil {
+		apiReturn.ErrorParamFomat(c, err.Error())
+		c.Abort()
+		return
+	}
+
+	uniqueIDs := make([]uint, 0, len(param.UserIds))
+	seen := make(map[uint]struct{}, len(param.UserIds))
+	for _, id := range param.UserIds {
+		if id == 0 {
+			continue
+		}
+		if _, dup := seen[id]; !dup {
+			seen[id] = struct{}{}
+			uniqueIDs = append(uniqueIDs, id)
+		}
+	}
+	if len(uniqueIDs) == 0 {
+		apiReturn.ErrorParamFomat(c, "userIds is required")
+		return
+	}
+
+	tokensToEvict, txErr := deleteUsersInProtectedTx(global.Db, uniqueIDs)
 	if errors.Is(txErr, ErrUsersApiAtLeastKeepOne) {
 		apiReturn.ErrorByCode(c, 1201)
 		return
@@ -185,10 +273,62 @@ func (a UsersApi) Deletes(c *gin.Context) {
 	}
 
 	for _, tok := range tokensToEvict {
-		sessionguard.EvictUserToken(global.UserToken, tok)
+		sessionguard.RevokeToken(global.UserToken, tok)
 	}
 
 	apiReturn.Success(c)
+}
+
+func updateUserInProtectedTx(db *gorm.DB, param userUpdateReq) (updated models.User, evictedToken string, err error) {
+	err = runActiveAdminProtectedTx(db, func(tx *gorm.DB) error {
+		var existing models.User
+		if findErr := tx.First(&existing, "id = ?", param.ID).Error; findErr != nil {
+			if errors.Is(findErr, gorm.ErrRecordNotFound) {
+				return errUsersApiNotFound
+			}
+			return findErr
+		}
+
+		var duplicate models.User
+		if dupErr := tx.Where("username = ? AND id <> ?", param.Username, existing.ID).First(&duplicate).Error; dupErr == nil {
+			return errUsersApiUsernameExists
+		} else if !errors.Is(dupErr, gorm.ErrRecordNotFound) {
+			return dupErr
+		}
+
+		nextRole := existing.Role
+		if param.Role != 0 {
+			nextRole = param.Role
+		}
+
+		nextStatus := existing.Status
+		if param.Status != nil {
+			nextStatus = *param.Status
+		}
+
+		updates := map[string]interface{}{
+			"username": param.Username,
+			"name":     param.Name,
+			"mail":     param.Mail,
+			"role":     nextRole,
+			"status":   nextStatus,
+			"token":    "",
+		}
+		if param.HeadImage != "" {
+			updates["head_image"] = param.HeadImage
+		}
+		if param.Password != "" && param.Password != "-" {
+			updates["password"] = cmn.PasswordEncryption(param.Password)
+		}
+
+		if updErr := tx.Model(&models.User{}).Where("id = ?", existing.ID).Updates(updates).Error; updErr != nil {
+			return updErr
+		}
+		evictedToken = existing.Token
+
+		return tx.First(&updated, "id = ?", existing.ID).Error
+	})
+	return updated, evictedToken, err
 }
 
 func (a UsersApi) Update(c *gin.Context) {
@@ -210,69 +350,24 @@ func (a UsersApi) Update(c *gin.Context) {
 		return
 	}
 
-	var existing models.User
-	if err := global.Db.First(&existing, "id = ?", param.ID).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			apiReturn.ErrorDataNotFound(c)
-			return
-		}
-		apiReturn.ErrorDatabase(c, err.Error())
+	if param.Role != 0 && !validUserRole(param.Role) {
+		apiReturn.ErrorParamFomat(c, "Invalid user role")
+		return
+	}
+	if param.Status != nil && !validUserStatus(*param.Status) {
+		apiReturn.ErrorParamFomat(c, "Invalid user status")
 		return
 	}
 
-	mUser := models.User{}
-	if found, err := mUser.CheckUsernameExist(param.Username); err != nil && found.ID != existing.ID {
+	updated, evictedToken, txErr := updateUserInProtectedTx(global.Db, param)
+	if errors.Is(txErr, errUsersApiNotFound) {
+		apiReturn.ErrorDataNotFound(c)
+		return
+	}
+	if errors.Is(txErr, errUsersApiUsernameExists) {
 		apiReturn.ErrorByCode(c, 1006)
 		return
 	}
-
-	nextRole := existing.Role
-	if param.Role != 0 {
-		if !validUserRole(param.Role) {
-			apiReturn.ErrorParamFomat(c, "Invalid user role")
-			return
-		}
-		nextRole = param.Role
-	}
-
-	nextStatus := existing.Status
-	if param.Status != nil {
-		if !validUserStatus(*param.Status) {
-			apiReturn.ErrorParamFomat(c, "Invalid user status")
-			return
-		}
-		nextStatus = *param.Status
-	}
-
-	updates := map[string]interface{}{
-		"username": param.Username,
-		"name":     param.Name,
-		"mail":     param.Mail,
-		"role":     nextRole,
-		"status":   nextStatus,
-		"token":    "",
-	}
-	if param.HeadImage != "" {
-		updates["head_image"] = param.HeadImage
-	}
-	if param.Password != "" && param.Password != "-" {
-		updates["password"] = cmn.PasswordEncryption(param.Password)
-	}
-
-	txErr := global.Db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&models.User{}).Where("id = ?", existing.ID).Updates(updates).Error; err != nil {
-			return err
-		}
-
-		var activeAdminCount int64
-		if err := tx.Model(&models.User{}).Where("role = ? AND status = ?", 1, 1).Count(&activeAdminCount).Error; err != nil {
-			return err
-		}
-		if activeAdminCount == 0 {
-			return ErrUsersApiAtLeastKeepOne
-		}
-		return nil
-	})
 	if errors.Is(txErr, ErrUsersApiAtLeastKeepOne) {
 		apiReturn.ErrorByCode(c, 1201)
 		return
@@ -282,13 +377,7 @@ func (a UsersApi) Update(c *gin.Context) {
 		return
 	}
 
-	sessionguard.EvictUserToken(global.UserToken, existing.Token)
-
-	var updated models.User
-	if err := global.Db.First(&updated, "id = ?", existing.ID).Error; err != nil {
-		apiReturn.ErrorDatabase(c, err.Error())
-		return
-	}
+	sessionguard.RevokeToken(global.UserToken, evictedToken)
 	apiReturn.SuccessData(c, systemApiStructs.ToAdminUserItemResp(updated))
 }
 

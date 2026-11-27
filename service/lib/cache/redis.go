@@ -168,9 +168,9 @@ func (r *RedisCacheStruct[T]) ItemCount() (int64, error) {
 	}
 }
 
-// Flush 删除当前已存在的所有key
-func (r *RedisCacheStruct[T]) Flush() {
-	r.Redis.Del(r.Ctx, r.HashKey)
+// Flush 删除当前实例命名空间对应的 Hash 键，并返回底层 Redis 错误供调用方检测与重试
+func (r *RedisCacheStruct[T]) Flush() error {
+	return r.Redis.Del(r.Ctx, r.HashKey).Err()
 }
 
 // 定时清理过期验证

@@ -19,22 +19,16 @@ func PublicModeInterceptor(c *gin.Context) {
 	if cToken != "" && global.CUserToken != nil && global.UserToken != nil && global.Db != nil {
 		token, ok := global.CUserToken.Get(cToken)
 		if ok && token != "" {
-			if userInfo, success := global.UserToken.Get(token); success {
-				if sessionguard.IsActiveTokenUser(userInfo) {
-					c.Set("userInfo", userInfo)
-					return
-				}
-				sessionguard.EvictSessionMapping(global.UserToken, global.CUserToken, cToken, token)
-			} else {
-				mUser := models.User{}
-				info, err := mUser.GetUserInfoByToken(token)
-				if err == nil && sessionguard.IsActiveTokenUser(info) {
-					global.UserToken.SetDefault(info.Token, info)
-					global.CUserToken.SetDefault(cToken, token)
-					c.Set("userInfo", info)
-					return
-				}
-				sessionguard.EvictSessionMapping(global.UserToken, global.CUserToken, cToken, token)
+			mUser := models.User{}
+			if userInfo, valid := sessionguard.ResolveTokenUser(
+				global.UserToken,
+				global.CUserToken,
+				cToken,
+				token,
+				mUser.GetUserInfoByToken,
+			); valid {
+				c.Set("userInfo", userInfo)
+				return
 			}
 		}
 	}

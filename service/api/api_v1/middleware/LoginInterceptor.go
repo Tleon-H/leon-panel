@@ -30,30 +30,21 @@ func LoginInterceptor(c *gin.Context) {
 		return
 	}
 
-	// Hot-cache hit branch must also enforce active account status (Status == 1).
-	if userInfo, success := global.UserToken.Get(token); success {
-		if !sessionguard.IsActiveTokenUser(userInfo) {
-			sessionguard.EvictSessionMapping(global.UserToken, global.CUserToken, cToken, token)
-			apiReturn.ErrorCode(c, 1001, expireMsg(), nil)
-			c.Abort()
-			return
-		}
-		c.Set("userInfo", userInfo)
-		return
-	}
-
 	mUser := models.User{}
-	info, err := mUser.GetUserInfoByToken(token)
-	if err != nil || !sessionguard.IsActiveTokenUser(info) {
-		sessionguard.EvictSessionMapping(global.UserToken, global.CUserToken, cToken, token)
+	userInfo, valid := sessionguard.ResolveTokenUser(
+		global.UserToken,
+		global.CUserToken,
+		cToken,
+		token,
+		mUser.GetUserInfoByToken,
+	)
+	if !valid {
 		apiReturn.ErrorCode(c, 1001, expireMsg(), nil)
 		c.Abort()
 		return
 	}
 
-	global.UserToken.SetDefault(info.Token, info)
-	global.CUserToken.SetDefault(cToken, token)
-	c.Set("userInfo", info)
+	c.Set("userInfo", userInfo)
 }
 
 func expireMsg() string {

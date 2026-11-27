@@ -500,3 +500,236 @@ func TestPR1AHotCacheRevocationPublicFallbackReenableAndPostCutoverSessionRotati
 		t.Fatalf("post-rotation session lost on second boot check: %#v", checkSurvives)
 	}
 }
+
+func TestPR1AConcurrentCacheBackfillCannotResurrectRevokedSessionOnBothAuthEntrypoints(t *testing.T) {
+	env := setupPR1AEnv(t)
+
+	admin := models.User{
+		Username: "admin@leon.local",
+		Password: cmn.PasswordEncryption("adminPass123"),
+		Name:     "Admin",
+		Status:   1,
+		Role:     1,
+	}
+	alice := models.User{
+		Username: "alice_race",
+		Password: cmn.PasswordEncryption("alicePass123"),
+		Name:     "Alice Race",
+		Status:   1,
+		Role:     2,
+	}
+	bob := models.User{
+		Username: "bob_race",
+		Password: cmn.PasswordEncryption("bobPass123"),
+		Name:     "Bob Race",
+		Status:   1,
+		Role:     2,
+	}
+	carol := models.User{
+		Username: "carol_race",
+		Password: cmn.PasswordEncryption("carolPass123"),
+		Name:     "Carol Race",
+		Status:   1,
+		Role:     2,
+	}
+	pubAccount := models.User{
+		Username: "public_race",
+		Password: cmn.PasswordEncryption("pubPass123"),
+		Name:     "Public Race",
+		Status:   1,
+		Role:     2,
+	}
+	for _, u := range []*models.User{&admin, &alice, &bob, &carol, &pubAccount} {
+		if err := env.db.Create(u).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	login := func(username, password string) string {
+		t.Helper()
+		_, resp := env.postJSON(t, "/api/login", "", fmt.Sprintf(`{"username":%q,"password":%q}`, username, password))
+		if resp["code"] != float64(0) {
+			t.Fatalf("login %s failed: %#v", username, resp)
+		}
+		return resp["data"].(map[string]interface{})["token"].(string)
+	}
+
+	adminCToken := login("admin@leon.local", "adminPass123")
+	_, setPub := env.postJSON(t, "/api/panel/users/setPublicVisitUser", adminCToken, fmt.Sprintf(`{"userId":%d}`, pubAccount.ID))
+	if setPub["code"] != float64(0) {
+		t.Fatalf("setPublicVisitUser failed: %#v", setPub)
+	}
+
+	// Subtest 1: LoginInterceptor (/api/user/getInfo) — concurrent disable (UsersApi.Update)
+	t.Run("LoginInterceptor_DisableRace", func(t *testing.T) {
+		aliceCToken := login("alice_race", "alicePass123")
+		var aliceDB models.User
+		if err := env.db.First(&aliceDB, "id = ?", alice.ID).Error; err != nil {
+			t.Fatal(err)
+		}
+		aliceBToken := aliceDB.Token
+		global.UserToken.Delete(aliceBToken) // Force DB lookup path.
+
+		dbLoaded := make(chan struct{})
+		releaseBackfill := make(chan struct{})
+		var once sync.Once
+		restore := sessionguard.SetAfterDBLookupHookForTest(func(bToken string) {
+			if bToken == aliceBToken {
+				once.Do(func() { close(dbLoaded) })
+				<-releaseBackfill
+			}
+		})
+		defer restore()
+
+		type callResult struct {
+			resp map[string]interface{}
+		}
+		done := make(chan callResult, 1)
+		go func() {
+			_, resp := env.postJSON(t, "/api/user/getInfo", aliceCToken, `{}`)
+			done <- callResult{resp: resp}
+		}()
+
+		// Wait until LoginInterceptor has loaded Alice's pre-revocation active snapshot from DB and paused before backfill.
+		<-dbLoaded
+
+		// Revoke Alice via Admin disable while LoginInterceptor holds stale active snapshot.
+		_, disableResp := env.postJSON(t, "/api/panel/users/update", adminCToken, fmt.Sprintf(
+			`{"id":%d,"username":"alice_race","name":"Alice Race","role":2,"status":2}`,
+			alice.ID,
+		))
+		if disableResp["code"] != float64(0) {
+			t.Fatalf("disable Alice failed: %#v", disableResp)
+		}
+
+		// Release the paused LoginInterceptor goroutine to attempt late cache backfill.
+		close(releaseBackfill)
+		res := <-done
+		if res.resp["code"] != float64(1001) {
+			t.Fatalf("expected paused LoginInterceptor request to reject with 1001 after revocation, got: %#v", res.resp)
+		}
+		if _, resurrected := global.UserToken.Get(aliceBToken); resurrected {
+			t.Fatal("stale snapshot resurrected disabled Alice in UserToken hot cache")
+		}
+
+		// Subsequent request with Alice's cToken must also fail with 1001.
+		_, followUp := env.postJSON(t, "/api/user/getInfo", aliceCToken, `{}`)
+		if followUp["code"] != float64(1001) {
+			t.Fatalf("follow-up request accepted revoked Alice token: %#v", followUp)
+		}
+	})
+
+	// Subtest 2: LoginInterceptor (/api/user/getInfo) — concurrent delete (UsersApi.Deletes)
+	t.Run("LoginInterceptor_DeleteRace", func(t *testing.T) {
+		bobCToken := login("bob_race", "bobPass123")
+		var bobDB models.User
+		if err := env.db.First(&bobDB, "id = ?", bob.ID).Error; err != nil {
+			t.Fatal(err)
+		}
+		bobBToken := bobDB.Token
+		global.UserToken.Delete(bobBToken)
+
+		dbLoaded := make(chan struct{})
+		releaseBackfill := make(chan struct{})
+		var once sync.Once
+		restore := sessionguard.SetAfterDBLookupHookForTest(func(bToken string) {
+			if bToken == bobBToken {
+				once.Do(func() { close(dbLoaded) })
+				<-releaseBackfill
+			}
+		})
+		defer restore()
+
+		done := make(chan map[string]interface{}, 1)
+		go func() {
+			_, resp := env.postJSON(t, "/api/user/getInfo", bobCToken, `{}`)
+			done <- resp
+		}()
+
+		<-dbLoaded
+
+		_, delResp := env.postJSON(t, "/api/panel/users/deletes", adminCToken, fmt.Sprintf(`{"userIds":[%d]}`, bob.ID))
+		if delResp["code"] != float64(0) {
+			t.Fatalf("delete Bob failed: %#v", delResp)
+		}
+
+		close(releaseBackfill)
+		racedResp := <-done
+		if racedResp["code"] != float64(1001) {
+			t.Fatalf("expected paused LoginInterceptor request to reject with 1001 after deletion, got: %#v", racedResp)
+		}
+		if _, resurrected := global.UserToken.Get(bobBToken); resurrected {
+			t.Fatal("stale snapshot resurrected deleted Bob in UserToken hot cache")
+		}
+
+		_, followUp := env.postJSON(t, "/api/user/getInfo", bobCToken, `{}`)
+		if followUp["code"] != float64(1001) {
+			t.Fatalf("follow-up request accepted deleted Bob token: %#v", followUp)
+		}
+	})
+
+	// Subtest 3: PublicModeInterceptor (/api/user/getAuthInfo) — concurrent token reset / disable must NOT resurrect Carol's private session
+	t.Run("PublicModeInterceptor_RevocationRace", func(t *testing.T) {
+		carolCToken := login("carol_race", "carolPass123")
+		var carolDB models.User
+		if err := env.db.First(&carolDB, "id = ?", carol.ID).Error; err != nil {
+			t.Fatal(err)
+		}
+		carolBToken := carolDB.Token
+		global.UserToken.Delete(carolBToken)
+
+		dbLoaded := make(chan struct{})
+		releaseBackfill := make(chan struct{})
+		var once sync.Once
+		restore := sessionguard.SetAfterDBLookupHookForTest(func(bToken string) {
+			if bToken == carolBToken {
+				once.Do(func() { close(dbLoaded) })
+				<-releaseBackfill
+			}
+		})
+		defer restore()
+
+		done := make(chan map[string]interface{}, 1)
+		go func() {
+			_, resp := env.postJSON(t, "/api/user/getAuthInfo", carolCToken, `{}`)
+			done <- resp
+		}()
+
+		<-dbLoaded
+
+		// Admin updates Carol (resets token & disables account) while PublicModeInterceptor holds Carol's pre-revocation active snapshot.
+		_, revokeCarol := env.postJSON(t, "/api/panel/users/update", adminCToken, fmt.Sprintf(
+			`{"id":%d,"username":"carol_race","name":"Carol Race","role":2,"status":2}`,
+			carol.ID,
+		))
+		if revokeCarol["code"] != float64(0) {
+			t.Fatalf("revoke Carol failed: %#v", revokeCarol)
+		}
+
+		close(releaseBackfill)
+		racedResp := <-done
+		if racedResp["code"] != float64(0) {
+			t.Fatalf("expected PublicModeInterceptor to fall back to public user, got: %#v", racedResp)
+		}
+		racedData := racedResp["data"].(map[string]interface{})
+		racedUser := racedData["user"].(map[string]interface{})
+		if racedUser["id"] != float64(pubAccount.ID) || racedData["visitMode"] != float64(1) {
+			t.Fatalf("PublicModeInterceptor returned revoked Carol instead of public fallback: %#v", racedData)
+		}
+		if _, resurrected := global.UserToken.Get(carolBToken); resurrected {
+			t.Fatal("PublicModeInterceptor backfilled revoked Carol into UserToken hot cache")
+		}
+
+		// Subsequent calls on both PublicModeInterceptor and LoginInterceptor must NOT restore Carol's privileges.
+		_, followUpPublic := env.postJSON(t, "/api/user/getAuthInfo", carolCToken, `{}`)
+		followUpData := followUpPublic["data"].(map[string]interface{})
+		followUpUser := followUpData["user"].(map[string]interface{})
+		if followUpUser["id"] != float64(pubAccount.ID) || followUpData["visitMode"] != float64(1) {
+			t.Fatalf("follow-up PublicModeInterceptor restored Carol privileges: %#v", followUpData)
+		}
+		_, followUpLogin := env.postJSON(t, "/api/user/getInfo", carolCToken, `{}`)
+		if followUpLogin["code"] != float64(1001) {
+			t.Fatalf("follow-up LoginInterceptor accepted revoked Carol token: %#v", followUpLogin)
+		}
+	})
+}

@@ -34,5 +34,5 @@ type Cacher[T any] interface {
 	ItemCount() (int64, error)
 
 	// 清空
-	Flush()
+	Flush() error
 }

@@ -24,10 +24,11 @@ import (
 // miniRESPServer implements the minimal RESP2 wire protocol (HELLO/PING/SELECT/HSET/HGET/HDEL/HLEN/HKEYS/DEL/SET/GET/EXISTS)
 // so go-redis/v9 and cache.NewRedisCache can be verified over real TCP sockets without an external Redis daemon.
 type miniRESPServer struct {
-	mu      sync.Mutex
-	hashes  map[string]map[string]string
-	strings map[string]string
-	ln      net.Listener
+	mu          sync.Mutex
+	hashes      map[string]map[string]string
+	strings     map[string]string
+	failDelKeys map[string]string
+	ln          net.Listener
 }
 
 func startMiniRESPServer(t *testing.T) (*miniRESPServer, string) {
@@ -37,13 +38,24 @@ func startMiniRESPServer(t *testing.T) (*miniRESPServer, string) {
 		t.Fatal(err)
 	}
 	srv := &miniRESPServer{
-		hashes:  make(map[string]map[string]string),
-		strings: make(map[string]string),
-		ln:      ln,
+		hashes:      make(map[string]map[string]string),
+		strings:     make(map[string]string),
+		failDelKeys: make(map[string]string),
+		ln:          ln,
 	}
 	go srv.acceptLoop()
 	t.Cleanup(func() { _ = ln.Close() })
 	return srv, ln.Addr().String()
+}
+
+func (s *miniRESPServer) SetDelError(key string, errMsg string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if errMsg == "" {
+		delete(s.failDelKeys, key)
+		return
+	}
+	s.failDelKeys[key] = errMsg
 }
 
 func (s *miniRESPServer) acceptLoop() {
@@ -131,6 +143,18 @@ func (s *miniRESPServer) handleConn(conn net.Conn) {
 				}
 			}
 		case "DEL":
+			var injectedErr string
+			for _, key := range args[1:] {
+				if msg, fail := s.failDelKeys[key]; fail {
+					injectedErr = msg
+					break
+				}
+			}
+			if injectedErr != "" {
+				_, _ = fmt.Fprintf(conn, "-ERR %s\r\n", injectedErr)
+				s.mu.Unlock()
+				continue
+			}
 			removed := 0
 			for _, key := range args[1:] {
 				if _, ok := s.hashes[key]; ok {
@@ -314,5 +338,136 @@ func TestEnsureLegacySessionRotationIsIdempotentAndStrictlyScopedToRedisPrefix(t
 	}
 	if got, ok := instACUserToken.Get("ctoken_admin_fresh"); !ok || got != "fresh_crypto_btoken_admin" {
 		t.Fatalf("second startup wiped newly issued Redis cToken: ok=%v got=%q", ok, got)
+	}
+}
+
+func TestEnsureLegacySessionRotationRetriesAfterPartialCacheFlushFailure(t *testing.T) {
+	srv, addr := startMiniRESPServer(t)
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     addr,
+		Protocol: 2,
+	})
+	t.Cleanup(func() { _ = rdb.Close() })
+
+	if err := rdb.Ping(context.Background()).Err(); err != nil {
+		t.Fatalf("mini redis ping failed: %v", err)
+	}
+
+	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "rotation_retry.db")), &gorm.Config{
+		NamingStrategy: schema.NamingStrategy{SingularTable: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&models.User{}, &models.SystemSetting{}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if sqlDB, err := db.DB(); err == nil {
+			_ = sqlDB.Close()
+		}
+	})
+
+	admin := models.User{Username: "admin@leon.local", Password: "p1", Status: 1, Role: 1, Token: "legacy_retry_btoken"}
+	if err := db.Create(&admin).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	instAUserToken := cache.NewRedisCache[models.User](rdb, "inst_a:UserToken", time.Minute, 0)
+	instACUserToken := cache.NewRedisCache[string](rdb, "inst_a:CUserToken", 72*time.Hour, 0)
+	instBUserToken := cache.NewRedisCache[models.User](rdb, "inst_b:UserToken", time.Minute, 0)
+	instBCUserToken := cache.NewRedisCache[string](rdb, "inst_b:CUserToken", 72*time.Hour, 0)
+
+	instAUserToken.SetDefault("legacy_retry_btoken", admin)
+	instACUserToken.SetDefault("legacy_retry_ctoken", "legacy_retry_btoken")
+	instBUserToken.SetDefault("inst_b_btoken", models.User{BaseModel: models.BaseModel{ID: 77}, Status: 1, Token: "inst_b_btoken"})
+	instBCUserToken.SetDefault("inst_b_ctoken", "inst_b_btoken")
+	if err := rdb.Set(context.Background(), "foreign_app:state", "untouched", 0).Err(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Inject partial cache cleanup failure: UserToken DEL succeeds, CUserToken DEL fails!
+	srv.SetDelError("inst_a:CUserToken", "READONLY cannot delete CUserToken")
+
+	rotated, err := EnsureLegacySessionRotation(db, instAUserToken, instACUserToken, false)
+	if err == nil {
+		t.Fatal("expected error when CUserToken Redis DEL fails, got nil")
+	}
+	if rotated {
+		t.Fatal("rotation must NOT report rotated=true on partial cache flush failure")
+	}
+
+	// Completion marker MUST NOT be recorded as "1" after partial failure.
+	var markerCount int64
+	if err := db.Model(&models.SystemSetting{}).
+		Where("config_name = ? AND config_value = ?", LegacyBTokenRotationV1Key, "1").
+		Count(&markerCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if markerCount != 0 {
+		t.Fatalf("completion marker persisted despite flush failure: count=%d", markerCount)
+	}
+	// Verify partial state: UserToken was cleared, CUserToken still present, other namespaces untouched.
+	if _, ok := instAUserToken.Get("legacy_retry_btoken"); ok {
+		t.Fatal("expected UserToken flush to have executed during partial attempt")
+	}
+	if _, ok := instACUserToken.Get("legacy_retry_ctoken"); !ok {
+		t.Fatal("expected failed CUserToken entry to still exist before retry")
+	}
+	if _, ok := instBUserToken.Get("inst_b_btoken"); !ok {
+		t.Fatal("inst_b UserToken was modified during inst_a partial failure")
+	}
+	if got, ok := instBCUserToken.Get("inst_b_ctoken"); !ok || got != "inst_b_btoken" {
+		t.Fatalf("inst_b CUserToken was modified: ok=%v got=%q", ok, got)
+	}
+	if val, err := rdb.Get(context.Background(), "foreign_app:state").Result(); err != nil || val != "untouched" {
+		t.Fatalf("foreign_app key modified: val=%q err=%v", val, err)
+	}
+
+	// Clear injected Redis error and simulate service restart -> retry MUST succeed and finish cleanup!
+	srv.SetDelError("inst_a:CUserToken", "")
+
+	rotated, err = EnsureLegacySessionRotation(db, instAUserToken, instACUserToken, false)
+	if err != nil {
+		t.Fatalf("retry after Redis recovery failed: %v", err)
+	}
+	if !rotated {
+		t.Fatal("expected retry after partial failure to complete rotation (rotated=true)")
+	}
+
+	if _, ok := instACUserToken.Get("legacy_retry_ctoken"); ok {
+		t.Fatal("inst_a CUserToken still holds legacy session after retry")
+	}
+	if err := db.Model(&models.SystemSetting{}).
+		Where("config_name = ? AND config_value = ?", LegacyBTokenRotationV1Key, "1").
+		Count(&markerCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if markerCount != 1 {
+		t.Fatalf("expected completion marker after successful retry, got count=%d", markerCount)
+	}
+
+	// Other Redis namespaces remain completely untouched after successful retry.
+	if _, ok := instBUserToken.Get("inst_b_btoken"); !ok {
+		t.Fatal("inst_b UserToken was wiped on retry")
+	}
+	if got, ok := instBCUserToken.Get("inst_b_ctoken"); !ok || got != "inst_b_btoken" {
+		t.Fatalf("inst_b CUserToken was wiped on retry: ok=%v got=%q", ok, got)
+	}
+	if val, err := rdb.Get(context.Background(), "foreign_app:state").Result(); err != nil || val != "untouched" {
+		t.Fatalf("foreign_app key modified on retry: val=%q err=%v", val, err)
+	}
+
+	// Next restart after new login is a no-op and preserves fresh sessions.
+	if err := db.Model(&models.User{}).Where("id = ?", admin.ID).Update("token", "post_retry_btoken").Error; err != nil {
+		t.Fatal(err)
+	}
+	instACUserToken.SetDefault("post_retry_ctoken", "post_retry_btoken")
+	rotatedAgain, err := EnsureLegacySessionRotation(db, instAUserToken, instACUserToken, false)
+	if err != nil || rotatedAgain {
+		t.Fatalf("post-completion restart should be no-op: rotated=%v err=%v", rotatedAgain, err)
+	}
+	if got, ok := instACUserToken.Get("post_retry_ctoken"); !ok || got != "post_retry_btoken" {
+		t.Fatalf("post-completion restart wiped fresh session: ok=%v got=%q", ok, got)
 	}
 }
