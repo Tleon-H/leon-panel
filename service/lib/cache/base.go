@@ -33,6 +33,12 @@ type Cacher[T any] interface {
 	// 项目总数
 	ItemCount() (int64, error)
 
+	// 仅当键不存在时原子写入，返回是否成功写入
+	SetIfAbsent(k string, v T, d time.Duration) (bool, error)
+
+	// 标识是否为跨进程共享缓存（如 Redis）
+	IsShared() bool
+
 	// 清空
-	Flush()
+	Flush() error
 }

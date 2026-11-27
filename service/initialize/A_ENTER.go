@@ -15,8 +15,10 @@ import (
 	"leon-panel/initialize/systemSettingCache"
 	"leon-panel/initialize/userToken"
 	"leon-panel/lib/cmn"
+	"leon-panel/lib/sessionguard"
 	"leon-panel/models"
 	"leon-panel/structs"
+	"strings"
 	"time"
 
 	"log"
@@ -85,6 +87,16 @@ func InitApp() error {
 	// 初始化用户token
 	global.UserToken = userToken.InitUserToken()
 	global.CUserToken = cUserToken.InitCUserToken()
+	{
+		skipRotation := strings.EqualFold(
+			strings.TrimSpace(global.Config.GetValueString("base", sessionguard.ConfigDisableStartupSessionRotation)),
+			"true",
+		) || strings.TrimSpace(global.Config.GetValueString("base", sessionguard.ConfigDisableStartupSessionRotation)) == "1"
+		if _, err := sessionguard.EnsureLegacySessionRotation(global.Db, global.UserToken, global.CUserToken, skipRotation); err != nil {
+			global.Logger.Errorln("Legacy session rotation error", err)
+			return err
+		}
+	}
 
 	// 其他的初始化
 	global.VerifyCodeCachePool = other.InitVerifyCodeCachePool()

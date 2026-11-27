@@ -2,6 +2,7 @@ package panel
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"leon-panel/api/api_v1/common/apiData/commonApiStructs"
 	"leon-panel/api/api_v1/common/apiData/panelApiStructs"
@@ -22,8 +23,20 @@ import (
 type ItemIcon struct {
 }
 
+func verifyOwnedGroup(db *gorm.DB, userID uint, groupID int) error {
+	if groupID <= 0 {
+		return gorm.ErrRecordNotFound
+	}
+	var group models.ItemIconGroup
+	return db.Where("id = ? AND user_id = ?", groupID, userID).First(&group).Error
+}
+
 func (a *ItemIcon) Edit(c *gin.Context) {
-	userInfo, _ := base.GetCurrentUserInfo(c)
+	userInfo, ok := base.GetCurrentUserInfo(c)
+	if !ok || userInfo.ID == 0 {
+		apiReturn.ErrorByCode(c, 1000)
+		return
+	}
 	req := models.ItemIcon{}
 
 	if err := c.ShouldBindBodyWith(&req, binding.JSON); err != nil {
@@ -31,32 +44,69 @@ func (a *ItemIcon) Edit(c *gin.Context) {
 		return
 	}
 
-	if req.ItemIconGroupId == 0 {
-		// apiReturn.Error(c, "Group is mandatory")
+	if req.ItemIconGroupId <= 0 {
 		apiReturn.ErrorParamFomat(c, "Group is mandatory")
 		return
 	}
 
-	req.UserId = userInfo.ID
+	if err := verifyOwnedGroup(global.Db, userInfo.ID, req.ItemIconGroupId); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			apiReturn.ErrorDataNotFound(c)
+			return
+		}
+		apiReturn.ErrorDatabase(c, err.Error())
+		return
+	}
 
-	// json转字符串
 	if j, err := json.Marshal(req.Icon); err == nil {
 		req.IconJson = string(j)
 	}
 
 	if req.ID != 0 {
-		// 修改
-		updateField := []string{"IconJson", "Icon", "Title", "Url", "LanUrl", "Description", "OpenMethod", "GroupId", "UserId", "ItemIconGroupId"}
-		if req.Sort != 0 {
-			updateField = append(updateField, "Sort")
+		var existing models.ItemIcon
+		if err := global.Db.Where("id = ? AND user_id = ?", req.ID, userInfo.ID).First(&existing).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				apiReturn.ErrorDataNotFound(c)
+				return
+			}
+			apiReturn.ErrorDatabase(c, err.Error())
+			return
 		}
-		global.Db.Model(&models.ItemIcon{}).
-			Select(updateField).
-			Where("id=?", req.ID).Updates(&req)
-	} else {
-		req.Sort = 9999
-		// 创建
-		global.Db.Create(&req)
+
+		updates := map[string]interface{}{
+			"icon_json":          req.IconJson,
+			"title":              req.Title,
+			"url":                req.Url,
+			"lan_url":            req.LanUrl,
+			"description":        req.Description,
+			"open_method":        req.OpenMethod,
+			"item_icon_group_id": req.ItemIconGroupId,
+		}
+		if req.Sort != 0 {
+			updates["sort"] = req.Sort
+		}
+		if err := global.Db.Model(&models.ItemIcon{}).
+			Where("id = ? AND user_id = ?", req.ID, userInfo.ID).
+			Updates(updates).Error; err != nil {
+			apiReturn.ErrorDatabase(c, err.Error())
+			return
+		}
+
+		var saved models.ItemIcon
+		if err := global.Db.Where("id = ? AND user_id = ?", req.ID, userInfo.ID).First(&saved).Error; err != nil {
+			apiReturn.ErrorDatabase(c, err.Error())
+			return
+		}
+		_ = json.Unmarshal([]byte(saved.IconJson), &saved.Icon)
+		apiReturn.SuccessData(c, saved)
+		return
+	}
+
+	req.UserId = userInfo.ID
+	req.Sort = 9999
+	if err := global.Db.Create(&req).Error; err != nil {
+		apiReturn.ErrorDatabase(c, err.Error())
+		return
 	}
 
 	apiReturn.SuccessData(c, req)
@@ -64,8 +114,11 @@ func (a *ItemIcon) Edit(c *gin.Context) {
 
 // 添加多个图标
 func (a *ItemIcon) AddMultiple(c *gin.Context) {
-	userInfo, _ := base.GetCurrentUserInfo(c)
-	// type Request
+	userInfo, ok := base.GetCurrentUserInfo(c)
+	if !ok || userInfo.ID == 0 {
+		apiReturn.ErrorByCode(c, 1000)
+		return
+	}
 	req := []models.ItemIcon{}
 
 	if err := c.ShouldBindBodyWith(&req, binding.JSON); err != nil {
@@ -73,19 +126,45 @@ func (a *ItemIcon) AddMultiple(c *gin.Context) {
 		return
 	}
 
+	if len(req) == 0 {
+		apiReturn.SuccessData(c, []models.ItemIcon{})
+		return
+	}
+
+	uniqueGroupIDs := make([]int, 0, len(req))
+	seenGroups := make(map[int]struct{}, len(req))
 	for i := 0; i < len(req); i++ {
-		if req[i].ItemIconGroupId == 0 {
+		if req[i].ItemIconGroupId <= 0 {
 			apiReturn.ErrorParamFomat(c, "Group is mandatory")
 			return
 		}
+		if _, exists := seenGroups[req[i].ItemIconGroupId]; !exists {
+			seenGroups[req[i].ItemIconGroupId] = struct{}{}
+			uniqueGroupIDs = append(uniqueGroupIDs, req[i].ItemIconGroupId)
+		}
+		req[i].ID = 0
 		req[i].UserId = userInfo.ID
-		// json转字符串
 		if j, err := json.Marshal(req[i].Icon); err == nil {
 			req[i].IconJson = string(j)
 		}
 	}
 
-	global.Db.Create(&req)
+	var ownedGroupCount int64
+	if err := global.Db.Model(&models.ItemIconGroup{}).
+		Where("id IN ? AND user_id = ?", uniqueGroupIDs, userInfo.ID).
+		Count(&ownedGroupCount).Error; err != nil {
+		apiReturn.ErrorDatabase(c, err.Error())
+		return
+	}
+	if int(ownedGroupCount) != len(uniqueGroupIDs) {
+		apiReturn.ErrorDataNotFound(c)
+		return
+	}
+
+	if err := global.Db.Create(&req).Error; err != nil {
+		apiReturn.ErrorDatabase(c, err.Error())
+		return
+	}
 
 	apiReturn.SuccessData(c, req)
 }

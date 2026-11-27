@@ -6,6 +6,7 @@ import (
 	"leon-panel/api/api_v1/common/base"
 	"leon-panel/global"
 	"leon-panel/lib/cmn"
+	"leon-panel/lib/sessionguard"
 	"leon-panel/models"
 
 	"github.com/gin-gonic/gin"
@@ -22,22 +23,14 @@ func (a *UserApi) GetInfo(c *gin.Context) {
 		"headImage": userInfo.HeadImage,
 		"name":      userInfo.Name,
 		"role":      userInfo.Role,
-		// "token":     userInfo.Token,
-
 	})
 }
 
 func (a *UserApi) GetAuthInfo(c *gin.Context) {
 	userInfo, _ := base.GetCurrentUserInfo(c)
 	visitMode := base.GetCurrentVisitMode(c)
-	user := models.User{}
-	user.ID = userInfo.ID
-	user.HeadImage = userInfo.HeadImage
-	user.Name = userInfo.Name
-	user.Role = userInfo.Role
-	user.Username = userInfo.Username
 	apiReturn.SuccessData(c, gin.H{
-		"user":      user,
+		"user":      systemApiStructs.ToAuthProfileUserResp(userInfo),
 		"visitMode": visitMode,
 	})
 }
@@ -51,8 +44,7 @@ func (a *UserApi) UpdateInfo(c *gin.Context) {
 	}
 	params := UpdateUserInfoStruct{}
 
-	err := c.ShouldBindBodyWith(&params, binding.JSON)
-	if err != nil {
+	if err := c.ShouldBindBodyWith(&params, binding.JSON); err != nil {
 		apiReturn.ErrorParamFomat(c, err.Error())
 		return
 	}
@@ -63,14 +55,14 @@ func (a *UserApi) UpdateInfo(c *gin.Context) {
 	}
 
 	mUser := models.User{}
-	err = mUser.UpdateUserInfoByUserId(userInfo.ID, map[string]interface{}{
+	err := mUser.UpdateUserInfoByUserId(userInfo.ID, map[string]interface{}{
 		"head_image": params.HeadImage,
 		"name":       params.Name,
 	})
-	// 删除缓存
-	global.UserToken.Delete(userInfo.Token)
+	sessionguard.InvalidateTokenCache(global.UserToken, userInfo.Token)
 	if err != nil {
 		apiReturn.ErrorDatabase(c, err.Error())
+		return
 	}
 	apiReturn.Success(c)
 }
@@ -83,25 +75,22 @@ func (a *UserApi) UpdatePasssword(c *gin.Context) {
 	}
 
 	params := UpdatePasssStruct{}
-
-	err := c.ShouldBindBodyWith(&params, binding.JSON)
-	if err != nil {
+	if err := c.ShouldBindBodyWith(&params, binding.JSON); err != nil {
 		apiReturn.ErrorParamFomat(c, err.Error())
 		return
 	}
 	userInfo, _ := base.GetCurrentUserInfo(c)
 	mUser := models.User{}
-	if v, err := mUser.GetUserInfoByUid(userInfo.ID); err != nil {
+	v, err := mUser.GetUserInfoByUid(userInfo.ID)
+	if err != nil {
 		apiReturn.ErrorParamFomat(c, err.Error())
 		return
-	} else {
-		if v.Password != cmn.PasswordEncryption(params.OldPassword) {
-			// 旧密码不正确
-			apiReturn.ErrorByCode(c, 1007)
-			return
-		}
 	}
-	res := global.Db.Model(&models.User{}).Where("id", userInfo.ID).Updates(map[string]interface{}{
+	if v.Password != cmn.PasswordEncryption(params.OldPassword) {
+		apiReturn.ErrorByCode(c, 1007)
+		return
+	}
+	res := global.Db.Model(&models.User{}).Where("id = ?", userInfo.ID).Updates(map[string]interface{}{
 		"password": cmn.PasswordEncryption(params.NewPassword),
 		"token":    "",
 	})
@@ -109,8 +98,8 @@ func (a *UserApi) UpdatePasssword(c *gin.Context) {
 		apiReturn.ErrorDatabase(c, res.Error.Error())
 		return
 	}
-	// 删除token
-	global.UserToken.Delete(userInfo.Token)
+	sessionguard.EvictSessionMapping(global.UserToken, global.CUserToken, c.GetHeader("token"), v.Token)
+	sessionguard.EvictUserToken(global.UserToken, userInfo.Token)
 	apiReturn.Success(c)
 }
 
@@ -124,26 +113,25 @@ func (a *UserApi) GetReferralCode(c *gin.Context) {
 		return
 	}
 
-	// 为空生成一个
 	if userInfo.ReferralCode == "" {
 		for {
-			referralCode := cmn.BuildRandCode(8, cmn.RAND_CODE_MODE2)
-			global.Logger.Debug("referralCode:", referralCode)
+			referralCode, randErr := cmn.BuildCryptoRandToken(8)
+			if randErr != nil {
+				apiReturn.Error(c, "Failed to generate referral code")
+				return
+			}
 
-			// 查询是否有重复的
-			if row := global.Db.Find(&userInfo, "referral_code=?", referralCode).RowsAffected; row != 0 {
-				apiReturn.ErrorDatabase(c, err.Error())
+			var existing models.User
+			if row := global.Db.Find(&existing, "referral_code = ?", referralCode).RowsAffected; row != 0 {
 				continue
 			}
 
-			// 创建新的邀请码
-			if err := global.Db.Model(&models.User{}).Where("id=?", userInfo.ID).Update("referral_code", referralCode).Error; err != nil {
+			if err := global.Db.Model(&models.User{}).Where("id = ?", userInfo.ID).Update("referral_code", referralCode).Error; err != nil {
 				apiReturn.ErrorDatabase(c, err.Error())
 				return
-			} else {
-				userInfo.ReferralCode = referralCode
-				break
 			}
+			userInfo.ReferralCode = referralCode
+			break
 		}
 	}
 

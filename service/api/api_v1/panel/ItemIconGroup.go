@@ -3,7 +3,6 @@ package panel
 import (
 	"encoding/json"
 	"errors"
-	"math"
 	"leon-panel/api/api_v1/common/apiData/commonApiStructs"
 	"leon-panel/api/api_v1/common/apiReturn"
 	"leon-panel/api/api_v1/common/base"
@@ -170,6 +169,8 @@ func (a *ItemIconGroup) GetList(c *gin.Context) {
 	apiReturn.SuccessListData(c, result, 0)
 }
 
+var errGroupAtLeastKeepOne = errors.New("at least one group must be retained")
+
 func (a *ItemIconGroup) Deletes(c *gin.Context) {
 	req := commonApiStructs.RequestDeleteIds[uint]{}
 
@@ -177,33 +178,60 @@ func (a *ItemIconGroup) Deletes(c *gin.Context) {
 		apiReturn.ErrorParamFomat(c, err.Error())
 		return
 	}
-	userInfo, _ := base.GetCurrentUserInfo(c)
-
-	var count int64
-	if err := global.Db.Model(&models.ItemIconGroup{}).Where(" user_id=?", userInfo.ID).Count(&count).Error; err != nil {
-		apiReturn.ErrorDatabase(c, err.Error())
+	userInfo, ok := base.GetCurrentUserInfo(c)
+	if !ok || userInfo.ID == 0 {
+		apiReturn.ErrorByCode(c, 1000)
 		return
-	} else {
-		if math.Abs(float64(len(req.Ids))-float64(count)) < 1 {
-			apiReturn.ErrorCode(c, 1201, "At least one must be retained", nil)
-			return
-		}
+	}
 
+	requestedSet := make(map[uint]struct{}, len(req.Ids))
+	for _, id := range req.Ids {
+		if id != 0 {
+			requestedSet[id] = struct{}{}
+		}
+	}
+	if len(requestedSet) == 0 {
+		apiReturn.ErrorParamFomat(c, "ids is required")
+		return
 	}
 
 	txErr := global.Db.Transaction(func(tx *gorm.DB) error {
+		var ownedGroups []models.ItemIconGroup
+		if err := tx.Select("id").Where("user_id = ?", userInfo.ID).Find(&ownedGroups).Error; err != nil {
+			return err
+		}
+
+		ownedDeleteIDs := make([]uint, 0, len(requestedSet))
+		for _, g := range ownedGroups {
+			if _, match := requestedSet[g.ID]; match {
+				ownedDeleteIDs = append(ownedDeleteIDs, g.ID)
+			}
+		}
+		if len(ownedDeleteIDs) == 0 {
+			return gorm.ErrRecordNotFound
+		}
+		if len(ownedGroups)-len(ownedDeleteIDs) < 1 {
+			return errGroupAtLeastKeepOne
+		}
+
 		mitemIcon := models.ItemIcon{}
-		if err := tx.Delete(&models.ItemIconGroup{}, "id in ? AND user_id=?", req.Ids, userInfo.ID).Error; err != nil {
+		if err := tx.Delete(&models.ItemIconGroup{}, "id IN ? AND user_id = ?", ownedDeleteIDs, userInfo.ID).Error; err != nil {
 			return err
 		}
-
-		if err := mitemIcon.DeleteByItemIconGroupIds(tx, userInfo.ID, req.Ids); err != nil {
+		if err := mitemIcon.DeleteByItemIconGroupIds(tx, userInfo.ID, ownedDeleteIDs); err != nil {
 			return err
 		}
-
 		return nil
 	})
 
+	if errors.Is(txErr, errGroupAtLeastKeepOne) {
+		apiReturn.ErrorCode(c, 1201, "At least one must be retained", nil)
+		return
+	}
+	if errors.Is(txErr, gorm.ErrRecordNotFound) {
+		apiReturn.ErrorDataNotFound(c)
+		return
+	}
 	if txErr != nil {
 		apiReturn.ErrorDatabase(c, txErr.Error())
 		return
