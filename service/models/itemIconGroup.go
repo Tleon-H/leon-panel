@@ -20,7 +20,7 @@ type ItemIconGroup struct {
 	Description string `gorm:"type:varchar(1000)" json:"description"`
 	Sort        int    `gorm:"type:int(11)" json:"sort"`
 	UserId      uint   `json:"userId"`
-	User        User   `json:"user"`
+	User        User   `json:"-"`
 	// IconStyle 为空表示跟随该账号的全局图标样式。0 是详情大卡片，1 是小图标。
 	IconStyle *int `gorm:"column:icon_style;type:int" json:"iconStyle"`
 }

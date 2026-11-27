@@ -60,11 +60,14 @@ jobs:
           go-bindata-assetfs -o=assets/bindata.go -pkg=assets assets/...
           rm -f bindata.go
 
-      - name: Test
+      - name: Test and build backend
         working-directory: service
         run: |
           rm -f bindata.go
+          go test -v ./lib/cmn ./lib/sessionguard ./api/api_v1/panel ./router
           go test ./...
+          go build -o /tmp/leon-panel main.go
+          rm -f /tmp/leon-panel
 
   docker:
     runs-on: ubuntu-latest

@@ -14,5 +14,5 @@ type Notice struct {
 	Url         string `gorm:"type:varchar(255)" json:"url"`       // 跳转地址
 	IsLogin     uint   `gorm:"type:tinyint(1)" json:"isLogin"`     // 登录可见
 	UserId      uint   `json:"userId"`
-	User        User   `json:"user"`
+	User        User   `json:"-"`
 }

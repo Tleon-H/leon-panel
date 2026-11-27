@@ -3,15 +3,16 @@ package cmn
 import (
 	// "calendar-note-gin/assets"
 	"crypto/md5"
+	crand "crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"leon-panel/assets"
 	"math/rand"
 	"os"
 	"path"
 	"sort"
 	"strconv"
 	"strings"
-	"leon-panel/assets"
 	"time"
 )
 
@@ -79,6 +80,19 @@ func BuildRandCodeBySeed(count int, secret_content string, seed int64) (code str
 		code += string(secret_content[rand.Intn(len(secret_content))])
 	}
 	return code
+}
+
+// BuildCryptoRandToken generates a cryptographically secure lowercase hex string of length charLen.
+func BuildCryptoRandToken(charLen int) (string, error) {
+	if charLen <= 0 {
+		return "", fmt.Errorf("invalid token length: %d", charLen)
+	}
+	byteLen := (charLen + 1) / 2
+	buf := make([]byte, byteLen)
+	if _, err := crand.Read(buf); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(buf)[:charLen], nil
 }
 
 func InSlice(items []string, item string) bool {
