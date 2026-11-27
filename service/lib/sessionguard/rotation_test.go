@@ -25,11 +25,12 @@ import (
 // miniRESPServer implements the minimal RESP2 wire protocol (HELLO/PING/SELECT/HSET/HGET/HDEL/HLEN/HKEYS/DEL/SET/GET/EXISTS)
 // so go-redis/v9 and cache.NewRedisCache can be verified over real TCP sockets without an external Redis daemon.
 type miniRESPServer struct {
-	mu          sync.Mutex
-	hashes      map[string]map[string]string
-	strings     map[string]string
-	failDelKeys map[string]string
-	ln          net.Listener
+	mu                sync.Mutex
+	hashes            map[string]map[string]string
+	strings           map[string]string
+	failDelKeys       map[string]string
+	failHashWriteKeys map[string]string
+	ln                net.Listener
 }
 
 func startMiniRESPServer(t *testing.T) (*miniRESPServer, string) {
@@ -39,10 +40,11 @@ func startMiniRESPServer(t *testing.T) (*miniRESPServer, string) {
 		t.Fatal(err)
 	}
 	srv := &miniRESPServer{
-		hashes:      make(map[string]map[string]string),
-		strings:     make(map[string]string),
-		failDelKeys: make(map[string]string),
-		ln:          ln,
+		hashes:            make(map[string]map[string]string),
+		strings:           make(map[string]string),
+		failDelKeys:       make(map[string]string),
+		failHashWriteKeys: make(map[string]string),
+		ln:                ln,
 	}
 	go srv.acceptLoop()
 	t.Cleanup(func() { _ = ln.Close() })
@@ -57,6 +59,16 @@ func (s *miniRESPServer) SetDelError(key string, errMsg string) {
 		return
 	}
 	s.failDelKeys[key] = errMsg
+}
+
+func (s *miniRESPServer) SetHashWriteError(key string, errMsg string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if errMsg == "" {
+		delete(s.failHashWriteKeys, key)
+		return
+	}
+	s.failHashWriteKeys[key] = errMsg
 }
 
 func (s *miniRESPServer) acceptLoop() {
@@ -91,6 +103,11 @@ func (s *miniRESPServer) handleConn(conn net.Conn) {
 			_, _ = conn.Write([]byte("+OK\r\n"))
 		case "HSET":
 			if len(args) >= 4 {
+				if msg, fail := s.failHashWriteKeys[args[1]]; fail {
+					_, _ = fmt.Fprintf(conn, "-ERR %s\r\n", msg)
+					s.mu.Unlock()
+					continue
+				}
 				h, ok := s.hashes[args[1]]
 				if !ok {
 					h = make(map[string]string)
@@ -109,6 +126,11 @@ func (s *miniRESPServer) handleConn(conn net.Conn) {
 			}
 		case "HSETNX":
 			if len(args) >= 4 {
+				if msg, fail := s.failHashWriteKeys[args[1]]; fail {
+					_, _ = fmt.Fprintf(conn, "-ERR %s\r\n", msg)
+					s.mu.Unlock()
+					continue
+				}
 				h, ok := s.hashes[args[1]]
 				if !ok {
 					h = make(map[string]string)
@@ -136,6 +158,11 @@ func (s *miniRESPServer) handleConn(conn net.Conn) {
 			}
 		case "HDEL":
 			if len(args) >= 3 {
+				if msg, fail := s.failHashWriteKeys[args[1]]; fail {
+					_, _ = fmt.Fprintf(conn, "-ERR %s\r\n", msg)
+					s.mu.Unlock()
+					continue
+				}
 				removed := 0
 				if h, ok := s.hashes[args[1]]; ok {
 					for _, field := range args[2:] {
@@ -489,8 +516,8 @@ func TestEnsureLegacySessionRotationRetriesAfterPartialCacheFlushFailure(t *test
 	}
 }
 
-func TestCrossProcessRedisRevocationBlocksHotHitAndLateBackfillAcrossIndependentGuards(t *testing.T) {
-	_, addr := startMiniRESPServer(t)
+func TestCrossProcessRedisAuthoritativeAuthResistsCacheWriteFailureAndExpirationRace(t *testing.T) {
+	srv, addr := startMiniRESPServer(t)
 
 	// Two completely independent "processes": separate TokenGuards (zero shared in-process memory),
 	// separate Redis TCP clients, and separate SQLite DB pools sharing the SAME DB file & Redis namespace.
@@ -538,22 +565,27 @@ func TestCrossProcessRedisRevocationBlocksHotHitAndLateBackfillAcrossIndependent
 		}
 	}
 
-	// Subtest 1: Process A warms shared Redis cache; Process B revokes in DB + shared Redis;
-	// Process A's very next hot-cache read MUST reject immediately without sharing any Go memory with Process B.
-	t.Run("HotCacheHit_CrossProcessRevocation", func(t *testing.T) {
+	// Subtest 1: Stale active UserToken entry already exists in shared Redis AND Redis rejects ALL
+	// HSET/HSETNX/HDEL writes during revocation -> Process B revokes in DB -> independent Process A
+	// STILL rejects immediately because shared Redis auth always checks authoritative DB.
+	t.Run("RedisWriteFailureOnRevoke_StillRejectsStaleHotCacheAcrossProcesses", func(t *testing.T) {
 		alice := models.User{Username: "alice_xp", Password: "h1", Name: "Alice XP", Role: 2, Status: 1, Token: "xp_alice_btoken"}
 		if err := dbA.Create(&alice).Error; err != nil {
 			t.Fatal(err)
 		}
 		cUserTokenA.SetDefault("xp_alice_ctoken", alice.Token)
 
-		// Process A resolves and populates shared Redis UserToken cache.
-		got, status, err := guardA.ResolveTokenUser(userTokenA, cUserTokenA, "xp_alice_ctoken", alice.Token, loadFrom(dbA))
-		if err != nil || status != TokenResolveActive || got.ID != alice.ID {
-			t.Fatalf("Process A initial auth failed: got=%+v status=%v err=%v", got, status, err)
+		// Pre-populate a stale active hot-cache entry directly in shared Redis (simulating pre-existing cache).
+		userTokenA.SetDefault(alice.Token, alice)
+		if cached, hit := userTokenA.Get(alice.Token); !hit || !IsActiveTokenUser(cached) {
+			t.Fatalf("expected pre-populated active entry in Redis: hit=%v cached=%+v", hit, cached)
 		}
 
-		// Process B revokes Alice in DB and writes shared Redis tombstone using independent guardB.
+		// Inject Redis write failure on shared_ns:UserToken so ALL HSET/HSETNX/HDEL fail!
+		srv.SetHashWriteError("shared_ns:UserToken", "READONLY You can't write against a read only replica")
+		defer srv.SetHashWriteError("shared_ns:UserToken", "")
+
+		// Process B commits revocation in authoritative DB and calls RevokeToken (whose Redis HDEL fails).
 		if err := dbB.Model(&models.User{}).Where("id = ?", alice.ID).Updates(map[string]interface{}{
 			"status": 2,
 			"token":  "",
@@ -562,78 +594,149 @@ func TestCrossProcessRedisRevocationBlocksHotHitAndLateBackfillAcrossIndependent
 		}
 		guardB.RevokeToken(userTokenB, alice.Token)
 
-		// Process A immediately calls ResolveTokenUser -> must reject via shared Redis tombstone!
-		_, statusAfter, errAfter := guardA.ResolveTokenUser(userTokenA, cUserTokenA, "xp_alice_ctoken", alice.Token, loadFrom(dbA))
-		if errAfter != nil || statusAfter != TokenResolveInvalid {
-			t.Fatalf("Process A hot-cache check accepted cross-process revoked user: status=%v err=%v", statusAfter, errAfter)
+		// Confirm the stale active entry is STILL sitting in Redis because Redis write failed.
+		if stale, stillThere := userTokenA.Get(alice.Token); !stillThere || !IsActiveTokenUser(stale) {
+			t.Fatalf("expected stale entry to remain in Redis under write failure: hit=%v stale=%+v", stillThere, stale)
 		}
-		if _, stillMapped := cUserTokenB.Get("xp_alice_ctoken"); stillMapped {
-			t.Fatal("revoked cToken mapping was not removed from shared CUserToken")
+
+		// Independent Process A resolves Alice -> MUST ignore stale Redis entry and reject via authoritative DB!
+		_, statusA, errA := guardA.ResolveTokenUser(userTokenA, cUserTokenA, "xp_alice_ctoken", alice.Token, loadFrom(dbA))
+		if errA != nil || statusA != TokenResolveInvalid {
+			t.Fatalf("Process A accepted revoked Alice under Redis write failure: status=%v err=%v", statusA, errA)
 		}
 	})
 
-	// Subtest 2: Cold cache on Process A -> Process A queries DB and pauses right before backfill ->
-	// Process B revokes in DB + writes shared Redis tombstone -> Process A resumes HSETNX backfill ->
-	// MUST NOT overwrite tombstone, MUST reject paused request AND all subsequent requests on BOTH processes!
-	t.Run("ConcurrentLateBackfill_CrossProcessRevocation", func(t *testing.T) {
-		bob := models.User{Username: "bob_xp", Password: "h2", Name: "Bob XP", Role: 2, Status: 1, Token: "xp_bob_btoken"}
+	// Subtest 2: Concurrent redis.go lazy-expiration cleanup (Get -> HDEL on expired entry) racing with
+	// cross-process revocation MUST NEVER undo revocation on either process.
+	t.Run("ConcurrentRedisExpirationCleanup_DoesNotUndoRevocation", func(t *testing.T) {
+		bob := models.User{Username: "bob_exp", Password: "h2", Name: "Bob Exp", Role: 2, Status: 1, Token: "xp_bob_exp_btoken"}
 		if err := dbA.Create(&bob).Error; err != nil {
 			t.Fatal(err)
 		}
-		cUserTokenA.SetDefault("xp_bob_ctoken", bob.Token)
+		cUserTokenA.SetDefault("xp_bob_exp_ctoken", bob.Token)
 
-		dbLoaded := make(chan struct{})
-		releaseBackfill := make(chan struct{})
-		var once sync.Once
-		restore := guardA.SetAfterDBLookupHookForTest(func(bToken string) {
-			if bToken == bob.Token {
-				once.Do(func() { close(dbLoaded) })
-				<-releaseBackfill
-			}
-		})
-		defer restore()
-
-		type resolveRes struct {
-			status TokenResolveStatus
-			err    error
+		// Inject an already-expired entry into shared_ns:UserToken (ExpirationTimeStamp in the past)
+		// so concurrent userTokenA.Get(bob.Token) triggers redis.go's lazy HDEL path.
+		expiredPayload := fmt.Sprintf(`{"ExpirationTimeStamp":%d,"IsExpiration":true,"Value":{"id":%d,"status":1,"token":%q}}`,
+			time.Now().Add(-time.Minute).Unix(), bob.ID, bob.Token)
+		if err := rdbA.HSet(context.Background(), "shared_ns:UserToken", bob.Token, expiredPayload).Err(); err != nil {
+			t.Fatal(err)
 		}
-		doneA := make(chan resolveRes, 1)
-		go func() {
-			_, st, err := guardA.ResolveTokenUser(userTokenA, cUserTokenA, "xp_bob_ctoken", bob.Token, loadFrom(dbA))
-			doneA <- resolveRes{status: st, err: err}
-		}()
 
-		// Wait until Process A has loaded Bob's active pre-revocation snapshot from DB.
-		<-dbLoaded
-
-		// Independent Process B revokes Bob in DB and writes revocation tombstone to shared Redis.
+		// Commit Bob's revocation in DB, then race guardB.RevokeToken against concurrent lazy-expiration Get()->HDEL!
 		if err := dbB.Model(&models.User{}).Where("id = ?", bob.ID).Updates(map[string]interface{}{
 			"status": 2,
 			"token":  "",
 		}).Error; err != nil {
 			t.Fatal(err)
 		}
-		guardB.RevokeToken(userTokenB, bob.Token)
 
-		// Release Process A to attempt late cache backfill via HSETNX against shared Redis.
-		close(releaseBackfill)
-		resA := <-doneA
-		if resA.err != nil || resA.status != TokenResolveInvalid {
-			t.Fatalf("Process A late backfill succeeded after cross-process revocation: status=%v err=%v", resA.status, resA.err)
+		start := make(chan struct{})
+		var wg sync.WaitGroup
+		wg.Add(4)
+		go func() {
+			defer wg.Done()
+			<-start
+			guardB.RevokeToken(userTokenB, bob.Token)
+		}()
+		for i := 0; i < 3; i++ {
+			go func() {
+				defer wg.Done()
+				<-start
+				// Triggers redis.go:88-90 lazy expiration HDEL concurrently.
+				_, _ = userTokenA.Get(bob.Token)
+			}()
+		}
+		close(start)
+		wg.Wait()
+
+		// Both independent Process A and Process B MUST reject Bob regardless of HDEL ordering.
+		if _, stA, errA := guardA.ResolveTokenUser(userTokenA, cUserTokenA, "xp_bob_exp_ctoken", bob.Token, loadFrom(dbA)); errA != nil || stA != TokenResolveInvalid {
+			t.Fatalf("Process A accepted revoked Bob after concurrent expiration cleanup: status=%v err=%v", stA, errA)
+		}
+		if _, stB, errB := guardB.ResolveTokenUser(userTokenB, cUserTokenB, "xp_bob_exp_ctoken", bob.Token, loadFrom(dbB)); errB != nil || stB != TokenResolveInvalid {
+			t.Fatalf("Process B accepted revoked Bob after concurrent expiration cleanup: status=%v err=%v", stB, errB)
+		}
+	})
+
+	// Subtest 3: Process A pauses after DB lookup; Process B revokes in DB; Process A resumes ->
+	// Process A NEVER backfills shared Redis UserToken, and all subsequent requests on BOTH processes reject!
+	t.Run("ConcurrentLateRead_NeverBackfillsSharedRedisAcrossProcesses", func(t *testing.T) {
+		carol := models.User{Username: "carol_xp", Password: "h3", Name: "Carol XP", Role: 2, Status: 1, Token: "xp_carol_btoken"}
+		if err := dbA.Create(&carol).Error; err != nil {
+			t.Fatal(err)
+		}
+		cUserTokenA.SetDefault("xp_carol_ctoken", carol.Token)
+
+		dbLoaded := make(chan struct{})
+		release := make(chan struct{})
+		var once sync.Once
+		restore := guardA.SetAfterDBLookupHookForTest(func(bToken string) {
+			if bToken == carol.Token {
+				once.Do(func() { close(dbLoaded) })
+				<-release
+			}
+		})
+		defer restore()
+
+		doneA := make(chan struct{}, 1)
+		go func() {
+			_, _, _ = guardA.ResolveTokenUser(userTokenA, cUserTokenA, "xp_carol_ctoken", carol.Token, loadFrom(dbA))
+			doneA <- struct{}{}
+		}()
+
+		<-dbLoaded
+
+		if err := dbB.Model(&models.User{}).Where("id = ?", carol.ID).Updates(map[string]interface{}{
+			"status": 2,
+			"token":  "",
+		}).Error; err != nil {
+			t.Fatal(err)
+		}
+		guardB.RevokeToken(userTokenB, carol.Token)
+
+		close(release)
+		<-doneA
+
+		// Shared Redis UserToken must NOT contain any backfilled active entry for Carol.
+		if cached, hit := userTokenB.Get(carol.Token); hit && IsActiveTokenUser(cached) {
+			t.Fatalf("shared Redis was backfilled with active Carol after cross-process revocation: %+v", cached)
 		}
 
-		// Verify shared Redis STILL holds tombstone (NOT active Bob!).
-		cached, hit := userTokenB.Get(bob.Token)
-		if !hit || !IsRevokedTombstone(cached) || IsActiveTokenUser(cached) {
-			t.Fatalf("shared Redis entry corrupted by late backfill: hit=%v cached=%+v", hit, cached)
+		// Follow-up resolution on BOTH independent Process A and Process B MUST reject Carol!
+		if _, stA, errA := guardA.ResolveTokenUser(userTokenA, cUserTokenA, "xp_carol_ctoken", carol.Token, loadFrom(dbA)); errA != nil || stA != TokenResolveInvalid {
+			t.Fatalf("follow-up Process A accepted revoked Carol: status=%v err=%v", stA, errA)
+		}
+		if _, stB, errB := guardB.ResolveTokenUser(userTokenB, cUserTokenB, "xp_carol_ctoken", carol.Token, loadFrom(dbB)); errB != nil || stB != TokenResolveInvalid {
+			t.Fatalf("follow-up Process B accepted revoked Carol: status=%v err=%v", stB, errB)
+		}
+	})
+
+	// Subtest 4: Transient DB failure under shared Redis mode does NOT revoke or wipe cToken and recovers cleanly.
+	t.Run("TransientDBError_SharedRedisRecoversCleanly", func(t *testing.T) {
+		dave := models.User{Username: "dave_xp", Password: "h4", Name: "Dave XP", Role: 2, Status: 1, Token: "xp_dave_btoken"}
+		if err := dbA.Create(&dave).Error; err != nil {
+			t.Fatal(err)
+		}
+		cUserTokenA.SetDefault("xp_dave_ctoken", dave.Token)
+
+		transientErr := errors.New("simulated db failover")
+		_, stErr, err := guardA.ResolveTokenUser(userTokenA, cUserTokenA, "xp_dave_ctoken", dave.Token, func(string) (models.User, error) {
+			return models.User{}, transientErr
+		})
+		if stErr != TokenResolveTransientError || !errors.Is(err, transientErr) {
+			t.Fatalf("expected TokenResolveTransientError under shared Redis, got status=%v err=%v", stErr, err)
+		}
+		if guardA.IsTokenRevoked(userTokenA, dave.Token) {
+			t.Fatal("transient DB error erroneously revoked dave in shared Redis mode")
+		}
+		if mapped, ok := cUserTokenA.Get("xp_dave_ctoken"); !ok || mapped != dave.Token {
+			t.Fatalf("transient DB error deleted shared cToken mapping: ok=%v mapped=%q", ok, mapped)
 		}
 
-		// Follow-up resolution on BOTH Process A and Process B must reject.
-		if _, stA, errA := guardA.ResolveTokenUser(userTokenA, cUserTokenA, "xp_bob_ctoken", bob.Token, loadFrom(dbA)); errA != nil || stA != TokenResolveInvalid {
-			t.Fatalf("follow-up Process A accepted revoked Bob: status=%v err=%v", stA, errA)
-		}
-		if _, stB, errB := guardB.ResolveTokenUser(userTokenB, cUserTokenB, "xp_bob_ctoken", bob.Token, loadFrom(dbB)); errB != nil || stB != TokenResolveInvalid {
-			t.Fatalf("follow-up Process B accepted revoked Bob: status=%v err=%v", stB, errB)
+		got, stOK, errOK := guardA.ResolveTokenUser(userTokenA, cUserTokenA, "xp_dave_ctoken", dave.Token, loadFrom(dbA))
+		if errOK != nil || stOK != TokenResolveActive || got.ID != dave.ID {
+			t.Fatalf("expected recovery after transient DB error in shared Redis mode: got=%+v status=%v err=%v", got, stOK, errOK)
 		}
 	})
 }

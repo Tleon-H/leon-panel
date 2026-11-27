@@ -132,7 +132,7 @@ func (g *TokenGuard) markRevokedLocalLocked(bToken string, now time.Time) {
 	g.revokedAt[bToken] = now
 }
 
-// IsTokenRevoked reports whether bToken is marked revoked in either the local guard or shared cache tombstone.
+// IsTokenRevoked reports whether bToken is marked revoked in the local guard (and for in-process cache, its tombstone).
 func (g *TokenGuard) IsTokenRevoked(userTokenCache cache.Cacher[models.User], bToken string) bool {
 	if bToken == "" {
 		return false
@@ -143,7 +143,7 @@ func (g *TokenGuard) IsTokenRevoked(userTokenCache cache.Cacher[models.User], bT
 	if localRevoked {
 		return true
 	}
-	if userTokenCache != nil {
+	if userTokenCache != nil && !userTokenCache.IsShared() {
 		if cached, hit := userTokenCache.Get(bToken); hit && IsRevokedTombstone(cached) {
 			return true
 		}
@@ -151,13 +151,15 @@ func (g *TokenGuard) IsTokenRevoked(userTokenCache cache.Cacher[models.User], bT
 	return false
 }
 
-// IsTokenRevoked checks revocation status using the default process guard and shared cache.
+// IsTokenRevoked checks revocation status using the default process guard.
 func IsTokenRevoked(userTokenCache cache.Cacher[models.User], bToken string) bool {
 	return defaultGuard.IsTokenRevoked(userTokenCache, bToken)
 }
 
-// RevokeToken permanently fences a revoked persistent bToken locally and writes a shared-cache
-// revocation tombstone (overwriting any active cached entry and blocking cross-process HSETNX backfill).
+// RevokeToken fences a revoked persistent bToken locally.
+//   - For in-process caches (GoCache), writes an in-memory revocation tombstone under lock.
+//   - For shared caches (Redis), performs best-effort Delete cleanup; cross-process correctness
+//     is guaranteed by authoritative DB verification on shared-cache resolution rather than Redis write success.
 func (g *TokenGuard) RevokeToken(userTokenCache cache.Cacher[models.User], bToken string) {
 	if bToken == "" {
 		return
@@ -166,18 +168,22 @@ func (g *TokenGuard) RevokeToken(userTokenCache cache.Cacher[models.User], bToke
 	g.mu.Lock()
 	g.markRevokedLocalLocked(bToken, now)
 	if userTokenCache != nil {
-		userTokenCache.Set(bToken, revokedTombstoneUser(), revokedTokenFenceTTL)
+		if userTokenCache.IsShared() {
+			userTokenCache.Delete(bToken)
+		} else {
+			userTokenCache.Set(bToken, revokedTombstoneUser(), revokedTokenFenceTTL)
+		}
 	}
 	g.mu.Unlock()
 }
 
-// RevokeToken revokes bToken on the default process guard and writes the shared-cache tombstone.
+// RevokeToken revokes bToken on the default process guard.
 func RevokeToken(userTokenCache cache.Cacher[models.User], bToken string) {
 	defaultGuard.RevokeToken(userTokenCache, bToken)
 }
 
 // InvalidateTokenCache clears a cached user profile (e.g. nickname/avatar change) without writing
-// a revocation tombstone, preventing concurrent stale writes while keeping the session active.
+// a revocation record, preventing concurrent stale writes while keeping the session active.
 func (g *TokenGuard) InvalidateTokenCache(userTokenCache cache.Cacher[models.User], bToken string) {
 	if bToken == "" {
 		return
@@ -195,12 +201,12 @@ func InvalidateTokenCache(userTokenCache cache.Cacher[models.User], bToken strin
 	defaultGuard.InvalidateTokenCache(userTokenCache, bToken)
 }
 
-// EvictUserToken revokes a single persistent bToken across both local guard and shared cache.
+// EvictUserToken revokes a single persistent bToken.
 func EvictUserToken(userTokenCache cache.Cacher[models.User], bToken string) {
 	defaultGuard.RevokeToken(userTokenCache, bToken)
 }
 
-// EvictSessionMapping revokes bToken with a shared-cache tombstone and deletes the cToken mapping.
+// EvictSessionMapping records revocation for bToken and deletes the cToken mapping.
 // Must ONLY be called when credential invalidity/revocation is confirmed — never on transient errors.
 func (g *TokenGuard) EvictSessionMapping(
 	userTokenCache cache.Cacher[models.User],
@@ -213,7 +219,11 @@ func (g *TokenGuard) EvictSessionMapping(
 	if bToken != "" {
 		g.markRevokedLocalLocked(bToken, now)
 		if userTokenCache != nil {
-			userTokenCache.Set(bToken, revokedTombstoneUser(), revokedTokenFenceTTL)
+			if userTokenCache.IsShared() {
+				userTokenCache.Delete(bToken)
+			} else {
+				userTokenCache.Set(bToken, revokedTombstoneUser(), revokedTokenFenceTTL)
+			}
 		}
 	}
 	if cUserTokenCache != nil && cToken != "" {
@@ -232,11 +242,14 @@ func EvictSessionMapping(
 	defaultGuard.EvictSessionMapping(userTokenCache, cUserTokenCache, cToken, bToken)
 }
 
-// ResolveTokenUser resolves bToken into an active models.User from shared cache or authoritative DB.
-//   - Transient DB/cache errors return TokenResolveTransientError without revoking or deleting cToken.
-//   - Confirmed invalid/revoked credentials return TokenResolveInvalid and write a shared-cache tombstone.
-//   - Cache backfill uses atomic SetIfAbsent (Redis HSETNX / go-cache Add) so a late write from any
-//     process cannot overwrite a revocation tombstone written by another process.
+// ResolveTokenUser resolves bToken into an active models.User.
+//   - When userTokenCache is a shared multi-process cache (Redis), authorization ALWAYS reads the
+//     authoritative persistent database and NEVER trusts or backfills UserToken cache entries, so
+//     Redis write failures, stale hot entries, late backfills, or concurrent expiration cleanups
+//     cannot resurrect a revoked session across processes.
+//   - When userTokenCache is an in-process cache (GoCache), fenced atomic backfill (SetIfAbsent +
+//     in-memory tombstone under mutex) prevents concurrent late backfill after revocation.
+//   - Transient DB errors always return TokenResolveTransientError without revoking or deleting cToken.
 func (g *TokenGuard) ResolveTokenUser(
 	userTokenCache cache.Cacher[models.User],
 	cUserTokenCache cache.Cacher[string],
@@ -246,6 +259,43 @@ func (g *TokenGuard) ResolveTokenUser(
 ) (models.User, TokenResolveStatus, error) {
 	if bToken == "" || userTokenCache == nil || cUserTokenCache == nil || loadFromDB == nil {
 		return models.User{}, TokenResolveInvalid, nil
+	}
+
+	// Shared cross-process cache path (Redis): strictly authoritative DB verification.
+	// Never trust cached UserToken entries and never backfill UserToken in shared Redis.
+	if userTokenCache.IsShared() {
+		info, err := loadFromDB(bToken)
+
+		g.mu.Lock()
+		hook := g.afterDBLookup
+		g.mu.Unlock()
+		if hook != nil {
+			hook(bToken)
+		}
+
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				g.EvictSessionMapping(userTokenCache, cUserTokenCache, cToken, bToken)
+				return models.User{}, TokenResolveInvalid, nil
+			}
+			return models.User{}, TokenResolveTransientError, err
+		}
+		if !IsActiveTokenUser(info) {
+			g.EvictSessionMapping(userTokenCache, cUserTokenCache, cToken, bToken)
+			return models.User{}, TokenResolveInvalid, nil
+		}
+
+		// Guard against same-process revocation that occurred while loadFromDB was in flight.
+		g.mu.Lock()
+		revokedLocally := g.isRevokedLocked(bToken, time.Now())
+		g.mu.Unlock()
+		if revokedLocally {
+			if cToken != "" {
+				cUserTokenCache.Delete(cToken)
+			}
+			return models.User{}, TokenResolveInvalid, nil
+		}
+		return info, TokenResolveActive, nil
 	}
 
 	now := time.Now()
@@ -301,7 +351,7 @@ func (g *TokenGuard) ResolveTokenUser(
 		return models.User{}, TokenResolveInvalid, nil
 	}
 
-	// Attempt fenced atomic cache backfill.
+	// Attempt fenced atomic cache backfill for in-process cache.
 	g.mu.Lock()
 	revokedNow := g.isRevokedLocked(bToken, time.Now())
 	staleEpoch := g.globalEpoch != startGlobal || g.tokenEpoch[bToken] != startToken
@@ -325,7 +375,6 @@ func (g *TokenGuard) ResolveTokenUser(
 			g.mu.Unlock()
 			return info, TokenResolveActive, nil
 		}
-		// SetIfAbsent returned false: another process/goroutine already wrote an entry (potentially a revocation tombstone).
 		existing, hit := userTokenCache.Get(bToken)
 		if hit {
 			if IsRevokedTombstone(existing) || !IsActiveTokenUser(existing) {
@@ -342,11 +391,9 @@ func (g *TokenGuard) ResolveTokenUser(
 			g.mu.Unlock()
 			return existing, TokenResolveActive, nil
 		}
-		// Expired non-tombstone entry was lazily cleared by Get(); fall through to authoritative DB re-check.
 	}
 	g.mu.Unlock()
 
-	// Authoritative DB re-verification when local epoch advanced or an expired entry raced with SetIfAbsent.
 	fresh, freshErr := loadFromDB(bToken)
 	if freshErr != nil {
 		if errors.Is(freshErr, gorm.ErrRecordNotFound) {

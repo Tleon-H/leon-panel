@@ -185,6 +185,11 @@ func (r *RedisCacheStruct[T]) SetIfAbsent(k string, v T, d time.Duration) (bool,
 	return r.Redis.HSetNX(r.Ctx, r.HashKey, k, string(encoded)).Result()
 }
 
+// IsShared Redis 缓存可能被多个进程共享
+func (r *RedisCacheStruct[T]) IsShared() bool {
+	return true
+}
+
 // Flush 删除当前实例命名空间对应的 Hash 键，并返回底层 Redis 错误供调用方检测与重试
 func (r *RedisCacheStruct[T]) Flush() error {
 	return r.Redis.Del(r.Ctx, r.HashKey).Err()

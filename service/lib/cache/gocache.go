@@ -93,6 +93,11 @@ func (c *GoCacheStruct[T]) SetIfAbsent(k string, v T, d time.Duration) (bool, er
 	return true, nil
 }
 
+// IsShared 内存缓存仅属于当前单进程
+func (c *GoCacheStruct[T]) IsShared() bool {
+	return false
+}
+
 // Flush 删除当前已存在的所有key
 func (c *GoCacheStruct[T]) Flush() error {
 	c.gocahce.Flush()
