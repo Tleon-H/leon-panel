@@ -20,14 +20,20 @@ func PublicModeInterceptor(c *gin.Context) {
 		token, ok := global.CUserToken.Get(cToken)
 		if ok && token != "" {
 			mUser := models.User{}
-			if userInfo, valid := sessionguard.ResolveTokenUser(
+			userInfo, status, err := sessionguard.ResolveTokenUser(
 				global.UserToken,
 				global.CUserToken,
 				cToken,
 				token,
 				mUser.GetUserInfoByToken,
-			); valid {
+			)
+			switch status {
+			case sessionguard.TokenResolveActive:
 				c.Set("userInfo", userInfo)
+				return
+			case sessionguard.TokenResolveTransientError:
+				apiReturn.ErrorDatabase(c, err.Error())
+				c.Abort()
 				return
 			}
 		}

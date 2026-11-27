@@ -3,6 +3,7 @@ package router
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"leon-panel/global"
 	"leon-panel/lib/cache"
@@ -16,6 +17,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -608,8 +610,8 @@ func TestPR1AConcurrentCacheBackfillCannotResurrectRevokedSessionOnBothAuthEntry
 		if res.resp["code"] != float64(1001) {
 			t.Fatalf("expected paused LoginInterceptor request to reject with 1001 after revocation, got: %#v", res.resp)
 		}
-		if _, resurrected := global.UserToken.Get(aliceBToken); resurrected {
-			t.Fatal("stale snapshot resurrected disabled Alice in UserToken hot cache")
+		if cached, exists := global.UserToken.Get(aliceBToken); exists && (sessionguard.IsActiveTokenUser(cached) || !sessionguard.IsRevokedTombstone(cached)) {
+			t.Fatalf("stale snapshot resurrected disabled Alice in UserToken hot cache: %+v", cached)
 		}
 
 		// Subsequent request with Alice's cToken must also fail with 1001.
@@ -658,8 +660,8 @@ func TestPR1AConcurrentCacheBackfillCannotResurrectRevokedSessionOnBothAuthEntry
 		if racedResp["code"] != float64(1001) {
 			t.Fatalf("expected paused LoginInterceptor request to reject with 1001 after deletion, got: %#v", racedResp)
 		}
-		if _, resurrected := global.UserToken.Get(bobBToken); resurrected {
-			t.Fatal("stale snapshot resurrected deleted Bob in UserToken hot cache")
+		if cached, exists := global.UserToken.Get(bobBToken); exists && (sessionguard.IsActiveTokenUser(cached) || !sessionguard.IsRevokedTombstone(cached)) {
+			t.Fatalf("stale snapshot resurrected deleted Bob in UserToken hot cache: %+v", cached)
 		}
 
 		_, followUp := env.postJSON(t, "/api/user/getInfo", bobCToken, `{}`)
@@ -716,8 +718,8 @@ func TestPR1AConcurrentCacheBackfillCannotResurrectRevokedSessionOnBothAuthEntry
 		if racedUser["id"] != float64(pubAccount.ID) || racedData["visitMode"] != float64(1) {
 			t.Fatalf("PublicModeInterceptor returned revoked Carol instead of public fallback: %#v", racedData)
 		}
-		if _, resurrected := global.UserToken.Get(carolBToken); resurrected {
-			t.Fatal("PublicModeInterceptor backfilled revoked Carol into UserToken hot cache")
+		if cached, exists := global.UserToken.Get(carolBToken); exists && (sessionguard.IsActiveTokenUser(cached) || !sessionguard.IsRevokedTombstone(cached)) {
+			t.Fatalf("PublicModeInterceptor backfilled revoked Carol into UserToken hot cache: %+v", cached)
 		}
 
 		// Subsequent calls on both PublicModeInterceptor and LoginInterceptor must NOT restore Carol's privileges.
@@ -732,4 +734,98 @@ func TestPR1AConcurrentCacheBackfillCannotResurrectRevokedSessionOnBothAuthEntry
 			t.Fatalf("follow-up LoginInterceptor accepted revoked Carol token: %#v", followUpLogin)
 		}
 	})
+}
+
+func TestPR1ATransientDBErrorDoesNotRevokeSessionAndAllowsReloginRecovery(t *testing.T) {
+	env := setupPR1AEnv(t)
+
+	alice := models.User{
+		Username: "alice_transient",
+		Password: cmn.PasswordEncryption("alicePass123"),
+		Name:     "Alice Transient",
+		Status:   1,
+		Role:     2,
+	}
+	if err := env.db.Create(&alice).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	_, loginResp1 := env.postJSON(t, "/api/login", "", `{"username":"alice_transient","password":"alicePass123"}`)
+	if loginResp1["code"] != float64(0) {
+		t.Fatalf("initial login failed: %#v", loginResp1)
+	}
+	cToken1 := loginResp1["data"].(map[string]interface{})["token"].(string)
+
+	var aliceDB models.User
+	if err := env.db.First(&aliceDB, "id = ?", alice.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	originalBToken := aliceDB.Token
+	if originalBToken == "" {
+		t.Fatal("expected persisted bToken after login")
+	}
+
+	// Ensure cold UserToken cache so both interceptors hit DB.
+	global.UserToken.Delete(originalBToken)
+
+	// Inject a transient DB query error (simulating temporary disconnect/timeout).
+	var injectErr atomic.Bool
+	if err := env.db.Callback().Query().Before("gorm:query").Register("test:transient_db_err", func(tx *gorm.DB) {
+		if injectErr.Load() {
+			_ = tx.AddError(errors.New("simulated transient database disconnect"))
+		}
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	injectErr.Store(true)
+
+	// 1. Protected LoginInterceptor request fails as transient DB error (1200), NOT session revocation (1001).
+	_, loginIntErrResp := env.postJSON(t, "/api/user/getInfo", cToken1, `{}`)
+	if loginIntErrResp["code"] != float64(1200) {
+		t.Fatalf("LoginInterceptor expected 1200 on transient DB error, got: %#v", loginIntErrResp)
+	}
+	// 2. PublicModeInterceptor request with valid cToken also fails transiently without poisoning bToken.
+	_, publicIntErrResp := env.postJSON(t, "/api/user/getAuthInfo", cToken1, `{}`)
+	if publicIntErrResp["code"] != float64(1200) {
+		t.Fatalf("PublicModeInterceptor expected 1200 on transient DB error, got: %#v", publicIntErrResp)
+	}
+
+	// Verify bToken was NOT marked revoked and cToken1 was NOT deleted.
+	if sessionguard.IsTokenRevoked(global.UserToken, originalBToken) {
+		t.Fatal("transient DB outage erroneously marked bToken as permanently revoked")
+	}
+	if mapped, ok := global.CUserToken.Get(cToken1); !ok || mapped != originalBToken {
+		t.Fatalf("transient DB outage erroneously removed cToken1 mapping: ok=%v mapped=%q", ok, mapped)
+	}
+
+	// 3. DB recovers!
+	injectErr.Store(false)
+
+	// Existing session recovers immediately.
+	_, recoveredExisting := env.postJSON(t, "/api/user/getInfo", cToken1, `{}`)
+	if recoveredExisting["code"] != float64(0) {
+		t.Fatalf("existing session failed to recover after DB outage: %#v", recoveredExisting)
+	}
+
+	// User re-logs in (reusing persisted DB bToken) and immediately calls protected endpoint -> MUST succeed!
+	global.UserToken.Delete(originalBToken)
+	_, reloginResp := env.postJSON(t, "/api/login", "", `{"username":"alice_transient","password":"alicePass123"}`)
+	if reloginResp["code"] != float64(0) {
+		t.Fatalf("re-login after transient DB error failed: %#v", reloginResp)
+	}
+	cToken2 := reloginResp["data"].(map[string]interface{})["token"].(string)
+
+	var afterRelogin models.User
+	if err := env.db.First(&afterRelogin, "id = ?", alice.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if afterRelogin.Token != originalBToken {
+		t.Fatalf("expected normal re-login after transient error to keep existing bToken %q, got %q", originalBToken, afterRelogin.Token)
+	}
+
+	_, protectedAfterRelogin := env.postJSON(t, "/api/user/getInfo", cToken2, `{}`)
+	if protectedAfterRelogin["code"] != float64(0) {
+		t.Fatalf("protected request after re-login failed (token poisoned): %#v", protectedAfterRelogin)
+	}
 }

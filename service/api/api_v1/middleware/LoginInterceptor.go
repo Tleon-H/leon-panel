@@ -31,20 +31,23 @@ func LoginInterceptor(c *gin.Context) {
 	}
 
 	mUser := models.User{}
-	userInfo, valid := sessionguard.ResolveTokenUser(
+	userInfo, status, err := sessionguard.ResolveTokenUser(
 		global.UserToken,
 		global.CUserToken,
 		cToken,
 		token,
 		mUser.GetUserInfoByToken,
 	)
-	if !valid {
+	switch status {
+	case sessionguard.TokenResolveActive:
+		c.Set("userInfo", userInfo)
+	case sessionguard.TokenResolveTransientError:
+		apiReturn.ErrorDatabase(c, err.Error())
+		c.Abort()
+	default:
 		apiReturn.ErrorCode(c, 1001, expireMsg(), nil)
 		c.Abort()
-		return
 	}
-
-	c.Set("userInfo", userInfo)
 }
 
 func expireMsg() string {

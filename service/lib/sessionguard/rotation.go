@@ -20,11 +20,24 @@ const (
 	// while keeping DTO field filtering, bookmark ownership checks, and log redaction active.
 	ConfigDisableStartupSessionRotation = "disable_startup_session_rotation"
 
-	revokedTokenFenceTTL = 10 * time.Minute
-	maxRevokedFenceSize  = 10000
+	revokedTokenFenceTTL   = 10 * time.Minute
+	maxRevokedFenceSize    = 10000
+	revokedTombstoneStatus = -1
 )
 
-type tokenBackfillFence struct {
+// TokenResolveStatus distinguishes an active session, an explicitly invalid/revoked credential,
+// and a transient dependency error (which must never poison or revoke the credential).
+type TokenResolveStatus int
+
+const (
+	TokenResolveActive TokenResolveStatus = iota
+	TokenResolveInvalid
+	TokenResolveTransientError
+)
+
+// TokenGuard encapsulates per-process backfill fencing state while coordinating cross-process
+// revocation via shared-cache tombstones and atomic SetIfAbsent (Redis HSETNX / go-cache Add).
+type TokenGuard struct {
 	mu            sync.Mutex
 	globalEpoch   uint64
 	tokenEpoch    map[string]uint64
@@ -32,53 +45,23 @@ type tokenBackfillFence struct {
 	afterDBLookup func(bToken string)
 }
 
-var defaultFence = &tokenBackfillFence{
-	tokenEpoch: make(map[string]uint64),
-	revokedAt:  make(map[string]time.Time),
-}
-
-// SetAfterDBLookupHookForTest registers a synchronization hook invoked immediately after a DB
-// token lookup completes and before fenced cache backfill is attempted. Returns a restore func.
-func SetAfterDBLookupHookForTest(hook func(bToken string)) func() {
-	defaultFence.mu.Lock()
-	prev := defaultFence.afterDBLookup
-	defaultFence.afterDBLookup = hook
-	defaultFence.mu.Unlock()
-	return func() {
-		defaultFence.mu.Lock()
-		defaultFence.afterDBLookup = prev
-		defaultFence.mu.Unlock()
+// NewTokenGuard constructs an isolated TokenGuard instance (useful for modeling independent processes in tests).
+func NewTokenGuard() *TokenGuard {
+	return &TokenGuard{
+		tokenEpoch: make(map[string]uint64),
+		revokedAt:  make(map[string]time.Time),
 	}
 }
 
-func (f *tokenBackfillFence) pruneLocked(now time.Time) {
-	if len(f.revokedAt) == 0 {
-		return
-	}
-	for tok, ts := range f.revokedAt {
-		if now.Sub(ts) > revokedTokenFenceTTL {
-			delete(f.revokedAt, tok)
-			delete(f.tokenEpoch, tok)
-		}
-	}
-	if len(f.revokedAt) > maxRevokedFenceSize {
-		f.globalEpoch++
-		f.revokedAt = make(map[string]time.Time)
-		f.tokenEpoch = make(map[string]uint64)
-	}
+var defaultGuard = NewTokenGuard()
+
+func revokedTombstoneUser() models.User {
+	return models.User{Status: revokedTombstoneStatus}
 }
 
-func (f *tokenBackfillFence) isRevokedLocked(bToken string, now time.Time) bool {
-	ts, ok := f.revokedAt[bToken]
-	if !ok {
-		return false
-	}
-	if now.Sub(ts) > revokedTokenFenceTTL {
-		delete(f.revokedAt, bToken)
-		delete(f.tokenEpoch, bToken)
-		return false
-	}
-	return true
+// IsRevokedTombstone reports whether a cached User record is an explicit cross-process revocation tombstone.
+func IsRevokedTombstone(u models.User) bool {
+	return u.ID == 0 && u.Status == revokedTombstoneStatus
 }
 
 // IsActiveUser verifies that a cached or database-loaded user record is valid and enabled.
@@ -91,154 +74,309 @@ func IsActiveTokenUser(u models.User) bool {
 	return u.ID != 0 && u.Token != "" && u.Status == 1
 }
 
-// RevokeToken permanently fences a revoked persistent bToken against late cache backfill
-// and removes any existing entry from the hot UserToken cache under the same lock.
-func RevokeToken(userTokenCache cache.Cacher[models.User], bToken string) {
+// SetAfterDBLookupHookForTest registers a synchronization hook on this guard invoked right after
+// a DB token lookup completes and before fenced cache backfill. Returns a restore func.
+func (g *TokenGuard) SetAfterDBLookupHookForTest(hook func(bToken string)) func() {
+	g.mu.Lock()
+	prev := g.afterDBLookup
+	g.afterDBLookup = hook
+	g.mu.Unlock()
+	return func() {
+		g.mu.Lock()
+		g.afterDBLookup = prev
+		g.mu.Unlock()
+	}
+}
+
+// SetAfterDBLookupHookForTest registers the test synchronization hook on the default process guard.
+func SetAfterDBLookupHookForTest(hook func(bToken string)) func() {
+	return defaultGuard.SetAfterDBLookupHookForTest(hook)
+}
+
+func (g *TokenGuard) pruneLocked(now time.Time) {
+	if len(g.revokedAt) == 0 {
+		return
+	}
+	for tok, ts := range g.revokedAt {
+		if now.Sub(ts) > revokedTokenFenceTTL {
+			delete(g.revokedAt, tok)
+			delete(g.tokenEpoch, tok)
+		}
+	}
+	if len(g.revokedAt) > maxRevokedFenceSize {
+		g.globalEpoch++
+		g.revokedAt = make(map[string]time.Time)
+		g.tokenEpoch = make(map[string]uint64)
+	}
+}
+
+func (g *TokenGuard) isRevokedLocked(bToken string, now time.Time) bool {
+	ts, ok := g.revokedAt[bToken]
+	if !ok {
+		return false
+	}
+	if now.Sub(ts) > revokedTokenFenceTTL {
+		delete(g.revokedAt, bToken)
+		delete(g.tokenEpoch, bToken)
+		return false
+	}
+	return true
+}
+
+func (g *TokenGuard) markRevokedLocalLocked(bToken string, now time.Time) {
+	if bToken == "" {
+		return
+	}
+	g.pruneLocked(now)
+	g.tokenEpoch[bToken]++
+	g.revokedAt[bToken] = now
+}
+
+// IsTokenRevoked reports whether bToken is marked revoked in either the local guard or shared cache tombstone.
+func (g *TokenGuard) IsTokenRevoked(userTokenCache cache.Cacher[models.User], bToken string) bool {
+	if bToken == "" {
+		return false
+	}
+	g.mu.Lock()
+	localRevoked := g.isRevokedLocked(bToken, time.Now())
+	g.mu.Unlock()
+	if localRevoked {
+		return true
+	}
+	if userTokenCache != nil {
+		if cached, hit := userTokenCache.Get(bToken); hit && IsRevokedTombstone(cached) {
+			return true
+		}
+	}
+	return false
+}
+
+// IsTokenRevoked checks revocation status using the default process guard and shared cache.
+func IsTokenRevoked(userTokenCache cache.Cacher[models.User], bToken string) bool {
+	return defaultGuard.IsTokenRevoked(userTokenCache, bToken)
+}
+
+// RevokeToken permanently fences a revoked persistent bToken locally and writes a shared-cache
+// revocation tombstone (overwriting any active cached entry and blocking cross-process HSETNX backfill).
+func (g *TokenGuard) RevokeToken(userTokenCache cache.Cacher[models.User], bToken string) {
 	if bToken == "" {
 		return
 	}
 	now := time.Now()
-	defaultFence.mu.Lock()
-	defer defaultFence.mu.Unlock()
-	defaultFence.pruneLocked(now)
-	defaultFence.tokenEpoch[bToken]++
-	defaultFence.revokedAt[bToken] = now
+	g.mu.Lock()
+	g.markRevokedLocalLocked(bToken, now)
 	if userTokenCache != nil {
-		userTokenCache.Delete(bToken)
+		userTokenCache.Set(bToken, revokedTombstoneUser(), revokedTokenFenceTTL)
 	}
+	g.mu.Unlock()
 }
 
-// InvalidateTokenCache invalidates a cached user profile (e.g., nickname/avatar edit) without
-// permanently revoking the underlying bToken, preventing concurrent stale writes from overwriting cache.
-func InvalidateTokenCache(userTokenCache cache.Cacher[models.User], bToken string) {
+// RevokeToken revokes bToken on the default process guard and writes the shared-cache tombstone.
+func RevokeToken(userTokenCache cache.Cacher[models.User], bToken string) {
+	defaultGuard.RevokeToken(userTokenCache, bToken)
+}
+
+// InvalidateTokenCache clears a cached user profile (e.g. nickname/avatar change) without writing
+// a revocation tombstone, preventing concurrent stale writes while keeping the session active.
+func (g *TokenGuard) InvalidateTokenCache(userTokenCache cache.Cacher[models.User], bToken string) {
 	if bToken == "" {
 		return
 	}
-	defaultFence.mu.Lock()
-	defer defaultFence.mu.Unlock()
-	defaultFence.tokenEpoch[bToken]++
+	g.mu.Lock()
+	g.tokenEpoch[bToken]++
 	if userTokenCache != nil {
 		userTokenCache.Delete(bToken)
 	}
+	g.mu.Unlock()
 }
 
-// EvictUserToken revokes a single persistent bToken from the hot UserToken cache.
+// InvalidateTokenCache invalidates a cached profile on the default process guard without revoking the session.
+func InvalidateTokenCache(userTokenCache cache.Cacher[models.User], bToken string) {
+	defaultGuard.InvalidateTokenCache(userTokenCache, bToken)
+}
+
+// EvictUserToken revokes a single persistent bToken across both local guard and shared cache.
 func EvictUserToken(userTokenCache cache.Cacher[models.User], bToken string) {
-	RevokeToken(userTokenCache, bToken)
+	defaultGuard.RevokeToken(userTokenCache, bToken)
 }
 
-// EvictSessionMapping fences and removes both the client cToken mapping and persistent bToken cache entry.
-func EvictSessionMapping(
+// EvictSessionMapping revokes bToken with a shared-cache tombstone and deletes the cToken mapping.
+// Must ONLY be called when credential invalidity/revocation is confirmed — never on transient errors.
+func (g *TokenGuard) EvictSessionMapping(
 	userTokenCache cache.Cacher[models.User],
 	cUserTokenCache cache.Cacher[string],
 	cToken string,
 	bToken string,
 ) {
 	now := time.Now()
-	defaultFence.mu.Lock()
-	defer defaultFence.mu.Unlock()
+	g.mu.Lock()
 	if bToken != "" {
-		defaultFence.pruneLocked(now)
-		defaultFence.tokenEpoch[bToken]++
-		defaultFence.revokedAt[bToken] = now
+		g.markRevokedLocalLocked(bToken, now)
 		if userTokenCache != nil {
-			userTokenCache.Delete(bToken)
+			userTokenCache.Set(bToken, revokedTombstoneUser(), revokedTokenFenceTTL)
 		}
 	}
 	if cUserTokenCache != nil && cToken != "" {
 		cUserTokenCache.Delete(cToken)
 	}
+	g.mu.Unlock()
 }
 
-// ResolveTokenUser resolves a bToken into an active models.User from hot cache or DB while enforcing
-// fenced backfill: if the token is revoked or invalidated concurrently between DB load and cache write,
-// the stale snapshot is never written back into UserToken cache.
+// EvictSessionMapping revokes bToken and removes cToken on the default process guard.
+func EvictSessionMapping(
+	userTokenCache cache.Cacher[models.User],
+	cUserTokenCache cache.Cacher[string],
+	cToken string,
+	bToken string,
+) {
+	defaultGuard.EvictSessionMapping(userTokenCache, cUserTokenCache, cToken, bToken)
+}
+
+// ResolveTokenUser resolves bToken into an active models.User from shared cache or authoritative DB.
+//   - Transient DB/cache errors return TokenResolveTransientError without revoking or deleting cToken.
+//   - Confirmed invalid/revoked credentials return TokenResolveInvalid and write a shared-cache tombstone.
+//   - Cache backfill uses atomic SetIfAbsent (Redis HSETNX / go-cache Add) so a late write from any
+//     process cannot overwrite a revocation tombstone written by another process.
+func (g *TokenGuard) ResolveTokenUser(
+	userTokenCache cache.Cacher[models.User],
+	cUserTokenCache cache.Cacher[string],
+	cToken string,
+	bToken string,
+	loadFromDB func(string) (models.User, error),
+) (models.User, TokenResolveStatus, error) {
+	if bToken == "" || userTokenCache == nil || cUserTokenCache == nil || loadFromDB == nil {
+		return models.User{}, TokenResolveInvalid, nil
+	}
+
+	now := time.Now()
+	g.mu.Lock()
+	if g.isRevokedLocked(bToken, now) {
+		if cToken != "" {
+			cUserTokenCache.Delete(cToken)
+		}
+		g.mu.Unlock()
+		return models.User{}, TokenResolveInvalid, nil
+	}
+	startGlobal := g.globalEpoch
+	startToken := g.tokenEpoch[bToken]
+	g.mu.Unlock()
+
+	if cached, hit := userTokenCache.Get(bToken); hit {
+		if IsRevokedTombstone(cached) || !IsActiveTokenUser(cached) {
+			g.EvictSessionMapping(userTokenCache, cUserTokenCache, cToken, bToken)
+			return models.User{}, TokenResolveInvalid, nil
+		}
+		g.mu.Lock()
+		localRevoked := g.isRevokedLocked(bToken, time.Now())
+		g.mu.Unlock()
+		if localRevoked {
+			if cToken != "" {
+				cUserTokenCache.Delete(cToken)
+			}
+			return models.User{}, TokenResolveInvalid, nil
+		}
+		return cached, TokenResolveActive, nil
+	}
+
+	info, err := loadFromDB(bToken)
+
+	g.mu.Lock()
+	hook := g.afterDBLookup
+	g.mu.Unlock()
+	if hook != nil {
+		hook(bToken)
+	}
+
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			g.EvictSessionMapping(userTokenCache, cUserTokenCache, cToken, bToken)
+			return models.User{}, TokenResolveInvalid, nil
+		}
+		// Transient dependency error (e.g. DB timeout/disconnect): fail closed for this request
+		// WITHOUT recording revocation or deleting cToken so the session recovers once DB is healthy.
+		return models.User{}, TokenResolveTransientError, err
+	}
+	if !IsActiveTokenUser(info) {
+		g.EvictSessionMapping(userTokenCache, cUserTokenCache, cToken, bToken)
+		return models.User{}, TokenResolveInvalid, nil
+	}
+
+	// Attempt fenced atomic cache backfill.
+	g.mu.Lock()
+	revokedNow := g.isRevokedLocked(bToken, time.Now())
+	staleEpoch := g.globalEpoch != startGlobal || g.tokenEpoch[bToken] != startToken
+	if revokedNow {
+		if cToken != "" {
+			cUserTokenCache.Delete(cToken)
+		}
+		g.mu.Unlock()
+		return models.User{}, TokenResolveInvalid, nil
+	}
+	if !staleEpoch {
+		inserted, setErr := userTokenCache.SetIfAbsent(info.Token, info, 0)
+		if setErr != nil {
+			g.mu.Unlock()
+			return models.User{}, TokenResolveTransientError, setErr
+		}
+		if inserted {
+			if cToken != "" {
+				cUserTokenCache.SetDefault(cToken, bToken)
+			}
+			g.mu.Unlock()
+			return info, TokenResolveActive, nil
+		}
+		// SetIfAbsent returned false: another process/goroutine already wrote an entry (potentially a revocation tombstone).
+		existing, hit := userTokenCache.Get(bToken)
+		if hit {
+			if IsRevokedTombstone(existing) || !IsActiveTokenUser(existing) {
+				g.markRevokedLocalLocked(bToken, time.Now())
+				if cToken != "" {
+					cUserTokenCache.Delete(cToken)
+				}
+				g.mu.Unlock()
+				return models.User{}, TokenResolveInvalid, nil
+			}
+			if cToken != "" {
+				cUserTokenCache.SetDefault(cToken, bToken)
+			}
+			g.mu.Unlock()
+			return existing, TokenResolveActive, nil
+		}
+		// Expired non-tombstone entry was lazily cleared by Get(); fall through to authoritative DB re-check.
+	}
+	g.mu.Unlock()
+
+	// Authoritative DB re-verification when local epoch advanced or an expired entry raced with SetIfAbsent.
+	fresh, freshErr := loadFromDB(bToken)
+	if freshErr != nil {
+		if errors.Is(freshErr, gorm.ErrRecordNotFound) {
+			g.EvictSessionMapping(userTokenCache, cUserTokenCache, cToken, bToken)
+			return models.User{}, TokenResolveInvalid, nil
+		}
+		return models.User{}, TokenResolveTransientError, freshErr
+	}
+	if !IsActiveTokenUser(fresh) {
+		g.EvictSessionMapping(userTokenCache, cUserTokenCache, cToken, bToken)
+		return models.User{}, TokenResolveInvalid, nil
+	}
+	if g.IsTokenRevoked(userTokenCache, bToken) {
+		if cToken != "" {
+			cUserTokenCache.Delete(cToken)
+		}
+		return models.User{}, TokenResolveInvalid, nil
+	}
+	return fresh, TokenResolveActive, nil
+}
+
+// ResolveTokenUser resolves bToken using the default process guard.
 func ResolveTokenUser(
 	userTokenCache cache.Cacher[models.User],
 	cUserTokenCache cache.Cacher[string],
 	cToken string,
 	bToken string,
 	loadFromDB func(string) (models.User, error),
-) (models.User, bool) {
-	if bToken == "" || userTokenCache == nil || cUserTokenCache == nil || loadFromDB == nil {
-		return models.User{}, false
-	}
-
-	now := time.Now()
-	defaultFence.mu.Lock()
-	if defaultFence.isRevokedLocked(bToken, now) {
-		userTokenCache.Delete(bToken)
-		if cToken != "" {
-			cUserTokenCache.Delete(cToken)
-		}
-		defaultFence.mu.Unlock()
-		return models.User{}, false
-	}
-	startGlobal := defaultFence.globalEpoch
-	startToken := defaultFence.tokenEpoch[bToken]
-	defaultFence.mu.Unlock()
-
-	if cached, hit := userTokenCache.Get(bToken); hit {
-		defaultFence.mu.Lock()
-		revoked := defaultFence.isRevokedLocked(bToken, time.Now()) ||
-			defaultFence.globalEpoch != startGlobal ||
-			defaultFence.tokenEpoch[bToken] != startToken
-		if revoked || !IsActiveTokenUser(cached) {
-			userTokenCache.Delete(bToken)
-			if cToken != "" && (revoked || !IsActiveTokenUser(cached)) {
-				cUserTokenCache.Delete(cToken)
-			}
-			defaultFence.mu.Unlock()
-			return models.User{}, false
-		}
-		defaultFence.mu.Unlock()
-		return cached, true
-	}
-
-	info, err := loadFromDB(bToken)
-
-	defaultFence.mu.Lock()
-	hook := defaultFence.afterDBLookup
-	defaultFence.mu.Unlock()
-	if hook != nil {
-		hook(bToken)
-	}
-
-	if err != nil || !IsActiveTokenUser(info) {
-		EvictSessionMapping(userTokenCache, cUserTokenCache, cToken, bToken)
-		return models.User{}, false
-	}
-
-	defaultFence.mu.Lock()
-	revokedNow := defaultFence.isRevokedLocked(bToken, time.Now())
-	staleEpoch := defaultFence.globalEpoch != startGlobal || defaultFence.tokenEpoch[bToken] != startToken
-	if !revokedNow && !staleEpoch {
-		userTokenCache.SetDefault(info.Token, info)
-		if cToken != "" {
-			cUserTokenCache.SetDefault(cToken, bToken)
-		}
-		defaultFence.mu.Unlock()
-		return info, true
-	}
-	// A concurrent revocation or invalidation occurred while our DB query was in flight.
-	// Never backfill the pre-revocation snapshot into UserToken cache.
-	userTokenCache.Delete(bToken)
-	if revokedNow && cToken != "" {
-		cUserTokenCache.Delete(cToken)
-	}
-	defaultFence.mu.Unlock()
-
-	if revokedNow {
-		return models.User{}, false
-	}
-
-	// Non-revoking invalidation (e.g., profile update): re-verify against DB without backfilling stale data.
-	fresh, freshErr := loadFromDB(bToken)
-	if freshErr != nil || !IsActiveTokenUser(fresh) {
-		EvictSessionMapping(userTokenCache, cUserTokenCache, cToken, bToken)
-		return models.User{}, false
-	}
-	return fresh, true
+) (models.User, TokenResolveStatus, error) {
+	return defaultGuard.ResolveTokenUser(userTokenCache, cUserTokenCache, cToken, bToken, loadFromDB)
 }
 
 // FlushInstanceSessionNamespace clears only the current instance's UserToken and CUserToken caches
@@ -248,9 +386,9 @@ func FlushInstanceSessionNamespace(
 	userTokenCache cache.Cacher[models.User],
 	cUserTokenCache cache.Cacher[string],
 ) error {
-	defaultFence.mu.Lock()
-	defaultFence.globalEpoch++
-	defaultFence.mu.Unlock()
+	defaultGuard.mu.Lock()
+	defaultGuard.globalEpoch++
+	defaultGuard.mu.Unlock()
 
 	var errs []error
 	if userTokenCache != nil {
@@ -267,9 +405,9 @@ func FlushInstanceSessionNamespace(
 		return errors.Join(errs...)
 	}
 
-	defaultFence.mu.Lock()
-	defaultFence.globalEpoch++
-	defaultFence.mu.Unlock()
+	defaultGuard.mu.Lock()
+	defaultGuard.globalEpoch++
+	defaultGuard.mu.Unlock()
 	return nil
 }
 

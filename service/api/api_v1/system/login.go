@@ -7,6 +7,7 @@ import (
 	"leon-panel/global"
 	"leon-panel/lib/cmn"
 	"leon-panel/lib/cmn/systemSetting"
+	"leon-panel/lib/sessionguard"
 	"leon-panel/models"
 	"strconv"
 	"strings"
@@ -72,7 +73,7 @@ func (l LoginApi) Login(c *gin.Context) {
 	}
 
 	bToken := info.Token
-	if bToken == "" {
+	if bToken == "" || sessionguard.IsTokenRevoked(global.UserToken, bToken) {
 		for {
 			candidate, randErr := cmn.BuildCryptoRandToken(32)
 			if randErr != nil {

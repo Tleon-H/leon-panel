@@ -3,6 +3,7 @@ package sessionguard
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"leon-panel/lib/cache"
@@ -103,6 +104,22 @@ func (s *miniRESPServer) handleConn(conn net.Conn) {
 					h[args[i]] = args[i+1]
 				}
 				_, _ = fmt.Fprintf(conn, ":%d\r\n", added)
+			} else {
+				_, _ = conn.Write([]byte("-ERR wrong number of arguments\r\n"))
+			}
+		case "HSETNX":
+			if len(args) >= 4 {
+				h, ok := s.hashes[args[1]]
+				if !ok {
+					h = make(map[string]string)
+					s.hashes[args[1]] = h
+				}
+				if _, exists := h[args[2]]; exists {
+					_, _ = conn.Write([]byte(":0\r\n"))
+				} else {
+					h[args[2]] = args[3]
+					_, _ = conn.Write([]byte(":1\r\n"))
+				}
 			} else {
 				_, _ = conn.Write([]byte("-ERR wrong number of arguments\r\n"))
 			}
@@ -469,5 +486,191 @@ func TestEnsureLegacySessionRotationRetriesAfterPartialCacheFlushFailure(t *test
 	}
 	if got, ok := instACUserToken.Get("post_retry_ctoken"); !ok || got != "post_retry_btoken" {
 		t.Fatalf("post-completion restart wiped fresh session: ok=%v got=%q", ok, got)
+	}
+}
+
+func TestCrossProcessRedisRevocationBlocksHotHitAndLateBackfillAcrossIndependentGuards(t *testing.T) {
+	_, addr := startMiniRESPServer(t)
+
+	// Two completely independent "processes": separate TokenGuards (zero shared in-process memory),
+	// separate Redis TCP clients, and separate SQLite DB pools sharing the SAME DB file & Redis namespace.
+	dbPath := filepath.Join(t.TempDir(), "cross_process.db")
+	openDB := func() *gorm.DB {
+		db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{
+			NamingStrategy: schema.NamingStrategy{SingularTable: true},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			if sqlDB, err := db.DB(); err == nil {
+				_ = sqlDB.Close()
+			}
+		})
+		return db
+	}
+	dbA := openDB()
+	dbB := openDB()
+	if err := dbA.AutoMigrate(&models.User{}); err != nil {
+		t.Fatal(err)
+	}
+
+	rdbA := redis.NewClient(&redis.Options{Addr: addr, Protocol: 2})
+	rdbB := redis.NewClient(&redis.Options{Addr: addr, Protocol: 2})
+	t.Cleanup(func() {
+		_ = rdbA.Close()
+		_ = rdbB.Close()
+	})
+
+	userTokenA := cache.NewRedisCache[models.User](rdbA, "shared_ns:UserToken", time.Minute, 0)
+	cUserTokenA := cache.NewRedisCache[string](rdbA, "shared_ns:CUserToken", 72*time.Hour, 0)
+	guardA := NewTokenGuard()
+
+	userTokenB := cache.NewRedisCache[models.User](rdbB, "shared_ns:UserToken", time.Minute, 0)
+	cUserTokenB := cache.NewRedisCache[string](rdbB, "shared_ns:CUserToken", 72*time.Hour, 0)
+	guardB := NewTokenGuard()
+
+	loadFrom := func(db *gorm.DB) func(string) (models.User, error) {
+		return func(tok string) (models.User, error) {
+			var u models.User
+			err := db.Where("token = ?", tok).First(&u).Error
+			return u, err
+		}
+	}
+
+	// Subtest 1: Process A warms shared Redis cache; Process B revokes in DB + shared Redis;
+	// Process A's very next hot-cache read MUST reject immediately without sharing any Go memory with Process B.
+	t.Run("HotCacheHit_CrossProcessRevocation", func(t *testing.T) {
+		alice := models.User{Username: "alice_xp", Password: "h1", Name: "Alice XP", Role: 2, Status: 1, Token: "xp_alice_btoken"}
+		if err := dbA.Create(&alice).Error; err != nil {
+			t.Fatal(err)
+		}
+		cUserTokenA.SetDefault("xp_alice_ctoken", alice.Token)
+
+		// Process A resolves and populates shared Redis UserToken cache.
+		got, status, err := guardA.ResolveTokenUser(userTokenA, cUserTokenA, "xp_alice_ctoken", alice.Token, loadFrom(dbA))
+		if err != nil || status != TokenResolveActive || got.ID != alice.ID {
+			t.Fatalf("Process A initial auth failed: got=%+v status=%v err=%v", got, status, err)
+		}
+
+		// Process B revokes Alice in DB and writes shared Redis tombstone using independent guardB.
+		if err := dbB.Model(&models.User{}).Where("id = ?", alice.ID).Updates(map[string]interface{}{
+			"status": 2,
+			"token":  "",
+		}).Error; err != nil {
+			t.Fatal(err)
+		}
+		guardB.RevokeToken(userTokenB, alice.Token)
+
+		// Process A immediately calls ResolveTokenUser -> must reject via shared Redis tombstone!
+		_, statusAfter, errAfter := guardA.ResolveTokenUser(userTokenA, cUserTokenA, "xp_alice_ctoken", alice.Token, loadFrom(dbA))
+		if errAfter != nil || statusAfter != TokenResolveInvalid {
+			t.Fatalf("Process A hot-cache check accepted cross-process revoked user: status=%v err=%v", statusAfter, errAfter)
+		}
+		if _, stillMapped := cUserTokenB.Get("xp_alice_ctoken"); stillMapped {
+			t.Fatal("revoked cToken mapping was not removed from shared CUserToken")
+		}
+	})
+
+	// Subtest 2: Cold cache on Process A -> Process A queries DB and pauses right before backfill ->
+	// Process B revokes in DB + writes shared Redis tombstone -> Process A resumes HSETNX backfill ->
+	// MUST NOT overwrite tombstone, MUST reject paused request AND all subsequent requests on BOTH processes!
+	t.Run("ConcurrentLateBackfill_CrossProcessRevocation", func(t *testing.T) {
+		bob := models.User{Username: "bob_xp", Password: "h2", Name: "Bob XP", Role: 2, Status: 1, Token: "xp_bob_btoken"}
+		if err := dbA.Create(&bob).Error; err != nil {
+			t.Fatal(err)
+		}
+		cUserTokenA.SetDefault("xp_bob_ctoken", bob.Token)
+
+		dbLoaded := make(chan struct{})
+		releaseBackfill := make(chan struct{})
+		var once sync.Once
+		restore := guardA.SetAfterDBLookupHookForTest(func(bToken string) {
+			if bToken == bob.Token {
+				once.Do(func() { close(dbLoaded) })
+				<-releaseBackfill
+			}
+		})
+		defer restore()
+
+		type resolveRes struct {
+			status TokenResolveStatus
+			err    error
+		}
+		doneA := make(chan resolveRes, 1)
+		go func() {
+			_, st, err := guardA.ResolveTokenUser(userTokenA, cUserTokenA, "xp_bob_ctoken", bob.Token, loadFrom(dbA))
+			doneA <- resolveRes{status: st, err: err}
+		}()
+
+		// Wait until Process A has loaded Bob's active pre-revocation snapshot from DB.
+		<-dbLoaded
+
+		// Independent Process B revokes Bob in DB and writes revocation tombstone to shared Redis.
+		if err := dbB.Model(&models.User{}).Where("id = ?", bob.ID).Updates(map[string]interface{}{
+			"status": 2,
+			"token":  "",
+		}).Error; err != nil {
+			t.Fatal(err)
+		}
+		guardB.RevokeToken(userTokenB, bob.Token)
+
+		// Release Process A to attempt late cache backfill via HSETNX against shared Redis.
+		close(releaseBackfill)
+		resA := <-doneA
+		if resA.err != nil || resA.status != TokenResolveInvalid {
+			t.Fatalf("Process A late backfill succeeded after cross-process revocation: status=%v err=%v", resA.status, resA.err)
+		}
+
+		// Verify shared Redis STILL holds tombstone (NOT active Bob!).
+		cached, hit := userTokenB.Get(bob.Token)
+		if !hit || !IsRevokedTombstone(cached) || IsActiveTokenUser(cached) {
+			t.Fatalf("shared Redis entry corrupted by late backfill: hit=%v cached=%+v", hit, cached)
+		}
+
+		// Follow-up resolution on BOTH Process A and Process B must reject.
+		if _, stA, errA := guardA.ResolveTokenUser(userTokenA, cUserTokenA, "xp_bob_ctoken", bob.Token, loadFrom(dbA)); errA != nil || stA != TokenResolveInvalid {
+			t.Fatalf("follow-up Process A accepted revoked Bob: status=%v err=%v", stA, errA)
+		}
+		if _, stB, errB := guardB.ResolveTokenUser(userTokenB, cUserTokenB, "xp_bob_ctoken", bob.Token, loadFrom(dbB)); errB != nil || stB != TokenResolveInvalid {
+			t.Fatalf("follow-up Process B accepted revoked Bob: status=%v err=%v", stB, errB)
+		}
+	})
+}
+
+func TestTransientLookupErrorDoesNotPoisonTokenAndRecovers(t *testing.T) {
+	userCache := cache.NewGoCache[models.User](time.Minute, time.Hour)
+	cCache := cache.NewGoCache[string](72*time.Hour, 48*time.Hour)
+	guard := NewTokenGuard()
+
+	activeUser := models.User{
+		BaseModel: models.BaseModel{ID: 42},
+		Username:  "transient_user",
+		Status:    1,
+		Role:      2,
+		Token:     "stable_btoken_42",
+	}
+	cCache.SetDefault("ctoken_42", activeUser.Token)
+
+	transientErr := errors.New("driver: bad connection")
+	_, status, err := guard.ResolveTokenUser(userCache, cCache, "ctoken_42", activeUser.Token, func(string) (models.User, error) {
+		return models.User{}, transientErr
+	})
+	if status != TokenResolveTransientError || !errors.Is(err, transientErr) {
+		t.Fatalf("expected TokenResolveTransientError, got status=%v err=%v", status, err)
+	}
+	if guard.IsTokenRevoked(userCache, activeUser.Token) {
+		t.Fatal("transient DB error erroneously marked bToken as revoked")
+	}
+	if gotTok, ok := cCache.Get("ctoken_42"); !ok || gotTok != activeUser.Token {
+		t.Fatalf("transient DB error erroneously deleted cToken mapping: ok=%v got=%q", ok, gotTok)
+	}
+
+	// Once DB recovers, resolving the exact same bToken succeeds cleanly.
+	gotUser, statusOK, errOK := guard.ResolveTokenUser(userCache, cCache, "ctoken_42", activeUser.Token, func(string) (models.User, error) {
+		return activeUser, nil
+	})
+	if errOK != nil || statusOK != TokenResolveActive || gotUser.ID != activeUser.ID {
+		t.Fatalf("expected recovery after transient error, got user=%+v status=%v err=%v", gotUser, statusOK, errOK)
 	}
 }

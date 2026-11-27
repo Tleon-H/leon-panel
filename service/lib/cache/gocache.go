@@ -82,6 +82,17 @@ func (c *GoCacheStruct[T]) ItemCount() (int64, error) {
 	return int64(c.gocahce.ItemCount()), nil
 }
 
+// SetIfAbsent 仅当键不存在或已过期时原子写入，避免覆盖并发写入的吊销墓碑
+func (c *GoCacheStruct[T]) SetIfAbsent(k string, v T, d time.Duration) (bool, error) {
+	if d <= 0 {
+		d = cache.DefaultExpiration
+	}
+	if err := c.gocahce.Add(k, GoCacheValue[T]{Value: v}, d); err != nil {
+		return false, nil
+	}
+	return true, nil
+}
+
 // Flush 删除当前已存在的所有key
 func (c *GoCacheStruct[T]) Flush() error {
 	c.gocahce.Flush()
