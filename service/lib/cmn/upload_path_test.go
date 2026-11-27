@@ -18,7 +18,12 @@ func TestUploadRoutePrefixesAndPublicURL(t *testing.T) {
 		{"uploads/", "/uploads", "/ploads", []string{"/uploads", "/ploads"}},
 		{"/uploads", "/uploads", "", []string{"/uploads"}},
 		{"data/uploads", "/data/uploads", "/ata/uploads", []string{"/data/uploads", "/ata/uploads"}},
-		{"./custom/uploads", "/custom/uploads", "", []string{"/custom/uploads"}},
+		{"./custom/uploads", "/uploads", "", []string{"/uploads"}},
+		{"assets", "/ssets", "", []string{"/ssets"}},
+		{"assets/", "/ssets", "", []string{"/ssets"}},
+		{"custom", "/ustom", "", []string{"/ustom"}},
+		{"api", "/pi", "", []string{"/pi"}},
+		{"./assets", "/uploads", "", []string{"/uploads"}},
 	}
 
 	for _, tc := range prefixCases {
@@ -34,19 +39,22 @@ func TestUploadRoutePrefixesAndPublicURL(t *testing.T) {
 	}
 
 	urlCases := []struct {
-		stored string
-		want   string
+		sourcePath string
+		stored     string
+		want       string
 	}{
-		{"./uploads/2026/11/27/icon.png", "/uploads/2026/11/27/icon.png"},
-		{"uploads/2026/11/27/icon.png", "/uploads/2026/11/27/icon.png"},
-		{"/uploads/2026/11/27/icon.png", "/uploads/2026/11/27/icon.png"},
-		{"./uploads//2026/11/27/icon.svg", "/uploads/2026/11/27/icon.svg"},
-		{"uploads//2026/11/27/icon.svg", "/uploads/2026/11/27/icon.svg"},
-		{"", ""},
+		{"./uploads", "./uploads/2026/11/27/icon.png", "/uploads/2026/11/27/icon.png"},
+		{"uploads", "uploads/2026/11/27/icon.png", "/uploads/2026/11/27/icon.png"},
+		{"assets", "assets/2026/11/27/icon.png", "/ssets/2026/11/27/icon.png"},
+		{"assets/", "assets/2026/11/27/icon.svg", "/ssets/2026/11/27/icon.svg"},
+		{"custom", "custom/2026/11/27/icon.png", "/ustom/2026/11/27/icon.png"},
+		{"./assets", "./assets/2026/11/27/icon.png", "/uploads/2026/11/27/icon.png"},
+		{"", "./uploads/2026/11/27/icon.png", "/uploads/2026/11/27/icon.png"},
+		{"", "", ""},
 	}
 	for _, tc := range urlCases {
-		if got := UploadPublicURL(tc.stored); got != tc.want {
-			t.Fatalf("UploadPublicURL(%q) = %q, want %q", tc.stored, got, tc.want)
+		if got := UploadPublicURLWithSource(tc.sourcePath, tc.stored); got != tc.want {
+			t.Fatalf("UploadPublicURLWithSource(%q, %q) = %q, want %q", tc.sourcePath, tc.stored, got, tc.want)
 		}
 	}
 }

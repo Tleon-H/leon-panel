@@ -324,7 +324,7 @@ func (a *ItemIcon) GetSiteFavicon(c *gin.Context) {
 		return
 	}
 
-	iconURL := cmn.UploadPublicURL(saved.FilePath)
+	iconURL := cmn.UploadPublicURLWithSource(configUpload, saved.FilePath)
 	resp := panelApiStructs.ItemIconGetSiteFaviconResp{
 		IconUrl: iconURL,
 	}

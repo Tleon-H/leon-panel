@@ -111,7 +111,7 @@ func (a *FileApi) UploadImg(c *gin.Context) {
 		return
 	}
 	apiReturn.SuccessData(c, gin.H{
-		"imageUrl": cmn.UploadPublicURL(dstPath),
+		"imageUrl": cmn.UploadPublicURLWithSource(configUpload, dstPath),
 	})
 }
 
@@ -185,7 +185,7 @@ func (a *FileApi) UploadFiles(c *gin.Context) {
 			errFiles = append(errFiles, f.Filename)
 			continue
 		}
-		imageURL := cmn.UploadPublicURL(dstPath)
+		imageURL := cmn.UploadPublicURLWithSource(configUpload, dstPath)
 		succMap[f.Filename] = imageURL
 		saved = append(saved, map[string]string{
 			"fileName": f.Filename,
@@ -199,6 +199,13 @@ func (a *FileApi) UploadFiles(c *gin.Context) {
 		"saved":    saved,
 		"errFiles": errFiles,
 	})
+}
+
+func configuredUploadSourcePath() string {
+	if global.Config == nil {
+		return ""
+	}
+	return global.Config.GetValueString("base", "source_path")
 }
 
 func (a *FileApi) GetList(c *gin.Context) {
@@ -233,10 +240,11 @@ func (a *FileApi) GetList(c *gin.Context) {
 		return
 	}
 
+	sourcePath := configuredUploadSourcePath()
 	data := []map[string]interface{}{}
 	for _, v := range list {
 		data = append(data, map[string]interface{}{
-			"src":        cmn.UploadPublicURL(v.Src),
+			"src":        cmn.UploadPublicURLWithSource(sourcePath, v.Src),
 			"fileName":   v.FileName,
 			"id":         v.ID,
 			"createTime": v.CreatedAt,
@@ -287,10 +295,11 @@ func (a *FileApi) PublicList(c *gin.Context) {
 		apiReturn.ErrorDatabase(c, err.Error())
 		return
 	}
+	sourcePath := configuredUploadSourcePath()
 	data := []map[string]interface{}{}
 	for _, v := range list {
 		data = append(data, map[string]interface{}{
-			"src":        cmn.UploadPublicURL(v.Src),
+			"src":        cmn.UploadPublicURLWithSource(sourcePath, v.Src),
 			"fileName":   v.FileName,
 			"id":         v.ID,
 			"createTime": v.CreatedAt,

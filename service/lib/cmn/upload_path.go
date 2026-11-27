@@ -6,21 +6,41 @@ import (
 	"strings"
 )
 
-var reservedUploadPrefixes = map[string]struct{}{
-	"/":       {},
-	"/api":    {},
-	"/assets": {},
-	"/custom": {},
-	"/login":  {},
-	"/404":    {},
-	"/500":    {},
-	"/test":   {},
-	"/clear":  {},
+var reservedUploadExactPrefixes = map[string]struct{}{
+	"/":                     {},
+	"/login":                {},
+	"/404":                  {},
+	"/500":                  {},
+	"/test":                 {},
+	"/clear":                {},
+	"/favicon.ico":          {},
+	"/favicon.svg":          {},
+	"/favicon-black.svg":    {},
+	"/apple-touch-icon.png": {},
+	"/pwa-192x192.png":      {},
+	"/pwa-512x512.png":      {},
 }
 
-// UploadPublicPrefix 将配置的 source_path 归一化为统一的公开 URL 前缀（始终以 "/" 开头、无尾斜杠）。
-// 例如 "./uploads"、"uploads"、"/uploads" 均归一化为 "/uploads"。
-func UploadPublicPrefix(sourcePath string) string {
+var reservedUploadTreePrefixes = []string{
+	"/api",
+	"/assets",
+	"/custom",
+}
+
+func isReservedUploadPrefix(prefix string) bool {
+	cleaned := path.Clean(prefix)
+	if _, ok := reservedUploadExactPrefixes[cleaned]; ok {
+		return true
+	}
+	for _, tree := range reservedUploadTreePrefixes {
+		if cleaned == tree || strings.HasPrefix(cleaned, tree+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+func rawCanonicalUploadPrefix(sourcePath string) string {
 	trimmed := strings.TrimSpace(filepath.ToSlash(sourcePath))
 	for strings.HasPrefix(trimmed, "./") {
 		trimmed = strings.TrimPrefix(trimmed, "./")
@@ -39,9 +59,7 @@ func UploadPublicPrefix(sourcePath string) string {
 	return cleaned
 }
 
-// UploadLegacyPrefix 计算旧版 sourcePath[1:] 规则在无 "./" 前缀的相对路径（如 "uploads" -> "/ploads"）下
-// 曾经暴露过的历史 URL 前缀，用于兼容已保存在数据库中的旧素材地址；若与规范前缀一致则返回空字符串。
-func UploadLegacyPrefix(sourcePath string) string {
+func rawLegacyUploadPrefix(sourcePath string) string {
 	trimmed := strings.TrimSpace(filepath.ToSlash(sourcePath))
 	if len(trimmed) <= 1 {
 		return ""
@@ -51,27 +69,48 @@ func UploadLegacyPrefix(sourcePath string) string {
 		return ""
 	}
 	legacy = path.Clean("/" + legacy)
-	if legacy == UploadPublicPrefix(sourcePath) {
+	if legacy == "/" || legacy == "." || isReservedUploadPrefix(legacy) {
 		return ""
 	}
-	if _, reserved := reservedUploadPrefixes[legacy]; reserved {
+	return legacy
+}
+
+// UploadPublicPrefix 将配置的 source_path 归一化为统一的公开 URL 前缀（始终以 "/" 开头、无尾斜杠）。
+// 若规范前缀与内置路由（如 /assets、/custom、/api）冲突，则优先回退到不冲突的历史前缀（例如裸 "assets" -> "/ssets"），
+// 以保证旧配置平滑启动且与历史 URL 兼容；若历史前缀也冲突则回退到 "/uploads"。
+func UploadPublicPrefix(sourcePath string) string {
+	canonical := rawCanonicalUploadPrefix(sourcePath)
+	if !isReservedUploadPrefix(canonical) {
+		return canonical
+	}
+	if legacy := rawLegacyUploadPrefix(sourcePath); legacy != "" {
+		return legacy
+	}
+	return "/uploads"
+}
+
+// UploadLegacyPrefix 计算旧版 sourcePath[1:] 规则在无 "./" 前缀的相对路径（如 "uploads" -> "/ploads"）下
+// 曾经暴露过的历史 URL 前缀，用于兼容已保存在数据库中的旧素材地址；若与当前公开前缀一致或冲突则返回空字符串。
+func UploadLegacyPrefix(sourcePath string) string {
+	legacy := rawLegacyUploadPrefix(sourcePath)
+	if legacy == "" || legacy == UploadPublicPrefix(sourcePath) {
 		return ""
 	}
 	return legacy
 }
 
 // UploadRoutePrefixes 返回静态上传目录需要挂载的全部 URL 前缀：
-// 首位始终为规范公开前缀，若存在历史兼容前缀（如裸 "uploads" 对应的 "/ploads"）则一并返回。
+// 首位始终为当前不冲突的公开前缀，若还存在与公开前缀不同的合法历史兼容前缀（如裸 "uploads" 对应的 "/ploads"）则一并返回。
 func UploadRoutePrefixes(sourcePath string) []string {
-	canonical := UploadPublicPrefix(sourcePath)
+	publicPrefix := UploadPublicPrefix(sourcePath)
 	legacy := UploadLegacyPrefix(sourcePath)
-	if legacy == "" || legacy == canonical {
-		return []string{canonical}
+	if legacy == "" || legacy == publicPrefix {
+		return []string{publicPrefix}
 	}
-	return []string{canonical, legacy}
+	return []string{publicPrefix, legacy}
 }
 
-// UploadPublicURL 将数据库/磁盘保存的上传路径统一转换为与静态路由一致的公开 URL。
+// UploadPublicURL 将数据库/磁盘保存的上传路径转换为以 "/" 开头的公开 URL（用于无 source_path 上下文的回退场景）。
 func UploadPublicURL(storedPath string) string {
 	trimmed := strings.TrimSpace(filepath.ToSlash(storedPath))
 	if trimmed == "" {
@@ -87,4 +126,36 @@ func UploadPublicURL(storedPath string) string {
 		trimmed = "/" + trimmed
 	}
 	return path.Clean(trimmed)
+}
+
+func normalizeSourceMatchPath(p string) string {
+	trimmed := strings.TrimSpace(filepath.ToSlash(p))
+	for strings.HasPrefix(trimmed, "./") {
+		trimmed = strings.TrimPrefix(trimmed, "./")
+	}
+	trimmed = strings.TrimRight(trimmed, "/")
+	if trimmed == "" {
+		return ""
+	}
+	return path.Clean(trimmed)
+}
+
+// UploadPublicURLWithSource 结合当前配置的 source_path，将磁盘/数据库保存的路径转换为与静态挂载路由一致的公开 URL。
+// 当 source_path 的规范前缀与内置路由冲突（如裸 "assets" 回退到 "/ssets"）时，返回的 URL 也会一致使用 "/ssets/..."。
+func UploadPublicURLWithSource(sourcePath, storedPath string) string {
+	trimmedStored := strings.TrimSpace(filepath.ToSlash(storedPath))
+	if trimmedStored == "" {
+		return ""
+	}
+	if strings.TrimSpace(sourcePath) != "" {
+		normRoot := normalizeSourceMatchPath(sourcePath)
+		normStored := normalizeSourceMatchPath(trimmedStored)
+		if normRoot != "" && normRoot != "." && normRoot != "/" {
+			if strings.HasPrefix(normStored, normRoot+"/") {
+				rel := strings.TrimPrefix(normStored, normRoot+"/")
+				return path.Clean(UploadPublicPrefix(sourcePath) + "/" + rel)
+			}
+		}
+	}
+	return UploadPublicURL(trimmedStored)
 }

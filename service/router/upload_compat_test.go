@@ -38,19 +38,32 @@ func TestUploadEndToEndURLConsistencyAndLegacyPrefixSecurityHeaders(t *testing.T
 	legacySVGBytes := []byte(`<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>`)
 
 	cases := []struct {
-		name           string
-		sourcePath     string
-		wantLegacyPath string
+		name             string
+		sourcePath       string
+		dirName          string
+		wantPublicPrefix string
+		wantLegacyPath   string
 	}{
 		{
-			name:           "default_dot_slash_uploads",
-			sourcePath:     "./uploads",
-			wantLegacyPath: "/uploads/legacy-asset.svg",
+			name:             "default_dot_slash_uploads",
+			sourcePath:       "./uploads",
+			dirName:          "uploads",
+			wantPublicPrefix: "/uploads/",
+			wantLegacyPath:   "/uploads/legacy-asset.svg",
 		},
 		{
-			name:           "bare_relative_uploads",
-			sourcePath:     "uploads",
-			wantLegacyPath: "/ploads/legacy-asset.svg",
+			name:             "bare_relative_uploads",
+			sourcePath:       "uploads",
+			dirName:          "uploads",
+			wantPublicPrefix: "/uploads/",
+			wantLegacyPath:   "/ploads/legacy-asset.svg",
+		},
+		{
+			name:             "bare_relative_reserved_assets",
+			sourcePath:       "assets",
+			dirName:          "assets",
+			wantPublicPrefix: "/ssets/",
+			wantLegacyPath:   "/ssets/legacy-asset.svg",
 		},
 	}
 
@@ -58,8 +71,9 @@ func TestUploadEndToEndURLConsistencyAndLegacyPrefixSecurityHeaders(t *testing.T
 		t.Run(tc.name, func(t *testing.T) {
 			root := t.TempDir()
 			webPath := filepath.Join(root, "web")
-			uploadDir := filepath.Join(root, "uploads")
+			uploadDir := filepath.Join(root, tc.dirName)
 			writeFile(t, filepath.Join(webPath, "index.html"), "LEON_PANEL_SHELL")
+			writeFile(t, filepath.Join(webPath, "assets", "app.js"), "frontend-bundle-js")
 			writeFile(t, filepath.Join(uploadDir, "legacy-asset.svg"), string(legacySVGBytes))
 
 			confPath := filepath.Join(root, "conf.ini")
@@ -145,6 +159,15 @@ func TestUploadEndToEndURLConsistencyAndLegacyPrefixSecurityHeaders(t *testing.T
 
 			engine := NewEngine(webPath, tc.sourcePath)
 
+			// Built-in frontend /assets static route must keep serving web assets without upload sandbox CSP.
+			assetRec := get(engine, "/assets/app.js")
+			if assetRec.Code != http.StatusOK || assetRec.Body.String() != "frontend-bundle-js" {
+				t.Fatalf("GET /assets/app.js = %d %q", assetRec.Code, assetRec.Body.String())
+			}
+			if got := assetRec.Header().Get("Content-Security-Policy"); got != "" {
+				t.Fatalf("unexpected upload CSP on /assets/app.js: %q", got)
+			}
+
 			assertUploadServedWithHeaders := func(method, urlPath string, wantBody []byte) {
 				t.Helper()
 				rec := httptest.NewRecorder()
@@ -189,8 +212,8 @@ func TestUploadEndToEndURLConsistencyAndLegacyPrefixSecurityHeaders(t *testing.T
 			if err := json.Unmarshal(rec.Body.Bytes(), &singleResp); err != nil || singleResp.Code != 0 {
 				t.Fatalf("uploadImg failed: %s (%v)", rec.Body.String(), err)
 			}
-			if !strings.HasPrefix(singleResp.Data.ImageURL, "/uploads/") {
-				t.Fatalf("uploadImg returned non-canonical imageUrl = %q", singleResp.Data.ImageURL)
+			if !strings.HasPrefix(singleResp.Data.ImageURL, tc.wantPublicPrefix) {
+				t.Fatalf("uploadImg returned imageUrl = %q, want prefix %q", singleResp.Data.ImageURL, tc.wantPublicPrefix)
 			}
 			assertUploadServedWithHeaders(http.MethodGet, singleResp.Data.ImageURL, pngBytes)
 
@@ -224,13 +247,13 @@ func TestUploadEndToEndURLConsistencyAndLegacyPrefixSecurityHeaders(t *testing.T
 				t.Fatalf("uploadFiles failed: %s (%v)", rec.Body.String(), err)
 			}
 			batchSVGURL := batchResp.Data.SuccMap["batch.svg"]
-			if !strings.HasPrefix(batchSVGURL, "/uploads/") {
-				t.Fatalf("uploadFiles returned non-canonical SVG URL = %q", batchSVGURL)
+			if !strings.HasPrefix(batchSVGURL, tc.wantPublicPrefix) {
+				t.Fatalf("uploadFiles returned SVG URL = %q, want prefix %q", batchSVGURL, tc.wantPublicPrefix)
 			}
 			assertUploadServedWithHeaders(http.MethodGet, batchSVGURL, svgBytes)
 			assertUploadServedWithHeaders(http.MethodHead, batchSVGURL, nil)
 
-			// 3) Verify /api/file/getList and /api/file/publicList return matching canonical URLs readable with security headers.
+			// 3) Verify /api/file/getList and /api/file/publicList return matching URLs readable with security headers.
 			rec = httptest.NewRecorder()
 			req = httptest.NewRequest(http.MethodPost, "/api/file/getList", strings.NewReader(`{"page":1,"limit":10}`))
 			req.Header.Set("Content-Type", "application/json")
@@ -251,8 +274,8 @@ func TestUploadEndToEndURLConsistencyAndLegacyPrefixSecurityHeaders(t *testing.T
 			}
 			var batchSVGFileID uint
 			for _, item := range listResp.Data.List {
-				if !strings.HasPrefix(item.Src, "/uploads/") {
-					t.Fatalf("getList returned non-canonical src %q for %s", item.Src, item.FileName)
+				if !strings.HasPrefix(item.Src, tc.wantPublicPrefix) {
+					t.Fatalf("getList returned src %q for %s, want prefix %q", item.Src, item.FileName, tc.wantPublicPrefix)
 				}
 				if item.FileName == "batch.svg" {
 					batchSVGFileID = item.ID
@@ -289,14 +312,14 @@ func TestUploadEndToEndURLConsistencyAndLegacyPrefixSecurityHeaders(t *testing.T
 			if err := json.Unmarshal(rec.Body.Bytes(), &pubResp); err != nil || pubResp.Code != 0 || len(pubResp.Data.List) != 1 {
 				t.Fatalf("publicList failed: %s (%v)", rec.Body.String(), err)
 			}
-			if !strings.HasPrefix(pubResp.Data.List[0].Src, "/uploads/") {
-				t.Fatalf("publicList returned non-canonical src %q", pubResp.Data.List[0].Src)
+			if !strings.HasPrefix(pubResp.Data.List[0].Src, tc.wantPublicPrefix) {
+				t.Fatalf("publicList returned src %q, want prefix %q", pubResp.Data.List[0].Src, tc.wantPublicPrefix)
 			}
 			assertUploadServedWithHeaders(http.MethodGet, pubResp.Data.List[0].Src, svgBytes)
 
-			// 4) Pre-existing asset stays readable via both canonical /uploads/... and legacy prefix (e.g. /ploads/... for bare uploads),
-			//    and both prefixes enforce CSP sandbox + X-Content-Type-Options: nosniff.
-			assertUploadServedWithHeaders(http.MethodGet, "/uploads/legacy-asset.svg", legacySVGBytes)
+			// 4) Pre-existing asset stays readable via both current public prefix and legacy prefix,
+			//    and every upload route enforces CSP sandbox + X-Content-Type-Options: nosniff.
+			assertUploadServedWithHeaders(http.MethodGet, tc.wantPublicPrefix+"legacy-asset.svg", legacySVGBytes)
 			assertUploadServedWithHeaders(http.MethodGet, tc.wantLegacyPath, legacySVGBytes)
 			assertUploadServedWithHeaders(http.MethodHead, tc.wantLegacyPath, nil)
 			if tc.sourcePath == "uploads" {
