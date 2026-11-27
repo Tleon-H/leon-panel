@@ -1,6 +1,7 @@
 package database
 
 import (
+	"io"
 	"log"
 	"os"
 	"path"
@@ -92,18 +93,22 @@ func (d *SQLiteConfig) Connect() (db *gorm.DB, err error) {
 	return
 }
 
-// 日志
-func GetLogger() logger.Interface {
+func newLogger(writer io.Writer) logger.Interface {
 	return logger.New(
-		log.New(os.Stdout, "\r\n", log.LstdFlags), // io writer（日志输出的目标，前缀和日志包含的内容——译者注）
+		log.New(writer, "\r\n", log.LstdFlags), // io writer（日志输出的目标，前缀和日志包含的内容——译者注）
 		logger.Config{
 			SlowThreshold:             time.Second, // 慢 SQL 阈值
 			LogLevel:                  logger.Warn, // 日志级别
 			IgnoreRecordNotFoundError: true,        // 忽略ErrRecordNotFound（记录未找到）错误
+			ParameterizedQueries:      true,        // 隐藏 SQL 绑定参数，避免日志泄露令牌或密码哈希
 			Colorful:                  true,        // 彩色打印
 		},
 	)
+}
 
+// 日志
+func GetLogger() logger.Interface {
+	return newLogger(os.Stdout)
 }
 
 // 创建数据库
