@@ -9,6 +9,7 @@ import {
   isFilledContextAddress,
   openableContextHref,
   resolveContextMenuChoice,
+  resolvePrimaryItemOpen,
 } from './contextMenu.ts'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '../../..')
@@ -127,7 +128,47 @@ test('reasonable addresses without a scheme open as http and executable links do
   assert.equal(contextNewTabFeatures.includes('noopener'), true)
 })
 
-test('the homepage menu uses the chosen address on both card layouts and leaves left click alone', () => {
+test('primary click, keyboard Enter, and Dock open enforce protocol whitelist and schemeless LAN completion', () => {
+  // WAN mode uses url; LAN mode uses lanUrl when filled and falls back to url when lanUrl is empty.
+  assert.deepEqual(resolvePrimaryItemOpen(dual, false), {
+    kind: 'url',
+    method: 1,
+    href: dual.url,
+  })
+  assert.deepEqual(resolvePrimaryItemOpen(dual, true), {
+    kind: 'lan',
+    method: 1,
+    href: dual.lanUrl,
+  })
+  assert.deepEqual(resolvePrimaryItemOpen({ url: '192.168.1.20:9000/nas', lanUrl: '', openMethod: 2 }, true), {
+    kind: 'url',
+    method: 2,
+    href: 'http://192.168.1.20:9000/nas',
+  })
+  assert.deepEqual(resolvePrimaryItemOpen({ url: 'https://wan.example.com', lanUrl: '10.0.0.8:5000', openMethod: 3 }, true), {
+    kind: 'lan',
+    method: 3,
+    href: 'http://10.0.0.8:5000/',
+  })
+
+  // Dangerous schemes are blocked on primary click regardless of network mode or openMethod.
+  for (const blocked of [
+    'javascript:alert(1)',
+    ' JavaScript:alert(1)',
+    'data:text/html,<script>alert(1)</script>',
+    'vbscript:msgbox(1)',
+    'file:///etc/passwd',
+  ]) {
+    assert.equal(resolvePrimaryItemOpen({ url: blocked, lanUrl: '', openMethod: 2 }, false), null)
+    assert.equal(resolvePrimaryItemOpen({ url: 'https://safe.example.com', lanUrl: blocked, openMethod: 1 }, true), null)
+    assert.equal(resolvePrimaryItemOpen({ url: blocked, lanUrl: '', openMethod: 3 }, true), null)
+  }
+
+  // Unsupported openMethod is rejected cleanly.
+  assert.equal(resolvePrimaryItemOpen({ url: 'https://safe.example.com', lanUrl: '', openMethod: 99 }, false), null)
+})
+
+test('the homepage menu and primary click/Enter/Dock all use protocol-validated opening with noopener,noreferrer', () => {
   const home = source('src/views/home/index.vue')
   const menu = home.slice(home.indexOf('function getDropdownMenuOptions()'), home.indexOf('watch(settingModalShow'))
   const select = home.slice(home.indexOf('function handleRightMenuSelect'), home.indexOf('function handleContextMenu'))
@@ -144,10 +185,9 @@ test('the homepage menu uses the chosen address on both card layouts and leaves 
   assert.match(openChosen, /window\.open\(href, '_blank', contextNewTabFeatures\)/)
   assert.match(openChosen, /opened\.opener = null/)
   assert.match(openChosen, /windowSrc\.value = href/)
-  assert.match(click, /panelState\.networkMode === PanelStateNetworkModeEnum\.lan \? item\.lanUrl : item\.url/)
-  assert.match(click, /if \(item\.lanUrl === ''\)/)
-  assert.match(click, /jumpUrl = item\.url/)
-  assert.match(click, /openPage\(item\.openMethod, jumpUrl, item\.title\)/)
+  assert.match(click, /resolvePrimaryItemOpen\(item, panelState\.networkMode === PanelStateNetworkModeEnum\.lan\)/)
+  assert.match(click, /openChosenAddress\(choice\.method, choice\.href, item\.title\)/)
+  assert.doesNotMatch(home, /function openPage\(/)
   assert.match(home, /<iframe[\s\S]*:src="windowSrc"/)
 
   const zh = source('src/locales/zh-CN.json')

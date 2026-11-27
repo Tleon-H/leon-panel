@@ -64,7 +64,7 @@ jobs:
         working-directory: service
         run: |
           rm -f bindata.go
-          go test -v -race -count=1 ./lib/cmn ./lib/sessionguard ./api/api_v1/panel ./router ./initialize/database
+          go test -v -race -count=1 ./lib/cmn ./lib/sessionguard ./api/api_v1/panel ./api/api_v1/system ./router ./initialize/database
           go test ./...
           go build -o /tmp/leon-panel main.go
           rm -f /tmp/leon-panel

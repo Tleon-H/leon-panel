@@ -175,6 +175,49 @@ func TestListenAddressStaysCompatible(t *testing.T) {
 	}
 }
 
+func TestUploadsServeSandboxCSPAndNoSniffHeaders(t *testing.T) {
+	webPath, uploadPath := siteFixture(t)
+	engine := NewEngine(webPath, uploadPath)
+
+	for _, tc := range []struct {
+		method string
+		path   string
+		body   string
+	}{
+		{http.MethodGet, "/uploads/icon.svg", "<svg xmlns=\"http://www.w3.org/2000/svg\"><script>alert(1)</script></svg>"},
+		{http.MethodHead, "/uploads/icon.svg", ""},
+		{http.MethodGet, "/uploads/2026/11/nested.svg", "<svg xmlns=\"http://www.w3.org/2000/svg\"/>"},
+		{http.MethodGet, "/uploads/pic.png", "png-bytes"},
+	} {
+		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
+			resp := request(engine, tc.method, tc.path)
+			if resp.Code != http.StatusOK {
+				t.Fatalf("status = %d body = %q", resp.Code, resp.Body.String())
+			}
+			if got := resp.Header().Get("Content-Security-Policy"); got != UploadContentSecurityPolicy {
+				t.Fatalf("CSP = %q, want %q", got, UploadContentSecurityPolicy)
+			}
+			if got := resp.Header().Get("X-Content-Type-Options"); got != UploadContentTypeOptions {
+				t.Fatalf("X-Content-Type-Options = %q, want %q", got, UploadContentTypeOptions)
+			}
+			if tc.method == http.MethodGet && resp.Body.String() != tc.body {
+				t.Fatalf("body = %q, want %q", resp.Body.String(), tc.body)
+			}
+		})
+	}
+
+	// Non-upload routes must not receive the upload sandbox CSP header.
+	for _, path := range []string{"/", "/assets/app.js", "/custom/theme.css", "/favicon.svg"} {
+		resp := get(engine, path)
+		if resp.Code != http.StatusOK {
+			t.Fatalf("GET %s = %d", path, resp.Code)
+		}
+		if got := resp.Header().Get("Content-Security-Policy"); got != "" {
+			t.Fatalf("unexpected upload CSP on %s: %q", path, got)
+		}
+	}
+}
+
 func assertNoFileBody(t *testing.T, response *httptest.ResponseRecorder, shell string) {
 	t.Helper()
 	text := response.Body.String()
@@ -199,6 +242,8 @@ func siteFixture(t *testing.T) (string, string) {
 	writeFile(t, filepath.Join(webPath, "pwa-512x512.png"), "pwa-512-png")
 	writeFile(t, filepath.Join(webPath, "logo.png"), "logo-bytes")
 	writeFile(t, filepath.Join(uploadPath, "pic.png"), "png-bytes")
+	writeFile(t, filepath.Join(uploadPath, "icon.svg"), "<svg xmlns=\"http://www.w3.org/2000/svg\"><script>alert(1)</script></svg>")
+	writeFile(t, filepath.Join(uploadPath, "2026", "11", "nested.svg"), "<svg xmlns=\"http://www.w3.org/2000/svg\"/>")
 	writeFile(t, filepath.Join(root, "outside.txt"), "outside-secret")
 
 	wd, err := os.Getwd()

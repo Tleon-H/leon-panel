@@ -146,3 +146,21 @@ test('search box includes builtin icon fallback, chevron affordance, and hides k
   assert.match(box, /lucide:chevron-down/)
   assert.match(box, /@media \(max-width: 640px\), \(hover: none\)/)
 })
+
+test('homepage footer uses whitelist sanitization with safeMode skip and upload routes attach sandbox CSP', () => {
+  const home = source('src/views/home/index.vue')
+  assert.match(home, /resolveSafeFooterHtml\(activePanelConfig\.value\.footerHtml, studioStore\.safeMode\)/)
+  assert.match(home, /v-if="safeFooterHtml"[\s\S]*v-html="safeFooterHtml"/)
+  assert.doesNotMatch(home, /v-html="activePanelConfig\.footerHtml"/)
+
+  const box = source('src/components/deskModule/SearchBox/index.vue')
+  assert.match(box, /window\.open\(fullUrl, '_blank', contextNewTabFeatures\)/)
+
+  const cmn = source('src/utils/cmn/index.ts')
+  assert.match(cmn, /openableContextHref\(info\.url\)/)
+  assert.match(cmn, /window\.open\(safeNoticeHref, '_blank', contextNewTabFeatures\)/)
+
+  const webRouter = source('service/router/web.go')
+  assert.match(webRouter, /UploadContentSecurityPolicy/)
+  assert.match(webRouter, /X-Content-Type-Options/)
+})

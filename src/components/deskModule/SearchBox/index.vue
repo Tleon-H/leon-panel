@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { NCheckbox } from 'naive-ui'
 import { decideSearchConfirm, decideSearchKey } from '@/utils/search/filterIcons'
 import { addCustomEngine, buildSearchUrl, currentSearchEngine, moveEngine, normalizeSearchConfig, removeCustomEngine, resolveBuiltinEngineIconKey, resolveEngineLetter, selectEngine, toPersistedSearchConfig, updateCustomEngine, type SearchConfig, type SearchConfigError, type SearchEngineRecord } from '@/utils/search/engines'
+import { contextNewTabFeatures } from '@/utils/panel/contextMenu'
 import { SvgIcon } from '@/components/common'
 import { useModuleConfig } from '@/store/modules'
 import { useAuthStore } from '@/store'
@@ -102,10 +103,14 @@ function handleSearchClick() {
   if (!fullUrl)
     return
   handleClearSearchTerm()
-  if (config.value.newWindowOpen)
-    window.open(fullUrl)
-  else
+  if (config.value.newWindowOpen) {
+    const opened = window.open(fullUrl, '_blank', contextNewTabFeatures)
+    if (opened)
+      opened.opener = null
+  }
+  else {
     window.location.href = fullUrl
+  }
 }
 
 function handleConfirm() {

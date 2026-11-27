@@ -78,6 +78,26 @@ export function resolveContextMenuChoice(item: ContextAddressSource, key: string
   return { kind, method, href }
 }
 
+// 卡片左键点击、键盘回车与 Dock 快捷打开共用同一协议白名单：
+// 内网模式下有非空内网地址则选 lanUrl，否则回退默认 url；所有目标均须经 openableContextHref 校验。
+export function resolvePrimaryItemOpen(item: ContextAddressSource, preferLan: boolean): ContextOpenChoice | null {
+  const hasLan = isFilledContextAddress(item.lanUrl)
+  const kind: ContextAddressKind = (preferLan && hasLan) ? 'lan' : 'url'
+  const href = openableContextHref(kind === 'lan' ? item.lanUrl : item.url)
+  if (!href)
+    return null
+  const method = normalizeOpenMethod(item.openMethod)
+  if (!method)
+    return null
+  return { kind, method, href }
+}
+
+function normalizeOpenMethod(raw: unknown): ContextOpenMethod | null {
+  if (raw === contextOpenCurrent || raw === contextOpenNewTab || raw === contextOpenWindow)
+    return raw
+  return null
+}
+
 function addressGroup(kind: ContextAddressKind, labelKey: string): ContextMenuEntry {
   return {
     key: `address:${kind}`,

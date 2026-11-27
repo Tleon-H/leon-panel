@@ -33,8 +33,9 @@ import {
 } from '@/utils/panel/desktopEdit'
 import { APPEARANCE_PRESETS, APPEARANCE_PRESET_IDS, DEFAULT_APPEARANCE_SCOPES, hasSelectedScope, resolveHomepageThemeVars } from '@/utils/panel/appearance'
 import type { AppearancePresetId, AppearancePresetScopes } from '@/utils/panel/appearance'
-import { contextMenuEntries, contextNewTabFeatures, resolveContextMenuChoice } from '@/utils/panel/contextMenu'
+import { contextMenuEntries, contextNewTabFeatures, resolveContextMenuChoice, resolvePrimaryItemOpen } from '@/utils/panel/contextMenu'
 import type { ContextMenuEntry } from '@/utils/panel/contextMenu'
+import { resolveSafeFooterHtml } from '@/utils/panel/footerHtml'
 import { beginHomeListLoad, createHomeListState, disposeHomeList, homeListFeedback, homeListIdentity, homeListRequestCurrent, noteHomeListIdentity } from '@/utils/panel/homeListLoad'
 import type { HomeListState } from '@/utils/panel/homeListLoad'
 import { attachHomeRequest, createHomeViewCache, receiveHomeViewAuth, receiveHomeViewList, resetHomeViewAuth } from '@/utils/panel/homeCache'
@@ -124,6 +125,8 @@ const dockItems = computed<Array<{ groupIndex: number; item: ItemCard }>>(() => 
   }
   return list
 })
+
+const safeFooterHtml = computed(() => resolveSafeFooterHtml(activePanelConfig.value.footerHtml, studioStore.safeMode))
 
 function openStudioInSettings() {
   settingInitialApp.value = 'LeonStudio'
@@ -225,26 +228,6 @@ const searchMatches = ref<Panel.ItemInfo[]>([])
 const searchActive = ref(false)
 const activeMatchIndex = ref(-1)
 
-function openPage(openMethod: number, url: string, title?: string) {
-  switch (openMethod) {
-    case 1:
-      window.location.href = url
-      break
-    case 2:
-      window.open(url)
-      break
-    case 3:
-      windowShow.value = true
-      windowSrc.value = url
-      windowTitle.value = title || url
-      windowIframeIsLoad.value = true
-      break
-
-    default:
-      break
-  }
-}
-
 function openChosenAddress(method: 1 | 2 | 3, href: string, title?: string) {
   if (method === 1) {
     window.location.href = href
@@ -271,15 +254,13 @@ function handleItemClick(itemGroupIndex: number, item: Panel.ItemInfo) {
     handleEditItem(item)
     return
   }
+  if (!item)
+    return
 
-  let jumpUrl = ''
-
-  if (item)
-    jumpUrl = (panelState.networkMode === PanelStateNetworkModeEnum.lan ? item.lanUrl : item.url) as string
-  if (item.lanUrl === '')
-    jumpUrl = item.url
-
-  openPage(item.openMethod, jumpUrl, item.title)
+  const choice = resolvePrimaryItemOpen(item, panelState.networkMode === PanelStateNetworkModeEnum.lan)
+  if (!choice)
+    return
+  openChosenAddress(choice.method, choice.href, item.title)
 }
 
 function handWindowIframeIdLoad(payload: Event) {
@@ -1589,7 +1570,7 @@ function handleDraftItemSave(draft: Panel.Info) {
             </VueDraggable>
           </div>
         </div>
-        <div class="mt-5 footer" v-html="activePanelConfig.footerHtml" />
+        <div v-if="safeFooterHtml" class="mt-5 footer" data-testid="home-footer" v-html="safeFooterHtml" />
       </div>
     </div>
 

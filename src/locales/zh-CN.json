@@ -363,8 +363,8 @@
       "snippetNamePlaceholder": "片段名称（如：紧凑圆角微调 / 快捷键增强）",
       "snippetFieldsRequired": "请填写片段名称和代码内容",
       "saveAndApplySnippets": "保存并应用全部片段",
-      "safeModeActiveNotice": "当前处于安全模式（?safe=1），所有数据库自定义 CSS / JS 片段已被临时跳过，可在此禁用或删除异常片段。",
-      "safeModeBanner": "安全模式已激活（/?safe=1）：已跳过全部内置自定义 CSS / JS 片段",
+      "safeModeActiveNotice": "当前处于安全模式（?safe=1），所有数据库自定义 CSS / JS 片段及自定义页脚已被临时跳过，可在此禁用或修改异常配置。",
+      "safeModeBanner": "安全模式已激活（/?safe=1）：已跳过自定义 CSS / JS 片段与自定义页脚",
       "openStudio": "管理自定义代码",
       "exitSafeMode": "退出安全模式"
     },
