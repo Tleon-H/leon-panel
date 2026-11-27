@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"leon-panel/global"
+	"leon-panel/lib/cmn"
 	"leon-panel/router/openness"
 	"leon-panel/router/panel"
 	"leon-panel/router/system"
@@ -17,7 +18,20 @@ import (
 // 这里只给这些地址一个入口，不把未知路径、缺失文件或接口回成页面。
 var hashFrontendRoutes = []string{"/login", "/404", "/500", "/test", "/clear"}
 
-// NewEngine 组装接口、静态文件和前端入口。sourcePath 仍按原规则去掉首字符后作为 URL 前缀。
+const (
+	// UploadContentSecurityPolicy 将用户上传文件（包括 SVG）在直接访问时隔离到独立沙箱源并禁用脚本执行，
+	// 同时不影响页面通过 <img> 引用同源图片或 SVG 的正常渲染。
+	UploadContentSecurityPolicy = "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox"
+	UploadContentTypeOptions    = "nosniff"
+)
+
+func uploadSecurityHeadersMiddleware(c *gin.Context) {
+	c.Header("Content-Security-Policy", UploadContentSecurityPolicy)
+	c.Header("X-Content-Type-Options", UploadContentTypeOptions)
+	c.Next()
+}
+
+// NewEngine 组装接口、静态文件和前端入口。上传目录按统一的公开 URL 前缀挂载，并兼容历史旧前缀，均附加安全响应头。
 func NewEngine(webPath, sourcePath string) *gin.Engine {
 	engine := gin.Default()
 	rootRouter := engine.Group("/")
@@ -36,7 +50,11 @@ func NewEngine(webPath, sourcePath string) *gin.Engine {
 	engine.StaticFile("/apple-touch-icon.png", webPath+"/apple-touch-icon.png")
 	engine.StaticFile("/pwa-192x192.png", webPath+"/pwa-192x192.png")
 	engine.StaticFile("/pwa-512x512.png", webPath+"/pwa-512x512.png")
-	engine.Static(sourcePath[1:], sourcePath)
+
+	for _, prefix := range cmn.UploadRoutePrefixes(sourcePath) {
+		uploadsGroup := engine.Group(prefix, uploadSecurityHeadersMiddleware)
+		uploadsGroup.Static("/", sourcePath)
+	}
 
 	for _, route := range hashFrontendRoutes {
 		registerHashEntry(engine, route)

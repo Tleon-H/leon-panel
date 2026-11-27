@@ -359,8 +359,8 @@
       "snippetNamePlaceholder": "Snippet name (e.g. Compact tweaks / Shortcuts)",
       "snippetFieldsRequired": "Please enter both a snippet name and code",
       "saveAndApplySnippets": "Save & Apply Snippets",
-      "safeModeActiveNotice": "Safe Mode (?safe=1) is active. All database custom CSS/JS snippets are bypassed so you can disable or remove faulty code.",
-      "safeModeBanner": "Safe Mode Active (/?safe=1): Custom CSS/JS snippets are temporarily bypassed",
+      "safeModeActiveNotice": "Safe Mode (?safe=1) is active. All database custom CSS/JS snippets and custom footer HTML are bypassed so you can disable or fix faulty configuration.",
+      "safeModeBanner": "Safe Mode Active (/?safe=1): Custom CSS/JS snippets and custom footer are temporarily bypassed",
       "openStudio": "Manage Custom Code",
       "exitSafeMode": "Exit Safe Mode"
     },

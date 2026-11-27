@@ -5,6 +5,7 @@ import { NButton, createDiscreteApi } from 'naive-ui'
 import { useAuthStore, useNoticeStore, useUserStore } from '@/store'
 import { getAuthInfo } from '@/api/system/user'
 import { staleAuthProfile } from '@/utils/request/sessionExpiry'
+import { contextNewTabFeatures, openableContextHref } from '@/utils/panel/contextMenu'
 import type { VisitMode } from '@/enums/auth'
 import { getListByDisplayType as getListByDisplayTypeApi } from '@/api/notice'
 
@@ -44,7 +45,8 @@ export function noticeCreate(info: Notice.NoticeInfo) {
 
   let n: NotificationReactive
   // 链接按钮
-  if (info.url !== '') {
+  const safeNoticeHref = openableContextHref(info.url)
+  if (safeNoticeHref) {
     btns.push(
       h(
         NButton,
@@ -52,7 +54,9 @@ export function noticeCreate(info: Notice.NoticeInfo) {
           text: true,
           type: 'info',
           onClick: () => {
-            window.open(info.url, '_blank')
+            const opened = window.open(safeNoticeHref, '_blank', contextNewTabFeatures)
+            if (opened)
+              opened.opener = null
             n.destroy()
           },
         },

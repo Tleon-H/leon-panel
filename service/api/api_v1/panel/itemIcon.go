@@ -9,6 +9,7 @@ import (
 	"leon-panel/api/api_v1/common/apiReturn"
 	"leon-panel/api/api_v1/common/base"
 	"leon-panel/global"
+	"leon-panel/lib/cmn"
 	"leon-panel/lib/siteFavicon"
 	"leon-panel/models"
 	"os"
@@ -323,10 +324,7 @@ func (a *ItemIcon) GetSiteFavicon(c *gin.Context) {
 		return
 	}
 
-	iconURL := strings.TrimPrefix(saved.FilePath, ".")
-	if !strings.HasPrefix(iconURL, "/") {
-		iconURL = "/" + iconURL
-	}
+	iconURL := cmn.UploadPublicURLWithSource(configUpload, saved.FilePath)
 	resp := panelApiStructs.ItemIconGetSiteFaviconResp{
 		IconUrl: iconURL,
 	}
