@@ -74,6 +74,26 @@ test('sanitizeFooterHtml balances unclosed tags and ignores stray closing tags',
   )
 })
 
+test('sanitizeFooterHtml strips positioning, z-index, fullscreen Tailwind utilities and overlay inline styles', () => {
+  const overlayByClass = sanitizeFooterHtml(
+    '<div class="fixed inset-0 z-50 z-[9999] w-screen h-screen bg-black/90 pointer-events-auto absolute top-0 left-0 -mt-96 flex justify-center text-xs"><a class="block w-full h-full fixed inset-0 hover:underline" href="https://example.com" target="_blank">Overlay</a></div>',
+  )
+  assert.equal(
+    overlayByClass,
+    '<div class="flex justify-center text-xs"><a class="hover:underline" href="https://example.com" target="_blank" rel="noopener noreferrer">Overlay</a></div>',
+  )
+  for (const forbidden of ['fixed', 'absolute', 'inset-0', 'z-50', 'z-[9999]', 'w-screen', 'h-screen', 'w-full', 'h-full', 'bg-black', 'pointer-events', 'top-0', 'left-0', '-mt-96'])
+    assert.equal(overlayByClass.includes(forbidden), false, `forbidden utility class ${forbidden} leaked: ${overlayByClass}`)
+
+  const pureOverlayClass = sanitizeFooterHtml('<div class="fixed inset-0 z-50 bg-white">Cover</div>')
+  assert.equal(pureOverlayClass, '<div>Cover</div>')
+
+  const overlayByStyle = sanitizeFooterHtml(
+    '<div style="position: fixed; inset: 0; z-index: 9999; margin-top: -500px; height: 100vh; width: 100vw; background-color: #000; color: #94a3b8; margin-bottom: 12px">SafeText</div>',
+  )
+  assert.equal(overlayByStyle, '<div style="color: #94a3b8; margin-bottom: 12px">SafeText</div>')
+})
+
 test('resolveSafeFooterHtml skips custom footer rendering in /?safe=1 and #/?safe=1 safe mode', () => {
   const sample = '<div><a href="https://example.com" target="_blank">Footer</a></div>'
 

@@ -50,7 +50,6 @@ const SKIP_CONTENT_TAGS = new Set([
 
 const ALLOWED_STYLE_PROPERTIES = new Set([
   'color',
-  'background-color',
   'font-size',
   'font-weight',
   'font-style',
@@ -83,6 +82,71 @@ const ALLOWED_STYLE_PROPERTIES = new Set([
   'vertical-align',
   'border-radius',
   'white-space',
+])
+
+// 仅放行少量基础排版与页脚对齐工具类，禁止任何定位、层级、全屏尺寸、背景遮罩、负边距或交互拦截类。
+const ALLOWED_FOOTER_CLASSES = new Set([
+  'flex',
+  'inline-flex',
+  'flex-wrap',
+  'flex-col',
+  'items-center',
+  'justify-center',
+  'justify-between',
+  'gap-1',
+  'gap-2',
+  'gap-3',
+  'gap-4',
+  'text-center',
+  'text-left',
+  'text-right',
+  'text-xs',
+  'text-sm',
+  'text-base',
+  'font-normal',
+  'font-medium',
+  'font-semibold',
+  'font-bold',
+  'italic',
+  'underline',
+  'no-underline',
+  'hover:underline',
+  'leading-normal',
+  'leading-relaxed',
+  'tracking-wide',
+  'whitespace-nowrap',
+  'text-slate-300',
+  'text-slate-400',
+  'text-slate-500',
+  'text-gray-300',
+  'text-gray-400',
+  'text-gray-500',
+  'text-zinc-400',
+  'text-neutral-400',
+  'text-white',
+  'opacity-70',
+  'opacity-75',
+  'opacity-80',
+  'opacity-90',
+  'ml-[5px]',
+  'ml-1',
+  'ml-2',
+  'mr-1',
+  'mr-2',
+  'mx-1',
+  'mx-2',
+  'mx-auto',
+  'mt-1',
+  'mt-2',
+  'mt-3',
+  'mt-4',
+  'mb-1',
+  'mb-2',
+  'my-1',
+  'my-2',
+  'px-1',
+  'px-2',
+  'py-1',
 ])
 
 const ALLOWED_DISPLAY_VALUES = new Set(['inline', 'inline-block', 'block', 'flex', 'inline-flex'])
@@ -381,10 +445,15 @@ function sanitizeTagAttributes(tagName: string, attrs: ParsedAttr[]): string[] {
 function sanitizeClassAttr(raw?: string): string {
   if (!raw)
     return ''
-  const tokens = raw
-    .split(/\s+/)
-    .map(token => token.trim())
-    .filter(token => token.length > 0 && token.length <= 64 && /^[A-Za-z0-9_\-:\/\[\]#%\(\)\.]+$/.test(token))
+  const seen = new Set<string>()
+  const tokens: string[] = []
+  for (const part of raw.split(/\s+/)) {
+    const token = part.trim()
+    if (!token || seen.has(token) || !ALLOWED_FOOTER_CLASSES.has(token))
+      continue
+    seen.add(token)
+    tokens.push(token)
+  }
   return tokens.join(' ')
 }
 
@@ -445,6 +514,28 @@ function sanitizeStyleAttr(raw?: string): string {
   return declarations.join('; ')
 }
 
+const NON_NEGATIVE_BOUNDED_LENGTH_PROPS = new Set([
+  'margin',
+  'margin-top',
+  'margin-right',
+  'margin-bottom',
+  'margin-left',
+  'padding',
+  'padding-top',
+  'padding-right',
+  'padding-bottom',
+  'padding-left',
+  'gap',
+  'column-gap',
+  'row-gap',
+  'width',
+  'max-width',
+  'height',
+  'max-height',
+  'font-size',
+  'border-radius',
+])
+
 function isSafeCssValue(prop: string, value: string): boolean {
   const lower = value.toLowerCase()
   if (
@@ -470,10 +561,56 @@ function isSafeCssValue(prop: string, value: string): boolean {
     }
   }
 
+  // Reject viewport units (vh/vw/dvh/svh/lvh/vmin/vmax) so footer cannot span the screen.
+  if (/\d(?:d|s|l)?v[hw]\b|\dv(?:min|max)\b/.test(lower))
+    return false
+
   if (prop === 'display')
     return ALLOWED_DISPLAY_VALUES.has(lower)
 
+  if (NON_NEGATIVE_BOUNDED_LENGTH_PROPS.has(prop))
+    return isSafeBoundedLengthList(prop, lower)
+
   return /^[A-Za-z0-9\s#%.,()+\-/]+$/.test(value)
+}
+
+function isSafeBoundedLengthList(prop: string, value: string): boolean {
+  const tokens = value.split(/\s+/).filter(Boolean)
+  if (tokens.length === 0 || tokens.length > 4)
+    return false
+
+  const maxPx = (prop === 'width' || prop === 'max-width')
+    ? 1200
+    : (prop === 'height' || prop === 'max-height')
+        ? 120
+        : (prop === 'font-size')
+            ? 32
+            : 200
+
+  for (const token of tokens) {
+    if (token === 'auto' && (prop === 'margin' || prop === 'margin-left' || prop === 'margin-right' || prop === 'width' || prop === 'height'))
+      continue
+    if (token === '0')
+      continue
+    const m = /^(\d+(?:\.\d+)?)(px|rem|em|%)$/.exec(token)
+    if (!m)
+      return false
+    const num = Number.parseFloat(m[1])
+    const unit = m[2]
+    if (!Number.isFinite(num) || num < 0)
+      return false
+    if (unit === 'px' && num > maxPx)
+      return false
+    if ((unit === 'rem' || unit === 'em') && num * 16 > maxPx)
+      return false
+    if (unit === '%') {
+      if (prop !== 'width' && prop !== 'max-width' && prop !== 'border-radius')
+        return false
+      if (num > 100)
+        return false
+    }
+  }
+  return true
 }
 
 function sanitizeFooterHref(raw?: string): string {

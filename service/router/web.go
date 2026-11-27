@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"leon-panel/global"
+	"leon-panel/lib/cmn"
 	"leon-panel/router/openness"
 	"leon-panel/router/panel"
 	"leon-panel/router/system"
@@ -24,7 +25,13 @@ const (
 	UploadContentTypeOptions    = "nosniff"
 )
 
-// NewEngine 组装接口、静态文件和前端入口。sourcePath 仍按原规则去掉首字符后作为 URL 前缀。
+func uploadSecurityHeadersMiddleware(c *gin.Context) {
+	c.Header("Content-Security-Policy", UploadContentSecurityPolicy)
+	c.Header("X-Content-Type-Options", UploadContentTypeOptions)
+	c.Next()
+}
+
+// NewEngine 组装接口、静态文件和前端入口。上传目录按统一的公开 URL 前缀挂载，并兼容历史旧前缀，均附加安全响应头。
 func NewEngine(webPath, sourcePath string) *gin.Engine {
 	engine := gin.Default()
 	rootRouter := engine.Group("/")
@@ -44,16 +51,10 @@ func NewEngine(webPath, sourcePath string) *gin.Engine {
 	engine.StaticFile("/pwa-192x192.png", webPath+"/pwa-192x192.png")
 	engine.StaticFile("/pwa-512x512.png", webPath+"/pwa-512x512.png")
 
-	uploadPrefix := sourcePath
-	if len(uploadPrefix) > 1 && uploadPrefix[0] == '.' {
-		uploadPrefix = uploadPrefix[1:]
+	for _, prefix := range cmn.UploadRoutePrefixes(sourcePath) {
+		uploadsGroup := engine.Group(prefix, uploadSecurityHeadersMiddleware)
+		uploadsGroup.Static("/", sourcePath)
 	}
-	uploadsGroup := engine.Group(uploadPrefix, func(c *gin.Context) {
-		c.Header("Content-Security-Policy", UploadContentSecurityPolicy)
-		c.Header("X-Content-Type-Options", UploadContentTypeOptions)
-		c.Next()
-	})
-	uploadsGroup.Static("/", sourcePath)
 
 	for _, route := range hashFrontendRoutes {
 		registerHashEntry(engine, route)

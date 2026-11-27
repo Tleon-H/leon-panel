@@ -92,12 +92,25 @@ test('http and https addresses keep private addresses, ports, queries, and fragm
     assert.equal(openableContextHref(`  ${sample}  `), sample)
 })
 
-test('reasonable addresses without a scheme open as http and executable links do not open', () => {
+test('reasonable addresses without a scheme, root-relative paths, and hash routes open while unsafe links do not', () => {
   assert.equal(openableContextHref('192.168.1.20:9000/path?y=2#room'), 'http://192.168.1.20:9000/path?y=2#room')
   assert.equal(openableContextHref('nas.local:5000'), 'http://nas.local:5000/')
   assert.equal(openableContextHref('localhost:3000/app'), 'http://localhost:3000/app')
   assert.equal(openableContextHref('//10.0.0.8:9000/app?x=1#z'), 'http://10.0.0.8:9000/app?x=1#z')
   assert.equal(openableContextHref('[::1]:8765/a?b=1#c'), 'http://[::1]:8765/a?b=1#c')
+
+  // Explicit same-origin root-relative paths and hash routes are preserved.
+  for (const sameOrigin of [
+    '/',
+    '/admin',
+    '/nas/dashboard?tab=1#top',
+    '#/login',
+    '#/settings?tab=2',
+    '#section-1',
+  ]) {
+    assert.equal(openableContextHref(`  ${sameOrigin}  `), sameOrigin)
+    assert.equal(openableContextHref(sameOrigin, 'https://panel.local:8443'), sameOrigin)
+  }
 
   assert.deepEqual(keys({ url: 'javascript:alert(1)', lanUrl: 'data:text/html,hi' }, false).filter(key => key.startsWith('address')), ['address:url', 'address:lan'])
   for (const blocked of [
@@ -112,8 +125,13 @@ test('reasonable addresses without a scheme open as http and executable links do
     'file:///tmp/example',
     'about:blank',
     'mailto:admin@example.com',
-    '/admin',
     './admin',
+    '../admin',
+    '/\\evil.example',
+    '/admin\\next',
+    '/admin\nInjected',
+    '#/bad\\route',
+    '#/bad\troute',
     'javascript:http://example.com',
     'javascript://example.com/%0Aalert(1)',
     'http:example.com',
@@ -128,7 +146,7 @@ test('reasonable addresses without a scheme open as http and executable links do
   assert.equal(contextNewTabFeatures.includes('noopener'), true)
 })
 
-test('primary click, keyboard Enter, and Dock open enforce protocol whitelist and schemeless LAN completion', () => {
+test('primary click, keyboard Enter, Dock, and context menu resolve the exact same href for relative, hash, and LAN addresses', () => {
   // WAN mode uses url; LAN mode uses lanUrl when filled and falls back to url when lanUrl is empty.
   assert.deepEqual(resolvePrimaryItemOpen(dual, false), {
     kind: 'url',
@@ -151,17 +169,43 @@ test('primary click, keyboard Enter, and Dock open enforce protocol whitelist an
     href: 'http://10.0.0.8:5000/',
   })
 
-  // Dangerous schemes are blocked on primary click regardless of network mode or openMethod.
+  // Same-origin root-relative paths and hash routes produce identical targets across primary click and right-click menu.
+  const sameOriginItem = { url: '/apps/files?view=grid', lanUrl: '#/login?next=%2F', openMethod: 2 }
+  assert.deepEqual(resolvePrimaryItemOpen(sameOriginItem, false), {
+    kind: 'url',
+    method: 2,
+    href: '/apps/files?view=grid',
+  })
+  assert.deepEqual(resolveContextMenuChoice(sameOriginItem, 'open:url:2'), {
+    kind: 'url',
+    method: 2,
+    href: '/apps/files?view=grid',
+  })
+  assert.deepEqual(resolvePrimaryItemOpen(sameOriginItem, true), {
+    kind: 'lan',
+    method: 2,
+    href: '#/login?next=%2F',
+  })
+  assert.deepEqual(resolveContextMenuChoice(sameOriginItem, 'open:lan:2'), {
+    kind: 'lan',
+    method: 2,
+    href: '#/login?next=%2F',
+  })
+
+  // Dangerous schemes, control characters, and backslashes are blocked on all open paths.
   for (const blocked of [
     'javascript:alert(1)',
     ' JavaScript:alert(1)',
     'data:text/html,<script>alert(1)</script>',
     'vbscript:msgbox(1)',
     'file:///etc/passwd',
+    '/\\evil.example',
+    '#/bad\nroute',
   ]) {
     assert.equal(resolvePrimaryItemOpen({ url: blocked, lanUrl: '', openMethod: 2 }, false), null)
     assert.equal(resolvePrimaryItemOpen({ url: 'https://safe.example.com', lanUrl: blocked, openMethod: 1 }, true), null)
     assert.equal(resolvePrimaryItemOpen({ url: blocked, lanUrl: '', openMethod: 3 }, true), null)
+    assert.equal(resolveContextMenuChoice({ url: blocked, lanUrl: '', openMethod: 2 }, 'open:url:2'), null)
   }
 
   // Unsupported openMethod is rejected cleanly.

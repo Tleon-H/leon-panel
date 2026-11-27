@@ -1,11 +1,13 @@
-// 首页右键菜单按本次点选的地址和打开方式打开，不看当前内外网模式，也不看卡片保存的打开方式。
-// 只有 http 和 https 会打开。没有协议的主机地址按 http 补全。javascript、data 以及其他协议不会打开。
+// 首页书签点击、键盘回车、Dock 与右键菜单共用同一地址白名单。
+// 允许 http(s)、无协议主机/内网地址（按 http 补全）、同源根相对路径（/path）与同源 Hash 路由（#/path）；
+// 拒绝 javascript、data、vbscript、file、相对目录（./ ../）以及其他协议、控制字符和反斜杠。
 
 export const contextOpenCurrent = 1
 export const contextOpenNewTab = 2
 export const contextOpenWindow = 3
 export const contextNewTabFeatures = 'noopener,noreferrer'
 export const contextAddressLimit = 1000
+const controlledSameOriginBase = 'https://same-origin.invalid/'
 
 export type ContextAddressKind = 'url' | 'lan'
 export type ContextOpenMethod = 1 | 2 | 3
@@ -32,7 +34,7 @@ export function isFilledContextAddress(raw: unknown): boolean {
   return typeof raw === 'string' && raw.trim().length > 0
 }
 
-export function openableContextHref(raw: unknown): string | null {
+export function openableContextHref(raw: unknown, baseOrigin: string = controlledSameOriginBase): string | null {
   if (!isFilledContextAddress(raw) || typeof raw !== 'string')
     return null
   const trimmed = raw.trim()
@@ -40,6 +42,10 @@ export function openableContextHref(raw: unknown): string | null {
     return null
   if (hasControlCharacter(trimmed) || trimmed.includes('\\') || /\s/.test(trimmed))
     return null
+
+  // 明确的同源根相对路径（/path，排除协议相对 //host）与 Hash 路由（#/path 或 #anchor），用受控 origin/base 校验不越出同源。
+  if ((trimmed.startsWith('/') && !trimmed.startsWith('//')) || trimmed.startsWith('#'))
+    return acceptedSameOriginRelative(trimmed, baseOrigin)
 
   // 带点的主机加端口会像协议，所以先认完整的 http(s) 和主机写法，再拒绝其余协议。
   if (/^https?:\/\//i.test(trimmed))
@@ -117,6 +123,23 @@ function hasControlCharacter(value: string): boolean {
       return true
   }
   return false
+}
+
+function acceptedSameOriginRelative(value: string, baseOrigin: string): string | null {
+  let base: URL
+  let resolved: URL
+  try {
+    base = new URL(baseOrigin)
+    resolved = new URL(value, base)
+  }
+  catch {
+    return null
+  }
+  if ((base.protocol !== 'http:' && base.protocol !== 'https:') || base.hostname === '')
+    return null
+  if ((resolved.protocol !== 'http:' && resolved.protocol !== 'https:') || resolved.origin !== base.origin)
+    return null
+  return value
 }
 
 function acceptedHttp(value: string, preserve: boolean): string | null {

@@ -85,7 +85,7 @@ func (a *FileApi) UploadImg(c *gin.Context) {
 	}
 
 	fileName := cmn.Md5(fmt.Sprintf("%s%s", f.Filename, time.Now().String()))
-	fildDir := fmt.Sprintf("%s/%d/%d/%d/", configUpload, time.Now().Year(), time.Now().Month(), time.Now().Day())
+	fildDir := fmt.Sprintf("%s/%d/%d/%d/", strings.TrimRight(configUpload, "/"), time.Now().Year(), time.Now().Month(), time.Now().Day())
 	isExist, err := cmn.PathExists(fildDir)
 	if err != nil {
 		apiReturn.ErrorByCode(c, 1300)
@@ -110,12 +110,8 @@ func (a *FileApi) UploadImg(c *gin.Context) {
 		apiReturn.ErrorDatabase(c, err.Error())
 		return
 	}
-	imageURL := ""
-	if len(dstPath) > 0 {
-		imageURL = dstPath[1:]
-	}
 	apiReturn.SuccessData(c, gin.H{
-		"imageUrl": imageURL,
+		"imageUrl": cmn.UploadPublicURL(dstPath),
 	})
 }
 
@@ -167,7 +163,7 @@ func (a *FileApi) UploadFiles(c *gin.Context) {
 			continue
 		}
 		fileName := cmn.Md5(fmt.Sprintf("%s%s%d", f.Filename, time.Now().String(), i))
-		fildDir := fmt.Sprintf("%s/%d/%d/%d/", configUpload, time.Now().Year(), time.Now().Month(), time.Now().Day())
+		fildDir := fmt.Sprintf("%s/%d/%d/%d/", strings.TrimRight(configUpload, "/"), time.Now().Year(), time.Now().Month(), time.Now().Day())
 		isExist, err := cmn.PathExists(fildDir)
 		if err != nil {
 			errFiles = append(errFiles, f.Filename)
@@ -189,10 +185,7 @@ func (a *FileApi) UploadFiles(c *gin.Context) {
 			errFiles = append(errFiles, f.Filename)
 			continue
 		}
-		imageURL := ""
-		if len(dstPath) > 0 {
-			imageURL = dstPath[1:]
-		}
+		imageURL := cmn.UploadPublicURL(dstPath)
 		succMap[f.Filename] = imageURL
 		saved = append(saved, map[string]string{
 			"fileName": f.Filename,
@@ -242,12 +235,8 @@ func (a *FileApi) GetList(c *gin.Context) {
 
 	data := []map[string]interface{}{}
 	for _, v := range list {
-		src := v.Src
-		if len(src) > 0 {
-			src = src[1:]
-		}
 		data = append(data, map[string]interface{}{
-			"src":        src,
+			"src":        cmn.UploadPublicURL(v.Src),
 			"fileName":   v.FileName,
 			"id":         v.ID,
 			"createTime": v.CreatedAt,
@@ -300,12 +289,8 @@ func (a *FileApi) PublicList(c *gin.Context) {
 	}
 	data := []map[string]interface{}{}
 	for _, v := range list {
-		src := v.Src
-		if len(src) > 0 {
-			src = src[1:]
-		}
 		data = append(data, map[string]interface{}{
-			"src":        src,
+			"src":        cmn.UploadPublicURL(v.Src),
 			"fileName":   v.FileName,
 			"id":         v.ID,
 			"createTime": v.CreatedAt,
